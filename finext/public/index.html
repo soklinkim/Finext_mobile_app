@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <title>Finext</title>
+    <style id="expo-reset">
+      html, body { height: 100%; }
+      body { overflow: hidden; }
+      #root { display: flex; height: 100%; flex: 1; }
+    </style>
+    <!-- Web only: makes the page cross-origin isolated so expo-sqlite's WebAssembly worker can use SharedArrayBuffer -->
+    <script>
+      if (!window.crossOriginIsolated && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/coi-serviceworker.js').then(function () {
+          if (!navigator.serviceWorker.controller) window.location.reload();
+        });
+      }
+    </script>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+  </body>
+</html>

@@ -1,0 +1,92 @@
+import type { SQLiteDatabase } from 'expo-sqlite';
+
+/**
+ * Versioned schema migrations, tracked with PRAGMA user_version.
+ * Keep in sync with schema.ts. Append new entries; never edit a shipped one.
+ */
+const COMMON = `
+  id TEXT PRIMARY KEY NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  deleted_at INTEGER,
+  sync_status TEXT NOT NULL DEFAULT 'pending'`;
+
+const MIGRATIONS: string[] = [
+  `
+  CREATE TABLE banks (${COMMON},
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    logo_key TEXT
+  );
+  CREATE TABLE categories (${COMMON},
+    name TEXT NOT NULL,
+    icon TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'expense',
+    built_in INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE transactions (${COMMON},
+    title TEXT NOT NULL,
+    type_id TEXT NOT NULL,
+    direction TEXT NOT NULL,
+    group_id TEXT,
+    amount INTEGER NOT NULL,
+    currency TEXT NOT NULL,
+    exchange_rate INTEGER NOT NULL,
+    pay_method TEXT NOT NULL,
+    bank_id TEXT REFERENCES banks(id),
+    to_bank_id TEXT REFERENCES banks(id),
+    category_id TEXT REFERENCES categories(id),
+    counterparty TEXT,
+    note TEXT,
+    occurred_at INTEGER NOT NULL,
+    review_flag INTEGER NOT NULL DEFAULT 0,
+    meta TEXT
+  );
+  CREATE INDEX idx_transactions_occurred ON transactions(occurred_at);
+  CREATE INDEX idx_transactions_sync ON transactions(sync_status);
+  CREATE TABLE business_assets (${COMMON},
+    kind TEXT NOT NULL,
+    name TEXT NOT NULL,
+    bank_id TEXT REFERENCES banks(id),
+    amount INTEGER NOT NULL,
+    currency TEXT NOT NULL,
+    as_of INTEGER NOT NULL
+  );
+  CREATE TABLE budgets (${COMMON},
+    name TEXT NOT NULL,
+    period TEXT NOT NULL DEFAULT 'all',
+    target_amount INTEGER NOT NULL,
+    currency TEXT NOT NULL
+  );
+  CREATE TABLE settings (${COMMON},
+    language TEXT NOT NULL DEFAULT 'en-GB',
+    onboarding_status TEXT NOT NULL DEFAULT 'not_started',
+    start_option TEXT,
+    display_currency TEXT NOT NULL DEFAULT 'USD',
+    rate_khr_per_usd INTEGER NOT NULL DEFAULT 4000,
+    business_name TEXT,
+    business_industry TEXT,
+    registration_status TEXT,
+    registration_number TEXT,
+    start_operation_date TEXT,
+    owner_name TEXT,
+    location TEXT,
+    contact TEXT,
+    main_products TEXT,
+    push_notifications INTEGER NOT NULL DEFAULT 1,
+    dark_theme INTEGER NOT NULL DEFAULT 0
+  );
+  `,
+];
+
+export function runMigrations(sqlite: SQLiteDatabase): void {
+  const row = sqlite.getFirstSync<{ user_version: number }>('PRAGMA user_version');
+  let version = row?.user_version ?? 0;
+  while (version < MIGRATIONS.length) {
+    sqlite.withTransactionSync(() => {
+      sqlite.execSync(MIGRATIONS[version]);
+    });
+    version += 1;
+    sqlite.execSync(`PRAGMA user_version = ${version}`);
+  }
+}
