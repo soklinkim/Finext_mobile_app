@@ -85,20 +85,26 @@ class Settings(SyncRow):
     dark_theme: bool = False
 
 
-class PushChanges(BaseModel):
-    # keys match SYNCED_TABLES in schema.ts exactly
-    banks: list[Bank] = []
-    categories: list[Category] = []
-    transactions: list[Transaction] = []
-    business_assets: list[BusinessAsset] = []
-    budgets: list[Budget] = []
-    settings: list[Settings] = []
+class PushBatch(BaseModel):
+    table: Literal["banks", "categories", "transactions", "business_assets", "budgets", "settings"]
+    rows: list[dict]  # validated one by one in the router
 
 
-class PushRequest(CamelModel):
-    changes: PushChanges
+class PushRequest(BaseModel):
+    batches: list[PushBatch]
 
 
-class PushResponse(CamelModel):
-    accepted: dict[str, list[str]]  # table name -> ids the server stored
-    server_time: int
+class RejectedRow(BaseModel):
+    table: str
+    id: str
+    reason: str
+
+
+class PushResponse(BaseModel):
+    accepted: dict[str, list[str]]  # table -> ids the server stored
+    rejected: list[RejectedRow]
+
+
+class PullResponse(BaseModel):
+    changes: list[PushBatch]
+    cursor: str
