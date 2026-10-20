@@ -1,0 +1,885 @@
+{
+  "version": 2,
+  "deferred": [
+    "sold_equipment"
+  ],
+  "groups": [
+    {
+      "id": "sales",
+      "direction": "in",
+      "label": "Sales",
+      "effect": "Revenue, plus customer deposits held as a liability"
+    },
+    {
+      "id": "otherin",
+      "direction": "in",
+      "label": "Other money in",
+      "effect": "Loans received, money the owner puts in, other income"
+    },
+    {
+      "id": "monthly",
+      "direction": "out",
+      "label": "Monthly expenses",
+      "effect": "Operating expenses on the Income Statement"
+    },
+    {
+      "id": "stock",
+      "direction": "out",
+      "label": "Stock & equipment",
+      "effect": "Stock goes to Inventory; equipment is capitalised"
+    },
+    {
+      "id": "loantax",
+      "direction": "out",
+      "label": "Loans, tax & owner",
+      "effect": "Loan repayments, income tax and the owner's drawings"
+    },
+    {
+      "id": "move",
+      "direction": "move",
+      "label": "Move money",
+      "effect": "Direction with no group step: transfers between own cash, bank and wallet accounts; no profit effect"
+    }
+  ],
+  "accounts": [
+    {
+      "code": "1000",
+      "name": "Cash",
+      "cls": "Asset",
+      "statement": "Balance Sheet: current assets",
+      "normal_side": "debit"
+    },
+    {
+      "code": "1010",
+      "name": "Bank & wallet",
+      "cls": "Asset",
+      "statement": "Balance Sheet: current assets",
+      "normal_side": "debit"
+    },
+    {
+      "code": "1100",
+      "name": "Accounts receivable",
+      "cls": "Asset",
+      "statement": "Balance Sheet: current assets",
+      "normal_side": "debit"
+    },
+    {
+      "code": "1200",
+      "name": "Inventory",
+      "cls": "Asset",
+      "statement": "Balance Sheet: current assets",
+      "normal_side": "debit"
+    },
+    {
+      "code": "1300",
+      "name": "Prepaid expenses",
+      "cls": "Asset",
+      "statement": "Balance Sheet: current assets",
+      "normal_side": "debit"
+    },
+    {
+      "code": "1500",
+      "name": "Equipment & vehicles (cost)",
+      "cls": "Asset",
+      "statement": "Balance Sheet: non-current assets",
+      "normal_side": "debit"
+    },
+    {
+      "code": "1590",
+      "name": "Accumulated depreciation",
+      "cls": "Asset (contra)",
+      "statement": "Balance Sheet: non-current assets",
+      "normal_side": "credit"
+    },
+    {
+      "code": "1600",
+      "name": "Other long-term assets",
+      "cls": "Asset",
+      "statement": "Balance Sheet: non-current assets",
+      "normal_side": "debit"
+    },
+    {
+      "code": "2000",
+      "name": "Accounts payable",
+      "cls": "Liability",
+      "statement": "Balance Sheet: current liabilities",
+      "normal_side": "credit"
+    },
+    {
+      "code": "2100",
+      "name": "Customer deposits",
+      "cls": "Liability",
+      "statement": "Balance Sheet: current liabilities",
+      "normal_side": "credit"
+    },
+    {
+      "code": "2200",
+      "name": "Accrued expenses",
+      "cls": "Liability",
+      "statement": "Balance Sheet: current liabilities",
+      "normal_side": "credit"
+    },
+    {
+      "code": "2300",
+      "name": "Taxes payable",
+      "cls": "Liability",
+      "statement": "Balance Sheet: current liabilities",
+      "normal_side": "credit"
+    },
+    {
+      "code": "2400",
+      "name": "Short-term loans (bank / MFI)",
+      "cls": "Liability",
+      "statement": "Balance Sheet: current liabilities",
+      "normal_side": "credit"
+    },
+    {
+      "code": "2500",
+      "name": "Other short-term borrowings",
+      "cls": "Liability",
+      "statement": "Balance Sheet: current liabilities",
+      "normal_side": "credit"
+    },
+    {
+      "code": "2600",
+      "name": "Long-term loans",
+      "cls": "Liability",
+      "statement": "Balance Sheet: non-current liabilities",
+      "normal_side": "credit"
+    },
+    {
+      "code": "2700",
+      "name": "Lease obligations",
+      "cls": "Liability",
+      "statement": "Balance Sheet: non-current liabilities",
+      "normal_side": "credit"
+    },
+    {
+      "code": "3000",
+      "name": "Owner's capital",
+      "cls": "Equity",
+      "statement": "Balance Sheet: owner's equity",
+      "normal_side": "credit"
+    },
+    {
+      "code": "3100",
+      "name": "Retained earnings",
+      "cls": "Equity",
+      "statement": "Balance Sheet: owner's equity",
+      "normal_side": "credit"
+    },
+    {
+      "code": "3200",
+      "name": "Owner's drawings",
+      "cls": "Equity (contra)",
+      "statement": "Balance Sheet: owner's equity",
+      "normal_side": "debit"
+    },
+    {
+      "code": "4000",
+      "name": "Sales revenue",
+      "cls": "Revenue",
+      "statement": "Income Statement: sales",
+      "normal_side": "credit"
+    },
+    {
+      "code": "4100",
+      "name": "Service revenue",
+      "cls": "Revenue",
+      "statement": "Income Statement: sales",
+      "normal_side": "credit"
+    },
+    {
+      "code": "4200",
+      "name": "Other income",
+      "cls": "Revenue",
+      "statement": "Income Statement: other income",
+      "normal_side": "credit"
+    },
+    {
+      "code": "4900",
+      "name": "Sales returns & discounts",
+      "cls": "Revenue (contra)",
+      "statement": "Income Statement: sales",
+      "normal_side": "debit"
+    },
+    {
+      "code": "5000",
+      "name": "Cost of goods sold",
+      "cls": "Cost of sales",
+      "statement": "Income Statement: cost of goods sold",
+      "normal_side": "debit"
+    },
+    {
+      "code": "6000",
+      "name": "Rent",
+      "cls": "Expense",
+      "statement": "Income Statement: operating expenses",
+      "normal_side": "debit"
+    },
+    {
+      "code": "6100",
+      "name": "Salaries & wages",
+      "cls": "Expense",
+      "statement": "Income Statement: operating expenses",
+      "normal_side": "debit"
+    },
+    {
+      "code": "6200",
+      "name": "Utilities",
+      "cls": "Expense",
+      "statement": "Income Statement: operating expenses",
+      "normal_side": "debit"
+    },
+    {
+      "code": "6300",
+      "name": "Internet & phone",
+      "cls": "Expense",
+      "statement": "Income Statement: operating expenses",
+      "normal_side": "debit"
+    },
+    {
+      "code": "6400",
+      "name": "Transport & delivery",
+      "cls": "Expense",
+      "statement": "Income Statement: operating expenses",
+      "normal_side": "debit"
+    },
+    {
+      "code": "6500",
+      "name": "Marketing & advertising",
+      "cls": "Expense",
+      "statement": "Income Statement: operating expenses",
+      "normal_side": "debit"
+    },
+    {
+      "code": "6600",
+      "name": "Repairs & maintenance",
+      "cls": "Expense",
+      "statement": "Income Statement: operating expenses",
+      "normal_side": "debit"
+    },
+    {
+      "code": "6700",
+      "name": "Insurance",
+      "cls": "Expense",
+      "statement": "Income Statement: operating expenses",
+      "normal_side": "debit"
+    },
+    {
+      "code": "6800",
+      "name": "Depreciation",
+      "cls": "Expense",
+      "statement": "Income Statement: operating expenses",
+      "normal_side": "debit"
+    },
+    {
+      "code": "6900",
+      "name": "Bank & wallet fees",
+      "cls": "Expense",
+      "statement": "Income Statement: operating expenses",
+      "normal_side": "debit"
+    },
+    {
+      "code": "6950",
+      "name": "Licences & government fees",
+      "cls": "Expense",
+      "statement": "Income Statement: operating expenses",
+      "normal_side": "debit"
+    },
+    {
+      "code": "6990",
+      "name": "Other expenses",
+      "cls": "Expense",
+      "statement": "Income Statement: operating expenses",
+      "normal_side": "debit"
+    },
+    {
+      "code": "7000",
+      "name": "Interest expense",
+      "cls": "Expense",
+      "statement": "Income Statement: interest",
+      "normal_side": "debit"
+    },
+    {
+      "code": "7100",
+      "name": "Income tax expense",
+      "cls": "Expense",
+      "statement": "Income Statement: income tax",
+      "normal_side": "debit"
+    }
+  ],
+  "roles": {
+    "PAY": "Cash 1000 if cash; Bank & wallet 1010 if bank or wallet; if pay later: Accounts receivable 1100 (money in) or Accounts payable 2000 (money out)",
+    "LOAN": "Loan account stored on the loan record (2400, 2500 or 2600)",
+    "TO": "Destination account chosen by the user (1000 or a 1010 sub-account)",
+    "FROM": "Source account chosen by the user (1000 or a 1010 sub-account)"
+  },
+  "types": [
+    {
+      "id": "product_sale",
+      "group": "sales",
+      "label": "Product sale",
+      "allows_pay_later": true,
+      "extra_fields": "customer (if pay later); cost (optional, estimated if blank)",
+      "flags": "",
+      "rules": [
+        {
+          "line": 1,
+          "side": "debit",
+          "account": "PAY",
+          "amount": "AMOUNT",
+          "condition": ""
+        },
+        {
+          "line": 2,
+          "side": "credit",
+          "account": "4000",
+          "amount": "AMOUNT",
+          "condition": ""
+        },
+        {
+          "line": 3,
+          "side": "debit",
+          "account": "5000",
+          "amount": "COST",
+          "condition": "always (entered or estimated)"
+        },
+        {
+          "line": 4,
+          "side": "credit",
+          "account": "1200",
+          "amount": "COST",
+          "condition": "always (entered or estimated)"
+        }
+      ]
+    },
+    {
+      "id": "service_income",
+      "group": "sales",
+      "label": "Service income",
+      "allows_pay_later": true,
+      "extra_fields": "customer (if pay later)",
+      "flags": "",
+      "rules": [
+        {
+          "line": 1,
+          "side": "debit",
+          "account": "PAY",
+          "amount": "AMOUNT",
+          "condition": ""
+        },
+        {
+          "line": 2,
+          "side": "credit",
+          "account": "4100",
+          "amount": "AMOUNT",
+          "condition": ""
+        }
+      ]
+    },
+    {
+      "id": "customer_deposit",
+      "group": "sales",
+      "label": "Deposit or advance from a customer",
+      "allows_pay_later": false,
+      "extra_fields": "customer",
+      "flags": "",
+      "rules": [
+        {
+          "line": 1,
+          "side": "debit",
+          "account": "PAY",
+          "amount": "AMOUNT",
+          "condition": ""
+        },
+        {
+          "line": 2,
+          "side": "credit",
+          "account": "2100",
+          "amount": "AMOUNT",
+          "condition": ""
+        }
+      ]
+    },
+    {
+      "id": "loan_received",
+      "group": "otherin",
+      "label": "Loan received",
+      "allows_pay_later": false,
+      "extra_fields": "lender; lender type (bank/MFI or family/informal); term (up to 12 months or longer)",
+      "flags": "creates loan record",
+      "rules": [
+        {
+          "line": 1,
+          "side": "debit",
+          "account": "PAY",
+          "amount": "AMOUNT",
+          "condition": ""
+        },
+        {
+          "line": 2,
+          "side": "credit",
+          "account": "LOAN",
+          "amount": "AMOUNT",
+          "condition": "LOAN = 2400 bank/MFI up to 12 months; 2500 family/informal up to 12 months; 2600 longer than 12 months"
+        }
+      ]
+    },
+    {
+      "id": "owner_capital",
+      "group": "otherin",
+      "label": "Money I put into the business",
+      "allows_pay_later": false,
+      "extra_fields": "",
+      "flags": "",
+      "rules": [
+        {
+          "line": 1,
+          "side": "debit",
+          "account": "PAY",
+          "amount": "AMOUNT",
+          "condition": ""
+        },
+        {
+          "line": 2,
+          "side": "credit",
+          "account": "3000",
+          "amount": "AMOUNT",
+          "condition": ""
+        }
+      ]
+    },
+    {
+      "id": "other_income",
+      "group": "otherin",
+      "label": "Other income (interest, grants, gifts)",
+      "allows_pay_later": false,
+      "extra_fields": "note (required)",
+      "flags": "review flag",
+      "rules": [
+        {
+          "line": 1,
+          "side": "debit",
+          "account": "PAY",
+          "amount": "AMOUNT",
+          "condition": ""
+        },
+        {
+          "line": 2,
+          "side": "credit",
+          "account": "4200",
+          "amount": "AMOUNT",
+          "condition": ""
+        }
+      ]
+    },
+    {
+      "id": "rent",
+      "group": "monthly",
+      "label": "Rent",
+      "allows_pay_later": true,
+      "extra_fields": "supplier (if pay later)",
+      "flags": "",
+      "rules": [
+        {
+          "line": 1,
+          "side": "debit",
+          "account": "6000",
+          "amount": "AMOUNT",
+          "condition": ""
+        },
+        {
+          "line": 2,
+          "side": "credit",
+          "account": "PAY",
+          "amount": "AMOUNT",
+          "condition": ""
+        }
+      ]
+    },
+    {
+      "id": "wages",
+      "group": "monthly",
+      "label": "Salaries & wages",
+      "allows_pay_later": true,
+      "extra_fields": "",
+      "flags": "",
+      "rules": [
+        {
+          "line": 1,
+          "side": "debit",
+          "account": "6100",
+          "amount": "AMOUNT",
+          "condition": ""
+        },
+        {
+          "line": 2,
+          "side": "credit",
+          "account": "PAY",
+          "amount": "AMOUNT",
+          "condition": ""
+        }
+      ]
+    },
+    {
+      "id": "utilities",
+      "group": "monthly",
+      "label": "Utilities (electricity, water, internet, phone)",
+      "allows_pay_later": true,
+      "extra_fields": "supplier (if pay later)",
+      "flags": "",
+      "rules": [
+        {
+          "line": 1,
+          "side": "debit",
+          "account": "6200",
+          "amount": "AMOUNT",
+          "condition": ""
+        },
+        {
+          "line": 2,
+          "side": "credit",
+          "account": "PAY",
+          "amount": "AMOUNT",
+          "condition": ""
+        }
+      ]
+    },
+    {
+      "id": "transport",
+      "group": "monthly",
+      "label": "Transport & delivery",
+      "allows_pay_later": true,
+      "extra_fields": "supplier (if pay later)",
+      "flags": "",
+      "rules": [
+        {
+          "line": 1,
+          "side": "debit",
+          "account": "6400",
+          "amount": "AMOUNT",
+          "condition": ""
+        },
+        {
+          "line": 2,
+          "side": "credit",
+          "account": "PAY",
+          "amount": "AMOUNT",
+          "condition": ""
+        }
+      ]
+    },
+    {
+      "id": "marketing",
+      "group": "monthly",
+      "label": "Marketing",
+      "allows_pay_later": true,
+      "extra_fields": "supplier (if pay later)",
+      "flags": "",
+      "rules": [
+        {
+          "line": 1,
+          "side": "debit",
+          "account": "6500",
+          "amount": "AMOUNT",
+          "condition": ""
+        },
+        {
+          "line": 2,
+          "side": "credit",
+          "account": "PAY",
+          "amount": "AMOUNT",
+          "condition": ""
+        }
+      ]
+    },
+    {
+      "id": "repairs",
+      "group": "monthly",
+      "label": "Repairs & maintenance",
+      "allows_pay_later": true,
+      "extra_fields": "supplier (if pay later)",
+      "flags": "",
+      "rules": [
+        {
+          "line": 1,
+          "side": "debit",
+          "account": "6600",
+          "amount": "AMOUNT",
+          "condition": ""
+        },
+        {
+          "line": 2,
+          "side": "credit",
+          "account": "PAY",
+          "amount": "AMOUNT",
+          "condition": ""
+        }
+      ]
+    },
+    {
+      "id": "fees_licences",
+      "group": "monthly",
+      "label": "Fees & licences (bank, wallet, government)",
+      "allows_pay_later": false,
+      "extra_fields": "",
+      "flags": "",
+      "rules": [
+        {
+          "line": 1,
+          "side": "debit",
+          "account": "6950",
+          "amount": "AMOUNT",
+          "condition": ""
+        },
+        {
+          "line": 2,
+          "side": "credit",
+          "account": "PAY",
+          "amount": "AMOUNT",
+          "condition": ""
+        }
+      ]
+    },
+    {
+      "id": "other_cost",
+      "group": "monthly",
+      "label": "Other monthly cost (including insurance)",
+      "allows_pay_later": true,
+      "extra_fields": "note (required)",
+      "flags": "review flag",
+      "rules": [
+        {
+          "line": 1,
+          "side": "debit",
+          "account": "6990",
+          "amount": "AMOUNT",
+          "condition": ""
+        },
+        {
+          "line": 2,
+          "side": "credit",
+          "account": "PAY",
+          "amount": "AMOUNT",
+          "condition": ""
+        }
+      ]
+    },
+    {
+      "id": "stock_materials",
+      "group": "stock",
+      "label": "Stock & materials (goods for resale, packaging)",
+      "allows_pay_later": true,
+      "extra_fields": "supplier (if pay later)",
+      "flags": "",
+      "rules": [
+        {
+          "line": 1,
+          "side": "debit",
+          "account": "1200",
+          "amount": "AMOUNT",
+          "condition": ""
+        },
+        {
+          "line": 2,
+          "side": "credit",
+          "account": "PAY",
+          "amount": "AMOUNT",
+          "condition": ""
+        }
+      ]
+    },
+    {
+      "id": "equipment_purchase",
+      "group": "stock",
+      "label": "Equipment or vehicle",
+      "allows_pay_later": true,
+      "extra_fields": "asset name; useful life in years",
+      "flags": "creates asset record",
+      "rules": [
+        {
+          "line": 1,
+          "side": "debit",
+          "account": "1500",
+          "amount": "AMOUNT",
+          "condition": ""
+        },
+        {
+          "line": 2,
+          "side": "credit",
+          "account": "PAY",
+          "amount": "AMOUNT",
+          "condition": ""
+        }
+      ]
+    },
+    {
+      "id": "loan_repayment",
+      "group": "loantax",
+      "label": "Loan repayment",
+      "allows_pay_later": false,
+      "extra_fields": "loan (from loan records); interest part (optional)",
+      "flags": "splits principal and interest",
+      "rules": [
+        {
+          "line": 1,
+          "side": "debit",
+          "account": "LOAN",
+          "amount": "PRINCIPAL",
+          "condition": "LOAN = the account of the chosen loan record"
+        },
+        {
+          "line": 2,
+          "side": "debit",
+          "account": "7000",
+          "amount": "INTEREST",
+          "condition": "INTEREST > 0"
+        },
+        {
+          "line": 3,
+          "side": "credit",
+          "account": "PAY",
+          "amount": "AMOUNT",
+          "condition": "AMOUNT = principal + interest"
+        }
+      ]
+    },
+    {
+      "id": "income_tax",
+      "group": "loantax",
+      "label": "Income tax",
+      "allows_pay_later": false,
+      "extra_fields": "",
+      "flags": "",
+      "rules": [
+        {
+          "line": 1,
+          "side": "debit",
+          "account": "7100",
+          "amount": "AMOUNT",
+          "condition": ""
+        },
+        {
+          "line": 2,
+          "side": "credit",
+          "account": "PAY",
+          "amount": "AMOUNT",
+          "condition": ""
+        }
+      ]
+    },
+    {
+      "id": "owner_drawings",
+      "group": "loantax",
+      "label": "Money I took out for myself (including personal bills paid from the business)",
+      "allows_pay_later": false,
+      "extra_fields": "",
+      "flags": "",
+      "rules": [
+        {
+          "line": 1,
+          "side": "debit",
+          "account": "3200",
+          "amount": "AMOUNT",
+          "condition": ""
+        },
+        {
+          "line": 2,
+          "side": "credit",
+          "account": "PAY",
+          "amount": "AMOUNT",
+          "condition": ""
+        }
+      ]
+    },
+    {
+      "id": "transfer",
+      "group": "move",
+      "label": "Move money between my accounts",
+      "allows_pay_later": false,
+      "extra_fields": "from account; to account",
+      "flags": "no profit effect; no group step",
+      "rules": [
+        {
+          "line": 1,
+          "side": "debit",
+          "account": "TO",
+          "amount": "AMOUNT",
+          "condition": ""
+        },
+        {
+          "line": 2,
+          "side": "credit",
+          "account": "FROM",
+          "amount": "AMOUNT",
+          "condition": ""
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "name": "Mark as paid",
+      "when": "Settles an open item (customer owes you, or you owe a supplier). Partial payments allowed.",
+      "posting": "Money in: Dr Cash/Bank, Cr 1100 Accounts receivable. Money out: Dr 2000 Accounts payable, Cr Cash/Bank.",
+      "guard": "Cannot exceed the open balance; closes the open item when settled."
+    },
+    {
+      "name": "Refund or return",
+      "when": "Customer returns goods or gets money back; or you return goods to a supplier.",
+      "posting": "Customer refund: Dr 4900 Sales returns, Cr Cash/Bank (or 1100 if unpaid). If goods return to stock also Dr 1200, Cr 5000. Supplier return: Dr Cash/Bank (or 2000), Cr 1200.",
+      "guard": "Linked to the original entry; cannot exceed the original amount."
+    },
+    {
+      "name": "Apply customer deposit",
+      "when": "Customer's earlier deposit is used against a sale.",
+      "posting": "Dr 2100 Customer deposits, Cr 4000 Sales revenue (or 4100).",
+      "guard": "Cannot exceed the deposit balance."
+    },
+    {
+      "name": "Write off unpaid amount",
+      "when": "Customer will not pay.",
+      "posting": "Dr 6990 Other expenses (bad debt), Cr 1100 Accounts receivable.",
+      "guard": "Requires a note; review flag."
+    },
+    {
+      "name": "Edit or reverse",
+      "when": "User changes or cancels a posted entry.",
+      "posting": "Reversing entry swaps every debit and credit and links to the original; an edit then posts a new entry.",
+      "guard": "Posted entries are never edited or deleted."
+    }
+  ],
+  "system_entries": [
+    {
+      "name": "Opening balances",
+      "posts": "Customer enters year-end figures (statement screens). One entry posts each balance; the difference goes to Owner's capital / Retained earnings.",
+      "when": "Once per business, dated the day before the first daily entry."
+    },
+    {
+      "name": "Depreciation",
+      "posts": "Straight-line from the asset register: Dr 6800 Depreciation, Cr 1590 Accumulated depreciation.",
+      "when": "Monthly, system generated."
+    },
+    {
+      "name": "Accruals",
+      "posts": "Month-end prompt: bills used but not yet billed. Dr expense, Cr 2200 Accrued expenses.",
+      "when": "Monthly, user confirms."
+    },
+    {
+      "name": "Prepaid release",
+      "posts": "Month-end: part of a prepaid amount used up. Dr expense, Cr 1300 Prepaid expenses.",
+      "when": "Monthly, system suggested."
+    },
+    {
+      "name": "Stock count",
+      "posts": "User counts stock; the difference posts Dr 5000, Cr 1200 (or the reverse).",
+      "when": "Month-end prompt."
+    },
+    {
+      "name": "Loan reclassification",
+      "posts": "Portion of a long-term loan due within 12 months moves from 2600 to 2400.",
+      "when": "Monthly or at period end, system generated."
+    }
+  ]
+}
