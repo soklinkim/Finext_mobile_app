@@ -124,8 +124,11 @@ def run(n_iter: int, n_folds: int, out_dir: Path) -> dict:
         p_valid = trained.predict(valid)
         oof_calibrated = calibrator.transform(best["oof"])
         segs = {kind: evaluate.segments(y, oof_calibrated, labels) for kind, labels in segment_labels.items()}
+        p_train = trained.predict(train)
         results[candidate.name] = {
             "notes": candidate.notes, "params": best["params"], "configs_tried": best["configs_tried"],
+            # Overfitting check: the same model scored on the rows it was fitted on.
+            "train": {"pr_auc": evaluate.pr_auc(y, p_train), "roc_auc": evaluate.roc_auc(y, p_train)},
             "cv": {"fold_pr_auc": best["fold_pr_auc"], "pr_auc_mean": float(np.mean(best["fold_pr_auc"])),
                    "pr_auc_std": float(np.std(best["fold_pr_auc"])), "roc_auc_oof": evaluate.roc_auc(y, best["oof"])},
             "validation": {**evaluate.summary(valid[TARGET], p_valid),

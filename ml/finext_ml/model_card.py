@@ -36,17 +36,19 @@ def write(r: dict) -> str:
         "",
         f"## Candidates ({r['folds']}-fold grouped CV, up to {r['configs_per_model']} configurations each)",
         "",
-        "| Model | CV PR-AUC (mean ± sd) | CV ROC-AUC | Validation PR-AUC | Validation calibration error | Worst segment PR-AUC |",
-        "|---|---|---:|---:|---:|---:|",
+        "| Model | CV PR-AUC (mean ± sd) | CV ROC-AUC | Train PR-AUC / ROC-AUC | Validation PR-AUC | Validation calibration error | Worst segment PR-AUC |",
+        "|---|---|---:|---:|---:|---:|---:|",
     ]
     for name, c in r["candidates"].items():
         mark = " **(winner)**" if name == w else ""
         lines.append(f"| {NAMES[name]}{mark} | {_f(c['cv']['pr_auc_mean'])} ± {_f(c['cv']['pr_auc_std'])} | {_f(c['cv']['roc_auc_oof'])} | "
+                     f"{_f(c['train']['pr_auc'])} / {_f(c['train']['roc_auc'])} | "
                      f"{_f(c['validation']['pr_auc'])} | {_f(c['validation']['calibration_error'], 4)} | {_f(c['worst_segment_pr_auc'])} |")
     rule = r["selection_rule"]
     lines += [
         "",
-        f"Base rate is under 1%, so a random model scores PR-AUC ≈ 0.01. Probabilities are Platt-calibrated on out-of-fold scores.",
+        f"Base rate is under 1%, so a random model scores PR-AUC ≈ 0.01. Probabilities are Platt-calibrated on out-of-fold scores. "
+        "The train column scores each model on the rows it was fitted on: a large gap to CV means it memorises training cases.",
         "",
         "## Selection",
         f"XGBoost is the champion. A challenger replaces it only if it gains ≥ {rule['margin']} CV PR-AUC on average, wins in "

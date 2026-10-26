@@ -60,21 +60,23 @@ def _logistic(params: dict, imbalance: float, seed: int = 0) -> Pipeline:
 
 
 CANDIDATES: list[Candidate] = [
+    # Spaces lean towards strong regularisation: with a few hundred positives and heavy class weights,
+    # deep trees memorise the training failures (train ROC-AUC 0.996 vs 0.84 unseen in the first run).
     Candidate("xgboost", _xgboost, {
-        "n_estimators": [200, 400, 600], "learning_rate": [0.02, 0.05, 0.1], "max_depth": [3, 4, 5, 6],
-        "min_child_weight": [1, 5, 10], "subsample": [0.7, 0.85, 1.0], "colsample_bytree": [0.6, 0.8, 1.0],
-        "reg_lambda": [1.0, 5.0, 10.0],
+        "n_estimators": [100, 200, 400], "learning_rate": [0.02, 0.05, 0.1], "max_depth": [2, 3, 4],
+        "min_child_weight": [10, 30, 60], "subsample": [0.6, 0.8], "colsample_bytree": [0.5, 0.8],
+        "reg_lambda": [5.0, 20.0, 50.0], "gamma": [0.0, 1.0, 5.0],
     }, "Default champion: native missing values, monotonic constraints.", "tree"),
     Candidate("logistic_regression", _logistic, {
         "C": [0.01, 0.03, 0.1, 0.3, 1.0, 3.0],
     }, "Explainable baseline: median imputation + missing flags, rank-normal scaling.", "linear"),
     Candidate("random_forest", _random_forest, {
-        "max_depth": [6, 10, 16, None], "min_samples_leaf": [5, 20, 50, 100], "max_features": ["sqrt", 0.3, 0.5],
+        "max_depth": [4, 6, 10], "min_samples_leaf": [50, 100, 200, 400], "max_features": ["sqrt", 0.3, 0.5],
     }, "Native missing values; no monotonic constraints.", "tree"),
     Candidate("lightgbm", _lightgbm, {
-        "n_estimators": [200, 400, 600], "learning_rate": [0.02, 0.05, 0.1], "num_leaves": [7, 15, 31],
-        "min_child_samples": [20, 50, 100], "subsample": [0.7, 0.85, 1.0], "colsample_bytree": [0.6, 0.8, 1.0],
-        "reg_lambda": [0.0, 1.0, 5.0],
+        "n_estimators": [100, 200, 400], "learning_rate": [0.02, 0.05, 0.1], "num_leaves": [3, 7, 15],
+        "min_child_samples": [100, 200, 400], "subsample": [0.6, 0.8], "colsample_bytree": [0.5, 0.8],
+        "reg_lambda": [5.0, 20.0, 50.0],
     }, "Gradient-boosting alternative: native missing values, monotonic constraints.", "tree"),
 ]
 
