@@ -11,6 +11,7 @@ from app.auth import current_sme
 from app.accounting_validation import validate_bookkeeping_data, validate_opening_balances
 from app.financial_statement import ACCOUNT_NAMES, DEBIT_NORMAL_ACCOUNTS, ONBOARDING_ACCOUNT_MAP, natural_balance
 from app.health_ratio import RATIO_RULES, ratio_status
+from app.snapshots import monthly_snapshots
 from app.forecasting import forecast_income_expense
 from app.loan_notifications import loan_notifications
 
@@ -306,6 +307,16 @@ def statements(user_id: str = Depends(current_sme), period: Annotated[str, Query
             "_metrics": {"current": cur, "prior": prev, "balances": balances,
                          "periodMovements": current_lines, "cashOperating": cash_operating,
                          "cashInvesting": cash_investing, "cashFinancing": cash_financing}}
+
+
+@router.get("/snapshots")
+def snapshots(user_id: str = Depends(current_sme)):
+    """Stage A monthly feature snapshots (AI pipeline spec §2), one per complete month."""
+    _ensure_valid_bookkeeping(user_id)
+    settings = next((r for r in db.get_table_rows(user_id, "settings") if r.get("id") == "app"), {})
+    return {"snapshots": monthly_snapshots(db.get_table_rows(user_id, "transactions"),
+                                           db.get_table_rows(user_id, "banks", include_deleted=True), settings,
+                                           db.get_table_rows(user_id, "onboarding_financial_entries"))}
 
 
 @router.get("/summary")
