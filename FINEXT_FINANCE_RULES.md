@@ -456,7 +456,7 @@ Each trigger has a yellow and red condition, what to check, a suggested action a
 - **Cash on hand** = 1000 + 1010.
 - **Usual monthly expenses** = average monthly cash-out for operating expenses, interest and tax over the last 3 complete months *(assumption, see §12 Q8)*.
 - **Cash runway** = Cash on hand ÷ usual monthly expenses, in months. Red line = 0.5 months (2 weeks); yellow = 1 month.
-- **Days past terms** = today − due date of the open pay-later item.
+- **Days past terms** = today − date of the open pay-later item (no due dates yet, see §12 Q9).
 - **Supplier bill age** = today − bill date of the open payable.
 
 Every trigger result is stored with its date, level, the values used and whether the user dismissed it, so the app does not repeat the same alert.
@@ -529,3 +529,15 @@ Resolve these with the product owner before building the affected parts.
 | Q11 | Sales spike baseline | "Revenue 50% above the 3-month average" is checked on every entry, but the comparison window is not defined. | Compare month-to-date revenue, pro-rated to a full month, with the average of the last 3 complete months; only from month 4. |
 | Q12 | Typos in source | "DCSR" in triggers 13 and 14 means DSCR. | Use DSCR. |
 | Q13 | Opening balance split | "Difference goes to Owner's capital / Retained earnings" does not say how it is split. | Ask the user for owner's capital; post the remainder to retained earnings. |
+| Q14 | Opening balance date | §7 says opening balances are "dated the day before the first daily entry", but onboarding happens before any entry exists. | Date them when onboarding is completed (new business) or at the end of the entered period (existing business). |
+
+### Decisions (27 Oct 2026)
+
+These are settled; the app and backend follow them.
+
+- **Q1 Service income: keep.** `service_income` posts to `4100` Service revenue, and Sales revenue = `4000` + `4100` − `4900`. Many SMEs sell services; add the type and account to the Excel Types and Accounts sheets.
+- **Q6 Debt: includes leases.** Debt = `2400` + `2500` + `2600` + `2700` (loans and lease obligations). A lease is a fixed obligation lenders count as debt. The statement's quick ratio is labelled "Liabilities-to-equity".
+- **Q8 Usual expenses: cash paid.** Average over the last 3 complete months of cash paid for operating expenses, interest and tax. Pay-later bills count when they are paid (supplier payments against an expense bill).
+- **Q9 Payment terms: none for now.** Pay-later entries have no due date. Trigger 7 uses days since the entry (yellow 30, red 60 days, or receivable days at its line); trigger 8 uses days since the bill (yellow 45, red 60 days).
+- **Q13 Opening balance split: the user decides.** Onboarding shows a live balance check and offers to put the difference into Owner's capital; it cannot be finished until assets = liabilities + owner's equity.
+- **Q14 Opening balance date: at onboarding** (or the end of the entered period for an existing business).

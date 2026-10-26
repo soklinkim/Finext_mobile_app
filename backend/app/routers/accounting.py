@@ -649,11 +649,17 @@ def _cash_runway(user_id: str) -> tuple[float | None, dict]:
     start = datetime(year, month_zero + 1, 1, tzinfo=timezone.utc)
     expense_types = {"rent", "wages", "utilities", "transport", "marketing", "repairs", "fees_licences", "other_cost", "income_tax"}
     total = 0
-    for tx in _effective_transactions(user_id):
+    # Rules §12 Q8: cash actually paid for operating expenses, interest and tax. Pay-later bills
+    # count when they are paid (supplier payments against an expense bill), not when recorded.
+    rows = _effective_transactions(user_id)
+    expense_bills = {tx["id"] for tx in rows if tx["typeId"] in expense_types and tx["payMethod"] == "later"}
+    for tx in rows:
         occurred = datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=timezone.utc)
         if not start <= occurred < current_month:
             continue
-        amount = tx["amount"] if tx["typeId"] in expense_types else 0
+        settles = tx["typeId"] == "supplier_payment" and json.loads(tx.get("meta") or "{}").get("settlesId") in expense_bills
+        paid_now = tx["typeId"] in expense_types and tx["payMethod"] != "later"
+        amount = tx["amount"] if paid_now or settles else 0
         if tx["typeId"] == "loan_repayment":
             try:
                 amount = int(json.loads(tx.get("meta") or "{}").get("interest") or 0)
