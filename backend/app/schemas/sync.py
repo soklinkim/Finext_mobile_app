@@ -1,7 +1,11 @@
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from app import db
+from app.auth import current_user
 
 Currency = Literal["KHR", "USD"]
 
@@ -78,6 +82,8 @@ class Settings(SyncRow):
     registration_number: Optional[str] = None
     start_operation_date: Optional[str] = None
     owner_name: Optional[str] = None
+    owner_email: Optional[str] = None
+    owner_phone: Optional[str] = None
     location: Optional[str] = None
     contact: Optional[str] = None
     main_products: Optional[str] = None
@@ -85,8 +91,21 @@ class Settings(SyncRow):
     dark_theme: bool = False
 
 
+class OnboardingFinancialEntry(SyncRow):
+    section: Literal["balance_sheet", "income_statement"]
+    entry_key: str
+    amount: int  # minor units; net profit may be negative
+    currency: Currency
+    as_of: Optional[int] = None
+    period_start: Optional[int] = None
+    period_end: Optional[int] = None
+
+
 class PushBatch(BaseModel):
-    table: Literal["banks", "categories", "transactions", "business_assets", "budgets", "settings"]
+    table: Literal[
+        "banks", "categories", "transactions", "business_assets", "budgets",
+        "onboarding_financial_entries", "settings",
+    ]
     rows: list[dict]  # validated one by one in the router
 
 
@@ -100,11 +119,20 @@ class RejectedRow(BaseModel):
     reason: str
 
 
+class SyncConflict(BaseModel):
+    table: str
+    row: dict
+
+
 class PushResponse(BaseModel):
     accepted: dict[str, list[str]]  # table -> ids the server stored
     rejected: list[RejectedRow]
+    conflicts: list[SyncConflict] = Field(default_factory=list)  # server copy wins timestamp conflicts
+    postings: dict[str, list[dict]] = Field(default_factory=dict)  # transaction id -> deterministic journal lines
 
 
 class PullResponse(BaseModel):
     changes: list[PushBatch]
     cursor: str
+    has_more: bool = Field(default=False, serialization_alias="hasMore")  # pull again with the new cursor
+    reset: bool = False  # server has less than the client already saw: re-upload everything, pull from 0
