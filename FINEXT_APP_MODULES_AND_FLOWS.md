@@ -64,18 +64,17 @@ Each module lists **screens**, **functions** (what the code must do) and **data*
 
 ### 3.2 Onboarding (2)
 Screens, in order:
-1. **Welcome to Finext** (Next).
-2. **Select language**: Khmer, English - UK (single select, Next). Saves locale.
-3. **How would you like to start?** Two choices (single select, info icon shows a tooltip):
+1. **Select language**: Khmer, English - UK (single select, Next). Saves locale.
+2. **How would you like to start?** Two choices (single select, info icon shows a tooltip):
    - *Start new balance from today* → enter balance sheet info only.
    - *Starting with existing balance* → enter balance sheet info **and** income statement for a date range (start/end dates, **cannot be shorter than one month**).
-4. **Create business profile**: Business Name, Business Industry (dropdown with icon), Registration Status (dropdown; shows Registration Number when Registered), Start Operation Date, Owner Name, Location, Phone or Email, Main Products or Services.
-5. **Enter Business Assets - Current assets**: Cash & bank balances (bank selector, KHR and USD rows, "Add more bank"), Accounts receivable, Inventory, Prepaid & other current assets.
-6. **Enter Business Assets - Non-current**: Property, equipment & vehicles, Other long-term assets.
-7. **Enter Liabilities - Current**: Accounts payable, Customer deposits & deferred revenue, Accrued expenses & taxes payable, Short-term loans (bank / MFI), Other short-term borrowings.
-8. **Enter Liabilities - Non-current**: Long-term loans (bank / MFI, with lender), Lease obligations.
-9. **Owner's Equity**: Owner's capital, Retained earnings brought forward, Net profit for the period, Less: owner's drawings.
-10. *Only for "existing balance":* **Enter Revenue** (Sales revenue, Cost of goods sold) and **Operating Expenses** (Salaries & wages, Rent, Utilities, Marketing & advertising, Transport & delivery, Depreciation, Other operating expenses, Other income, Interest expense, Income tax). Each with Start Date / End Date.
+3. **Create business profile**: Business Name, Business Industry (dropdown with icon), Registration Status (dropdown; shows Registration Number when Registered), Start Operation Date, Owner Name, Location, Phone or Email, Main Products or Services.
+4. **Enter Business Assets - Current assets**: Cash & bank balances (bank selector, KHR and USD rows, "Add more bank"), Accounts receivable, Inventory, Prepaid & other current assets.
+5. **Enter Business Assets - Non-current**: Property, equipment & vehicles, Other long-term assets.
+6. **Enter Liabilities - Current**: Accounts payable, Customer deposits & deferred revenue, Accrued expenses & taxes payable, Short-term loans (bank / MFI), Other short-term borrowings.
+7. **Enter Liabilities - Non-current**: Long-term loans (bank / MFI, with lender), Lease obligations.
+8. **Owner's Equity**: Owner's capital, Retained earnings brought forward, Net profit for the period, Less: owner's drawings.
+9. *Only for "existing balance":* **Enter Revenue** (Sales revenue, Cost of goods sold) and **Operating Expenses** (Salaries & wages, Rent, Utilities, Marketing & advertising, Transport & delivery, Depreciation, Other operating expenses, Other income, Interest expense, Income tax). Each with Start Date / End Date.
 - Functions:
   - Per-step validation (numbers, dates, end date at least one month after start).
   - Each balance-sheet field has an info "!" tooltip (plain-language definition, from the template "What to enter" column).
@@ -208,9 +207,9 @@ Menu: Edit Profile, Security, Setting, Help, Logout.
 ```mermaid
 flowchart TD
   A[Launch] --> B{Has account?}
-  B -- No --> C[Sign Up] --> D[Onboarding: Welcome]
+  B -- No --> C[Sign Up] --> D[Select language]
   B -- Yes --> L[Log In]
-  D --> E[Select language] --> F[Start option]
+  D --> F[Start option]
   F -- From today --> G[Business profile] --> H[Assets] --> I[Liabilities] --> J[Equity] --> K[Balance check]
   F -- Existing balance --> G2[Business profile] --> H2[Assets] --> I2[Liabilities] --> J2[Equity] --> R[Revenue + Operating expenses] --> K
   K -- Balanced / adjusted --> M[Post opening balances] --> N[Home]
