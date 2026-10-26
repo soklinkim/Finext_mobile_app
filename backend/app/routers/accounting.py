@@ -5,7 +5,7 @@ from app.business_time import BUSINESS_TZ
 from typing import Annotated
 import json
 
-from app import db, loan_schedule
+from app import db, loan_schedule, risk
 from app.bookkeeping import PostingError, depreciation_entries, estimated_costs, journal_for, journal_response, loan_account_map, open_items, preview_impact, reversed_ids
 from app.auth import current_sme
 from app.accounting_validation import validate_bookkeeping_data, validate_opening_balances
@@ -317,6 +317,30 @@ def snapshots(user_id: str = Depends(current_sme)):
     return {"snapshots": monthly_snapshots(db.get_table_rows(user_id, "transactions"),
                                            db.get_table_rows(user_id, "banks", include_deleted=True), settings,
                                            db.get_table_rows(user_id, "onboarding_financial_entries"))}
+
+
+def _risk(user_id: str, proposed: dict | None = None) -> dict:
+    _ensure_valid_bookkeeping(user_id)
+    settings = next((r for r in db.get_table_rows(user_id, "settings") if r.get("id") == "app"), {})
+    return risk.assess(db.get_table_rows(user_id, "transactions"), db.get_table_rows(user_id, "banks", include_deleted=True),
+                       settings, db.get_table_rows(user_id, "onboarding_financial_entries"), proposed)
+
+
+@router.get("/risk")
+def future_risk(user_id: str = Depends(current_sme)):
+    """Layer 2 for the financial health dashboard: distress risk within 12 months (model) and debt capacity."""
+    return _risk(user_id)
+
+
+@router.post("/risk/loan-check")
+def loan_check(loan: Annotated[dict, Body()], user_id: str = Depends(current_sme)):
+    """The same, as if a proposed loan (amount, termMonths, annualInterestRate, rateType, repaymentFrequency,
+    optional installmentAmount) were taken: can the business afford it, and how does its risk change?"""
+    try:
+        proposed = risk.validate_proposed_loan(loan)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return _risk(user_id, proposed)
 
 
 @router.get("/summary")

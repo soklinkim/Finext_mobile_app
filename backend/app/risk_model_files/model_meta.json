@@ -1,0 +1,169 @@
+{
+  "model_version": "polish_bankruptcy-xgboost-20261026-231910",
+  "dataset": "polish_bankruptcy",
+  "target": "bankrupt_next_year",
+  "features": [
+    "net_profit_to_assets",
+    "liabilities_to_assets",
+    "working_capital_to_assets",
+    "current_ratio",
+    "liquid_days_of_expenses",
+    "retained_earnings_to_assets",
+    "ebit_to_assets",
+    "asset_turnover",
+    "equity_to_assets",
+    "pretax_margin",
+    "inventory_days",
+    "sales_growth",
+    "net_margin",
+    "cash_earnings_to_liabilities",
+    "interest_coverage",
+    "payable_days",
+    "cash_ratio",
+    "operating_margin",
+    "receivable_days",
+    "quick_ratio",
+    "short_term_liabilities_to_assets",
+    "costs_to_sales",
+    "long_term_liabilities_to_equity"
+  ],
+  "labels": {
+    "net_profit_to_assets": "Net profit relative to assets",
+    "liabilities_to_assets": "Liabilities relative to assets",
+    "working_capital_to_assets": "Working capital relative to assets",
+    "current_ratio": "Current ratio",
+    "liquid_days_of_expenses": "Days of expenses covered by liquid assets after short-term bills",
+    "retained_earnings_to_assets": "Retained earnings relative to assets",
+    "ebit_to_assets": "Operating profit relative to assets",
+    "asset_turnover": "Sales relative to assets",
+    "equity_to_assets": "Equity relative to assets",
+    "pretax_margin": "Profit before tax relative to sales",
+    "inventory_days": "Inventory days",
+    "sales_growth": "Sales relative to last year",
+    "net_margin": "Net profit margin",
+    "cash_earnings_to_liabilities": "Profit plus depreciation relative to liabilities",
+    "interest_coverage": "Operating profit relative to interest and finance costs",
+    "payable_days": "Short-term bills relative to daily cost of goods",
+    "cash_ratio": "Cash relative to short-term bills",
+    "operating_margin": "Operating profit margin",
+    "receivable_days": "Receivable days",
+    "quick_ratio": "Quick ratio (current assets without stock, relative to short-term bills)",
+    "short_term_liabilities_to_assets": "Short-term bills relative to assets",
+    "costs_to_sales": "Total costs relative to sales",
+    "long_term_liabilities_to_equity": "Long-term debt relative to equity"
+  },
+  "missing_text": {},
+  "calibration": {
+    "slope": 1.0202820812173239,
+    "intercept": -2.1517974198387035
+  },
+  "alert_threshold": 0.04390461538481806,
+  "risk_bands": {
+    "low": 0.3,
+    "high": 0.6
+  },
+  "range": {
+    "net_profit_to_assets": {
+      "low": -0.5342955,
+      "high": 0.5529479999999993
+    },
+    "liabilities_to_assets": {
+      "low": 0.01626242,
+      "high": 2.219939999999997
+    },
+    "working_capital_to_assets": {
+      "low": -1.19609,
+      "high": 0.8996435999999994
+    },
+    "current_ratio": {
+      "low": 0.1556512,
+      "high": 26.854099999999963
+    },
+    "liquid_days_of_expenses": {
+      "low": -760.9833,
+      "high": 768.5574999999941
+    },
+    "retained_earnings_to_assets": {
+      "low": -2.198769,
+      "high": 0.839524199999999
+    },
+    "ebit_to_assets": {
+      "low": -0.542469,
+      "high": 0.5855188999999994
+    },
+    "asset_turnover": {
+      "low": 0.1379496,
+      "high": 6.63500800000004
+    },
+    "equity_to_assets": {
+      "low": -1.309521,
+      "high": 0.9820191999999999
+    },
+    "pretax_margin": {
+      "low": -0.7067396,
+      "high": 0.4272098999999997
+    },
+    "inventory_days": {
+      "low": 0.0,
+      "high": 285.73979999999943
+    },
+    "sales_growth": {
+      "low": 0.32369800000000004,
+      "high": 2.704392
+    },
+    "net_margin": {
+      "low": -0.6284582999999999,
+      "high": 0.3929187999999992
+    },
+    "cash_earnings_to_liabilities": {
+      "low": -0.9889513,
+      "high": 6.814065999999993
+    },
+    "interest_coverage": {
+      "low": -83.85872,
+      "high": 5876.316000000345
+    },
+    "payable_days": {
+      "low": 6.927358,
+      "high": 1111.449000000001
+    },
+    "cash_ratio": {
+      "low": 0.001672500000000001,
+      "high": 16.085979999999992
+    },
+    "operating_margin": {
+      "low": -0.5942923999999997,
+      "high": 0.3990853999999997
+    },
+    "receivable_days": {
+      "low": 2.754744,
+      "high": 413.5193999999982
+    },
+    "quick_ratio": {
+      "low": 0.06015788000000001,
+      "high": 21.967119999999994
+    },
+    "short_term_liabilities_to_assets": {
+      "low": 0.01062845,
+      "high": 1.7664029999999955
+    },
+    "costs_to_sales": {
+      "low": 0.04359807000000001,
+      "high": 1.5316329999999991
+    },
+    "long_term_liabilities_to_equity": {
+      "low": -1.872961,
+      "high": 5.862755999999984
+    }
+  },
+  "results": {
+    "company_holdout": {
+      "pr_auc": 0.6589012976961494,
+      "roc_auc": 0.9318507890961263,
+      "calibration_error": 0.009319787138108212,
+      "recall": 0.9146341463414634,
+      "precision": 0.21994134897360704
+    }
+  },
+  "card": "**Real data, different businesses.** Annual accounts of Polish manufacturing companies (2000–2013) and whether they went bankrupt within a year. FINEXT computes the same ratios from an MSME's books, but Cambodian MSMEs are smaller and differently financed: describe output as *likely deterioration*, never as a prediction of loan default."
+}

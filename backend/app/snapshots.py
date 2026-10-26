@@ -186,7 +186,8 @@ def monthly_snapshots(transactions: list[dict], banks: list[dict], settings: dic
                             ("tax", tax), ("net_profit", net_profit), ("cash", cash), ("receivables", receivables),
                             ("inventory", inventory), ("payables", payables), ("current_assets", current_assets),
                             ("current_liabilities", current_liabilities), ("total_assets", total_assets),
-                            ("total_liabilities", total_liabilities), ("debt", debt), ("equity", equity), ("ocf", ocf),
+                            ("total_liabilities", total_liabilities), ("debt", debt), ("equity", equity),
+                            ("owner_capital", nat(("3000",))), ("ocf", ocf),
                             ("credit_sales", credit_sales.get(index, 0)), ("owner_drawings", drawings)):
             f.set(name, value)
         f.set("balance_check", total_assets - total_liabilities - equity)
@@ -319,7 +320,7 @@ def monthly_snapshots(transactions: list[dict], banks: list[dict], settings: dic
 
         statuses = rule_statuses(f.values)
         snapshot = {"period": f"{start:%Y-%m}", "monthEnd": month_end_ms, "version": SNAPSHOT_VERSION,
-                    "integrity": {"ok": True, "trialBalance": 0}, "features": f.values, "reasons": f.reasons,
+                    "complete": complete, "integrity": {"ok": True, "trialBalance": 0}, "features": f.values, "reasons": f.reasons,
                     "ratioStatus": statuses, "dimensions": dimension_summary(statuses)}
         snapshots.append(snapshot)
         history.append({**f.values, "_complete": complete})

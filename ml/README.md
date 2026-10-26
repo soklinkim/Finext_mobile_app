@@ -128,7 +128,8 @@ Every run reports these in the model card:
 
 ## Next steps toward the spec
 
-1. **Serving (C6)**: compute the same ratios from a FINEXT business's last 12 months of books, score them, store
-   predictions and SHAP drivers, show them on the dashboard.
+1. **Serving (C6)**: `backend/app/risk_features.py` already computes the same 23 ratios from a FINEXT business's
+   last 12 months of books (Polish definitions; `tests/test_backend_bridge.py` keeps the feature lists identical).
+   Still to do: a scoring endpoint with `RiskModel`, stored monthly predictions, and the dashboard card.
 2. **Real FINEXT outcomes**: once partner banks share missed or late repayments, restructuring and closures, train on
    FINEXT's own monthly snapshots (`backend/app/snapshots.py`) with the spec's `stress_3m` label; monitor drift (C7).
