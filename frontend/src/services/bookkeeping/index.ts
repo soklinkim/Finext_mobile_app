@@ -148,15 +148,19 @@ export interface TransactionView {
   note: string | null;
   bankName: string | null;
   syncStatus: Transaction['syncStatus'];
-  /** 'reversed' = cancelled by a reversal; 'reversal' / 'payment' = follow-up rows linked to another entry */
-  status: 'reversed' | 'reversal' | 'payment' | null;
-  /** pay-later entries only: amount still owed (0 once fully paid) */
+  /** 'reversed' = cancelled by a reversal; 'reversal' / 'payment' / 'writeOff' = follow-up rows linked to another entry */
+  status: 'reversed' | 'reversal' | 'payment' | 'writeOff' | null;
+  /** pay-later entries only: amount still owed (0 once fully paid or written off) */
   openBalance: number | null;
+  /** pay-later entries only: amount written off because the customer will not pay */
+  writtenOff: number | null;
 }
 
 /** "Mark as paid" and "Reverse" (spec: Actions) are recorded as their own entries linked to the original. */
 export const PAYMENT_TYPES = ['customer_payment', 'supplier_payment'] as const;
 export const REVERSAL_TYPE = 'reversal';
+/** "Write off unpaid amount" (spec: Actions): a customer will not pay. A bad-debt cost; no money moves. */
+export const WRITE_OFF_TYPE = 'write_off';
 
 function metaOf(t: Pick<Transaction, 'meta'>): Record<string, unknown> {
   try {
@@ -167,18 +171,22 @@ function metaOf(t: Pick<Transaction, 'meta'>): Record<string, unknown> {
 }
 
 const isPayment = (t: Pick<Transaction, 'typeId'>) => (PAYMENT_TYPES as readonly string[]).includes(t.typeId);
+/** Payments and write-offs: both reduce what is still owed on a pay-later entry. */
+const isSettlement = (t: Pick<Transaction, 'typeId'>) => isPayment(t) || t.typeId === WRITE_OFF_TYPE;
 
 /** Links between live entries: which are reversed, and how much has been paid against each pay-later entry. */
 function relations(rows: Transaction[]) {
   const reversed = new Set<string>();
   for (const r of rows) if (r.typeId === REVERSAL_TYPE) reversed.add(String(metaOf(r).reversesId ?? ''));
   const paid = new Map<string, number>();
+  const writtenOff = new Map<string, number>();
   for (const r of rows) {
-    if (!isPayment(r) || reversed.has(r.id)) continue;
+    if (!isSettlement(r) || reversed.has(r.id)) continue;
     const settles = String(metaOf(r).settlesId ?? '');
     paid.set(settles, (paid.get(settles) ?? 0) + r.amount);
+    if (r.typeId === WRITE_OFF_TYPE) writtenOff.set(settles, (writtenOff.get(settles) ?? 0) + r.amount);
   }
-  return { reversed, paid };
+  return { reversed, paid, writtenOff };
 }
 type Relations = ReturnType<typeof relations>;
 
@@ -194,6 +202,7 @@ function toView(
 ): TransactionView {
   const cat = t.categoryId ? cats.get(t.categoryId) : undefined;
   const reversed = rel?.reversed.has(t.id) ?? false;
+  const owedOn = t.payMethod === 'later' && !reversed && t.typeId !== REVERSAL_TYPE && t.typeId !== WRITE_OFF_TYPE;
   return {
     id: t.id,
     title: t.title,
@@ -210,8 +219,9 @@ function toView(
     note: t.note,
     bankName: t.bankId ? (banks.get(t.bankId)?.name ?? null) : null,
     syncStatus: t.syncStatus,
-    status: reversed ? 'reversed' : t.typeId === REVERSAL_TYPE ? 'reversal' : isPayment(t) ? 'payment' : null,
-    openBalance: t.payMethod === 'later' && !reversed && t.typeId !== REVERSAL_TYPE ? Math.max(0, t.amount - (rel?.paid.get(t.id) ?? 0)) : null,
+    status: reversed ? 'reversed' : t.typeId === REVERSAL_TYPE ? 'reversal' : isPayment(t) ? 'payment' : t.typeId === WRITE_OFF_TYPE ? 'writeOff' : null,
+    openBalance: owedOn ? Math.max(0, t.amount - (rel?.paid.get(t.id) ?? 0)) : null,
+    writtenOff: owedOn ? (rel?.writtenOff.get(t.id) ?? 0) : null,
   };
 }
 
@@ -411,7 +421,7 @@ export async function getMonthOverview(year: number, month: number): Promise<{ c
 
 export interface EntryDetail {
   entry: TransactionView;
-  /** payments recorded against this pay-later entry, oldest first */
+  /** payments and write-offs recorded against this pay-later entry, oldest first */
   payments: TransactionView[];
   /** the entry that cancelled this one, if any */
   reversal: TransactionView | null;
@@ -429,7 +439,7 @@ export async function getEntryDetail(id: string): Promise<EntryDetail | null> {
   if (!row) return null;
   const view = (r: Transaction) => toView(r, cats, banks, rel);
   const meta = metaOf(row);
-  const payments = rows.filter((r) => isPayment(r) && metaOf(r).settlesId === id).sort((a, b) => a.occurredAt - b.occurredAt).map(view);
+  const payments = rows.filter((r) => isSettlement(r) && metaOf(r).settlesId === id).sort((a, b) => a.occurredAt - b.occurredAt).map(view);
   const reversal = rows.find((r) => r.typeId === REVERSAL_TYPE && metaOf(r).reversesId === id);
   const linkedId = String(meta.settlesId ?? meta.reversesId ?? '');
   const linked = linkedId ? rows.find((r) => r.id === linkedId) : undefined;
@@ -485,6 +495,52 @@ export async function recordPayment(input: PaymentInput): Promise<AddResult> {
     note: null,
     occurredAt: input.occurredAt ?? Date.now(),
     reviewFlag: false,
+    meta: JSON.stringify({ settlesId: original.id }),
+  };
+  db.insert(schema.transactions).values(row).run();
+  emitChange();
+  return { ok: true, id: row.id };
+}
+
+export interface WriteOffInput {
+  entryId: string;
+  amount: number; // minor units, in the original entry's currency
+  note: string;
+  title: string;
+}
+
+/** Write off unpaid amount (spec: Actions) — a customer will not pay. Posts a bad-debt cost; note required. */
+export async function recordWriteOff(input: WriteOffInput): Promise<AddResult> {
+  const rows = allLive();
+  const rel = relations(rows);
+  const original = rows.find((r) => r.id === input.entryId);
+  if (!original || original.payMethod !== 'later' || original.direction !== 'in' || rel.reversed.has(original.id) || isSettlement(original) || original.typeId === REVERSAL_TYPE) {
+    return { ok: false, errors: { amount: 'error.cannotWriteOff' } };
+  }
+  const stillOwed = original.amount - (rel.paid.get(original.id) ?? 0);
+  const errors: ValidationErrors = {};
+  if (!(input.amount > 0)) errors.amount = 'error.amountPositive';
+  else if (input.amount > stillOwed) errors.amount = 'error.payMoreThanOwed';
+  if (!input.note.trim()) errors.note = 'error.required';
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+
+  const row = {
+    ...newRowMeta(),
+    title: input.title,
+    typeId: WRITE_OFF_TYPE,
+    direction: 'out' as Direction,
+    groupId: null,
+    amount: Math.round(input.amount),
+    currency: original.currency,
+    exchangeRate: original.exchangeRate,
+    payMethod: 'later' as const, // no money moves: it clears part of what the customer owed
+    bankId: null,
+    toBankId: null,
+    categoryId: null,
+    counterparty: original.counterparty,
+    note: input.note.trim(),
+    occurredAt: Date.now(),
+    reviewFlag: true,
     meta: JSON.stringify({ settlesId: original.id }),
   };
   db.insert(schema.transactions).values(row).run();

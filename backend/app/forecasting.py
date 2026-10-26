@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from app.business_time import BUSINESS_TZ
 from math import sqrt
 
-from app.bookkeeping import depreciation_entries, journal_for, loan_account_map
+from app.bookkeeping import depreciation_entries, estimated_costs, journal_for, loan_account_map
 
 REVENUE_ACCOUNTS = {"4000", "4100", "4200", "4900"}
 EXPENSE_ACCOUNTS = {
@@ -55,6 +55,7 @@ def forecast_income_expense(
 
     bank_kinds = {bank["id"]: bank["kind"] for bank in banks}
     loan_accounts = loan_account_map(transactions)
+    costs = estimated_costs(transactions)
     for transaction in transactions:
         if transaction.get("deletedAt") is not None:
             continue
@@ -63,7 +64,7 @@ def forecast_income_expense(
         if bucket is None:
             continue
         has_activity = False
-        for line in journal_for(transaction, bank_kinds, loan_accounts):
+        for line in journal_for(transaction, bank_kinds, loan_accounts, costs):
             amount = line["amount"]
             if transaction["currency"] != currency:
                 exchange_rate = transaction.get("exchangeRate", rate)

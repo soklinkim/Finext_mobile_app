@@ -245,9 +245,21 @@ export const en = {
   'entry.reverseConfirmTitle': 'Reverse this entry?',
   'entry.reverseConfirmBody': 'A reversing entry dated today will cancel it in your totals and reports. To correct it, reverse it and then record it again.',
   'entry.reverseTitle': 'Reversal: {title}',
-  'entry.reverseBlockedPayments': 'Payments are recorded against this entry. Reverse those payments first, then you can reverse this entry.',
+  'entry.reverseBlockedPayments': 'Payments or write-offs are recorded against this entry. Reverse those first, then you can reverse this entry.',
   'entry.reverseBlockedDone': 'This entry has already been reversed.',
   'entry.reverseBlockedReversal': 'A reversal can’t be reversed.',
+  'entry.writeOff': 'Write off',
+  'entry.writeOffHint': 'Use this when the customer will not pay. The unpaid amount becomes a cost (bad debt).',
+  'entry.writeOffAmount': 'Amount to write off',
+  'entry.writeOffReason': 'Reason',
+  'entry.saveWriteOff': 'Write off this amount',
+  'entry.writeOffConfirmTitle': 'Write off this amount?',
+  'entry.writeOffConfirmBody': 'It will no longer count as owed to you, and it lowers your profit. If the customer pays later, reverse the write-off first.',
+  'entry.writeOffTitle': 'Written off: {name}',
+  'entry.writeOffFor': 'Write-off for: {title}',
+  'entry.writtenOffOf': '{amount} written off',
+  'entry.closedWrittenOff': 'Closed · written off',
+  'entry.badgeWrittenOff': 'Written off',
 
   // entry groups + types
   'group.sales': 'Sales',
@@ -280,6 +292,7 @@ export const en = {
   'type.customer_payment': 'Customer payment',
   'type.supplier_payment': 'Supplier payment',
   'type.reversal': 'Reversal',
+  'type.write_off': 'Bad debt written off',
 
   // impact strip
   'impact.sales': 'Adds {amount} to this month’s sales',
@@ -312,6 +325,7 @@ export const en = {
   'error.amountPositive': 'Enter an amount above zero',
   'error.cannotPay': 'This entry can’t take a payment.',
   'error.payMoreThanOwed': 'That’s more than is still owed.',
+  'error.cannotWriteOff': 'Only an unpaid customer sale can be written off.',
   'error.cannotReverse': 'This entry can’t be reversed.',
   'error.payLaterNotAllowed': 'Pay later is not available for this type',
   'error.partyRequired': 'Enter a name',

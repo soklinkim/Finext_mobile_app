@@ -6,7 +6,7 @@ from typing import Annotated
 import json
 
 from app import db
-from app.bookkeeping import PostingError, depreciation_entries, journal_for, journal_response, loan_account_map, open_items, preview_impact, reversed_ids
+from app.bookkeeping import PostingError, depreciation_entries, estimated_costs, journal_for, journal_response, loan_account_map, open_items, preview_impact, reversed_ids
 from app.auth import current_sme
 from app.accounting_validation import validate_bookkeeping_data, validate_opening_balances
 from app.financial_statement import ACCOUNT_NAMES, DEBIT_NORMAL_ACCOUNTS, ONBOARDING_ACCOUNT_MAP, natural_balance
@@ -126,8 +126,12 @@ def _statement_period(now: datetime, period: str):
     if period == "annual":
         current_start = datetime(now.year, 1, 1, tzinfo=BUSINESS_TZ)
         prior_start = datetime(now.year - 1, 1, 1, tzinfo=BUSINESS_TZ)
-        elapsed = now - current_start + timedelta(milliseconds=1)
-        return (current_start, now + timedelta(milliseconds=1), prior_start, prior_start + elapsed,
+        # Same calendar date last year, not the same number of days: a leap year would shift it by one.
+        try:
+            prior_now = now.replace(year=now.year - 1)
+        except ValueError:  # 29 February: compare with all of February last year
+            prior_now = datetime(now.year - 1, 3, 1, tzinfo=BUSINESS_TZ) - timedelta(milliseconds=1)
+        return (current_start, now + timedelta(milliseconds=1), prior_start, prior_now + timedelta(milliseconds=1),
                 f"Year to date {now.year}", f"Year to date {now.year - 1}")
 
     raise HTTPException(status_code=400, detail="period must be weekly, monthly, or annual")
@@ -150,6 +154,7 @@ def statements(user_id: str = Depends(current_sme), period: Annotated[str, Query
     balances: dict[str, int] = {}
     bank_kinds = {b["id"]: b["kind"] for b in banks}
     loan_accounts = loan_account_map(transactions)
+    costs = estimated_costs(transactions)
 
     def signed(line: dict, amount: int) -> int:
         return amount if line["side"] == "debit" else -amount
@@ -157,7 +162,7 @@ def statements(user_id: str = Depends(current_sme), period: Annotated[str, Query
     for tx in transactions:
         if tx.get("deletedAt") is not None:
             continue
-        lines = journal_for(tx, bank_kinds, loan_accounts)
+        lines = journal_for(tx, bank_kinds, loan_accounts, costs)
         when = datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=BUSINESS_TZ)
         for line in lines:
             amount = _minor_amount(line["amount"], tx["currency"], currency, tx.get("exchangeRate", rate))
@@ -290,13 +295,14 @@ def summary(user_id: str = Depends(current_sme)):
     rate = settings.get("rateKhrPerUsd", 4000)
     bank_kinds = {b["id"]: b["kind"] for b in banks}
     loan_accounts = loan_account_map(transactions)
+    costs = estimated_costs(transactions)
     revenue_codes = {"4000", "4100", "4200", "4900"}
     expense_codes = {"5000", "6000", "6100", "6200", "6300", "6400", "6500", "6600", "6700", "6800", "6900", "6950", "6990", "7000", "7100"}
     total_income = total_expense = 0
     for tx in transactions:
         if tx.get("deletedAt") is not None:
             continue
-        for posting in journal_for(tx, bank_kinds, loan_accounts):
+        for posting in journal_for(tx, bank_kinds, loan_accounts, costs):
             amount = _minor_amount(posting["amount"], tx["currency"], currency, tx.get("exchangeRate", rate))
             code = posting["accountCode"]
             if code in revenue_codes:
@@ -335,6 +341,7 @@ def _quarter_profit(user_id: str, currency: str, rate: int, start: datetime, end
     banks = db.get_table_rows(user_id, "banks", include_deleted=True)
     bank_kinds = {b["id"]: b["kind"] for b in banks}
     loan_accounts = loan_account_map(tx_rows)
+    costs = estimated_costs(tx_rows)
     activity: dict[str, int] = {}
     for tx in tx_rows:
         if tx.get("deletedAt") is not None:
@@ -342,7 +349,7 @@ def _quarter_profit(user_id: str, currency: str, rate: int, start: datetime, end
         occurred = datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=BUSINESS_TZ)
         if not start <= occurred < end:
             continue
-        for posting in journal_for(tx, bank_kinds, loan_accounts):
+        for posting in journal_for(tx, bank_kinds, loan_accounts, costs):
             amount = _minor_amount(posting["amount"], tx["currency"], currency, tx.get("exchangeRate", rate))
             activity[posting["accountCode"]] = activity.get(posting["accountCode"], 0) + (amount if posting["side"] == "debit" else -amount)
     opening = db.get_table_rows(user_id, "onboarding_financial_entries")
@@ -361,9 +368,10 @@ def _quarter_profit(user_id: str, currency: str, rate: int, start: datetime, end
     operating = natural(("6000", "6100", "6200", "6300", "6400", "6500", "6600", "6700", "6800", "6900", "6950", "6990"))
     other = -activity.get("4200", 0)
     interest = natural(("7000",))
-    ebit = revenue - cogs - operating + other
+    operating_profit = revenue - cogs - operating
+    # Rules §9.3: EBIT = operating profit + other income (§12 Q7); EBITDA = operating profit + depreciation.
     return {"revenue": revenue, "cogs": cogs, "operating": operating, "other": other,
-            "interest": interest, "ebit": ebit, "ebitda": ebit + natural(("6800",))}
+            "interest": interest, "ebit": operating_profit + other, "ebitda": operating_profit + natural(("6800",))}
 
 
 def _scheduled_debt_service(user_id: str, currency: str, rate: int, start: datetime, end: datetime) -> tuple[int, bool]:
@@ -699,6 +707,10 @@ def _sales_spike(user_id: str) -> tuple[float | None, dict]:
         end_index = index + 1
         end_year, end_month_zero = divmod(end_index, 12)
         months.append((start, datetime(end_year, end_month_zero + 1, 1, tzinfo=BUSINESS_TZ)))
+    # Rules §12 Q11: only from month 4, once three complete months of records exist to average.
+    began = _business_start(user_id)
+    if began is None or began > months[0][0]:
+        return None, {}
     txs = _effective_transactions(user_id)
     history = [0, 0, 0]
     current = 0
@@ -739,6 +751,7 @@ def _cash_profit_trend(user_id: str) -> list[dict]:
     currency, rate = settings.get("displayCurrency", "USD"), settings.get("rateKhrPerUsd", 4000)
     bank_kinds = {b["id"]: b["kind"] for b in banks}
     loan_accounts = loan_account_map(tx_rows)
+    costs = estimated_costs(tx_rows)
     output = []
     revenue_codes = {"4000", "4100", "4200", "4900"}
     expense_codes = {"5000", "6000", "6100", "6200", "6300", "6400", "6500", "6600", "6700", "6800", "6900", "6950", "6990", "7000", "7100"}
@@ -752,7 +765,7 @@ def _cash_profit_trend(user_id: str) -> list[dict]:
             occurred = datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=BUSINESS_TZ)
             if not start <= occurred < end:
                 continue
-            for line in journal_for(tx, bank_kinds, loan_accounts):
+            for line in journal_for(tx, bank_kinds, loan_accounts, costs):
                 code = line["accountCode"]
                 value = _minor_amount(line["amount"], tx["currency"], currency, tx.get("exchangeRate", rate))
                 signed = value if line["side"] == "debit" else -value
@@ -799,6 +812,7 @@ def _activity_rows(user_id: str):
     rate = settings.get("rateKhrPerUsd", 4000)
     kinds = {b["id"]: b["kind"] for b in banks}
     loan_accounts = loan_account_map(transactions)
+    costs = estimated_costs(transactions)
     expenses = {"5000", "6000", "6100", "6200", "6300", "6400", "6500", "6600", "6700", "6800", "6900", "6950", "6990", "7000", "7100"}
     revenue = {"4000", "4100", "4200", "4900"}
     output = []
@@ -806,7 +820,7 @@ def _activity_rows(user_id: str):
         if tx.get("deletedAt") is not None:
             continue
         inc = exp = 0
-        for line in journal_for(tx, kinds, loan_accounts):
+        for line in journal_for(tx, kinds, loan_accounts, costs):
             amount = _minor_amount(line["amount"], tx["currency"], target, tx.get("exchangeRate", rate))
             code = line["accountCode"]
             if code in revenue:
@@ -892,13 +906,14 @@ def categories(user_id: str = Depends(current_sme)):
     banks = db.get_table_rows(user_id, "banks", include_deleted=True)
     kinds = {b["id"]: b["kind"] for b in banks}
     loan_accounts = loan_account_map(list(transactions.values()))
+    costs = estimated_costs(list(transactions.values()))
     settings = next((r for r in db.get_table_rows(user_id, "settings") if r.get("id") == "app"), {})
     rate = settings.get("rateKhrPerUsd", 4000)
     expenses = {"5000", "6000", "6100", "6200", "6300", "6400", "6500", "6600", "6700", "6800", "6900", "6950", "6990", "7000", "7100"}
     for tx in transactions.values():
         if datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=BUSINESS_TZ) < start:
             continue
-        for line in journal_for(tx, kinds, loan_accounts):
+        for line in journal_for(tx, kinds, loan_accounts, costs):
             if line["accountCode"] not in expenses or line["side"] != "debit":
                 continue
             code = line["accountCode"]

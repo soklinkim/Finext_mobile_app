@@ -20,6 +20,7 @@ import {
   listBanks,
   parseAmountInput,
   recordPayment,
+  recordWriteOff,
   reverseEntry,
   type EntryDetail,
   type ValidationErrors,
@@ -99,6 +100,46 @@ function PaymentForm({ detail, onDone }: { detail: EntryDetail; onDone: () => vo
   );
 }
 
+/** Write off unpaid amount: the customer will not pay. Needs a reason, and asks before saving. */
+function WriteOffForm({ detail, onDone }: { detail: EntryDetail; onDone: () => void }) {
+  const { t } = useI18n();
+  const { entry } = detail;
+  const owed = entry.openBalance ?? 0;
+  const toText = (minor: number) => (entry.currency === 'USD' ? (minor / 100).toFixed(2) : String(minor));
+  const [amountText, setAmountText] = useState(toText(owed));
+  const [note, setNote] = useState('');
+  const [errors, setErrors] = useState<ValidationErrors>({});
+  const amount = parseAmountInput(amountText, entry.currency);
+  const err = (key: keyof ValidationErrors) => (errors[key] ? t(errors[key] as TKey) : undefined);
+
+  const save = () => confirmAction(t('entry.writeOffConfirmTitle'), t('entry.writeOffConfirmBody'), t('entry.writeOff'), t('common.cancel'), async () => {
+    const result = await recordWriteOff({
+      entryId: entry.id,
+      amount,
+      note,
+      title: t('entry.writeOffTitle', { name: entry.counterparty ?? entry.title }),
+    });
+    if (result.ok) onDone();
+    else setErrors(result.errors);
+  });
+
+  return (
+    <View style={{ gap: 12 }}>
+      <TextField
+        label={t('entry.writeOffAmount')}
+        value={amountText}
+        onChangeText={(v) => setAmountText(formatAmountTyping(v, entry.currency))}
+        keyboardType="decimal-pad"
+        error={err('amount')}
+        right={<Text variant="body-sm" weight={500}>{entry.currency}</Text>}
+      />
+      <TextField label={t('entry.writeOffReason')} value={note} onChangeText={setNote} error={err('note')} />
+      <Text variant="micro" tone="neutral-600">{t('entry.writeOffHint')}</Text>
+      <Button size="sm" variant="soft" label={t('entry.saveWriteOff')} onPress={save} />
+    </View>
+  );
+}
+
 /** One entry: details, payment status for pay-later entries, and Reverse (spec: Actions). */
 export default function EntryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -107,6 +148,7 @@ export default function EntryScreen() {
   const dark = useAppTheme();
   const { data: detail, loading } = useLocalQuery(() => getEntryDetail(String(id)), [id]);
   const [paying, setPaying] = useState(false);
+  const [writingOff, setWritingOff] = useState(false);
   const [reverseError, setReverseError] = useState<string | null>(null);
   const card = { padding: 16, borderRadius: radius.card, gap: 8, backgroundColor: dark ? colors.dark.surface : colors.white, borderWidth: 1, borderColor: dark ? colors.dark.border : colors.neutral[200] } as const;
 
@@ -117,7 +159,8 @@ export default function EntryScreen() {
   const reversed = entry.status === 'reversed';
   const party = entry.direction === 'in' ? t('entry.customerLabel') : t('entry.supplierLabel');
   const amountText = entry.direction === 'move' ? formatMoney(entry.amount, entry.currency) : formatMoney(entry.signed, entry.currency);
-  const paid = entry.openBalance === null ? 0 : entry.amount - entry.openBalance;
+  const writtenOff = entry.writtenOff ?? 0;
+  const paid = entry.openBalance === null ? 0 : entry.amount - entry.openBalance - writtenOff;
 
   const reverse = () => confirmAction(t('entry.reverseConfirmTitle'), t('entry.reverseConfirmBody'), t('entry.reverse'), t('common.cancel'), async () => {
     const result = await reverseEntry(entry.id, t('entry.reverseTitle', { title: entry.title }));
@@ -139,7 +182,9 @@ export default function EntryScreen() {
           </Text>
           <View style={{ marginTop: 4 }}>
             <DetailRow label={t('entry.dateLabel')} value={formatTxDate(entry.occurredAt, locale)} />
-            <DetailRow label={t('entry.paidWith')} value={entry.payMethod === 'later' ? t('entry.payLater') : entry.bankName ?? '—'} />
+            {entry.status !== 'writeOff' && (
+              <DetailRow label={t('entry.paidWith')} value={entry.payMethod === 'later' ? t('entry.payLater') : entry.bankName ?? '—'} />
+            )}
             {entry.counterparty ? <DetailRow label={party} value={entry.counterparty} /> : null}
             {entry.note ? <DetailRow label={t('entry.noteLabel')} value={entry.note} /> : null}
           </View>
@@ -149,7 +194,7 @@ export default function EntryScreen() {
         {linked && (
           <Pressable accessibilityRole="link" onPress={() => router.push({ pathname: '/entry/[id]', params: { id: linked.id } })} style={[card, { backgroundColor: dark ? colors.dark.surface : colors.primary[50], borderColor: 'transparent' }]}>
             <Text variant="caption" tone="primary-900">
-              {t(entry.status === 'reversal' ? 'entry.reverses' : 'entry.paymentFor', { title: linked.title })} ›
+              {t(entry.status === 'reversal' ? 'entry.reverses' : entry.status === 'writeOff' ? 'entry.writeOffFor' : 'entry.paymentFor', { title: linked.title })} ›
             </Text>
           </Pressable>
         )}
@@ -164,14 +209,17 @@ export default function EntryScreen() {
           <View style={card}>
             <View className="flex-row items-center justify-between">
               <Text variant="body" weight={700} tone="primary-900">{t('entry.paymentStatus')}</Text>
-              <Text variant="caption" weight={600} style={{ color: entry.openBalance === 0 ? colors.success : colors.alert }}>
-                {entry.openBalance === 0 ? t('entry.fullyPaid') : t('entry.stillOwed', { amount: formatMoney(entry.openBalance, entry.currency) })}
+              <Text variant="caption" weight={600} style={{ color: entry.openBalance > 0 ? colors.alert : writtenOff ? colors.neutral[600] : colors.success }}>
+                {entry.openBalance > 0
+                  ? t('entry.stillOwed', { amount: formatMoney(entry.openBalance, entry.currency) })
+                  : t(writtenOff ? 'entry.closedWrittenOff' : 'entry.fullyPaid')}
               </Text>
             </View>
             <View style={{ height: 7, borderRadius: 99, backgroundColor: dark ? colors.dark.field : colors.neutral[200], overflow: 'hidden' }}>
               <View style={{ width: `${(paid / entry.amount) * 100}%`, height: '100%', backgroundColor: colors.success }} />
             </View>
             <Text variant="micro" tone="neutral-600">{t('entry.paidOf', { paid: formatMoney(paid, entry.currency), total: formatMoney(entry.amount, entry.currency) })}</Text>
+            {writtenOff > 0 && <Text variant="micro" tone="neutral-600">{t('entry.writtenOffOf', { amount: formatMoney(writtenOff, entry.currency) })}</Text>}
             {payments.length > 0 && (
               <View>
                 <Text variant="caption" weight={600} tone="primary-900" style={{ marginTop: 6 }}>{t('entry.payments')}</Text>
@@ -180,8 +228,14 @@ export default function EntryScreen() {
             )}
             {entry.openBalance > 0 && (paying ? (
               <PaymentForm detail={detail} onDone={() => setPaying(false)} />
+            ) : writingOff ? (
+              <WriteOffForm detail={detail} onDone={() => setWritingOff(false)} />
             ) : (
-              <Button size="sm" icon="check" label={t('entry.markPaid')} onPress={() => setPaying(true)} />
+              <View style={{ gap: 8 }}>
+                <Button size="sm" icon="check" label={t('entry.markPaid')} onPress={() => setPaying(true)} />
+                {/* Write-offs are for customers who will not pay (spec: Actions); supplier bills are paid. */}
+                {entry.direction === 'in' && <Button size="sm" variant="soft" label={t('entry.writeOff')} onPress={() => setWritingOff(true)} />}
+              </View>
             ))}
           </View>
         )}

@@ -22,12 +22,17 @@ EXPECTED_DIRECTIONS = {
     "owner_drawings": "out", "transfer": "move",
     # "Mark as paid" (spec: Actions): settle a pay-later entry, fully or in part.
     "customer_payment": "in", "supplier_payment": "out",
+    # "Write off unpaid amount" (spec: Actions): the customer will not pay. A cost, so "out".
+    "write_off": "out",
 }
 # "Edit or reverse" (spec: Actions): swaps every debit and credit of the original entry.
 # Its direction is the opposite of the original's ("move" stays "move").
 REVERSAL = "reversal"
 OPPOSITE_DIRECTION = {"in": "out", "out": "in", "move": "move"}
 PAYMENT_TYPES = {"customer_payment", "supplier_payment"}
+WRITE_OFF = "write_off"
+# Entries that reduce what is still owed on a pay-later entry.
+SETTLEMENT_TYPES = PAYMENT_TYPES | {WRITE_OFF}
 
 
 def _meta(transaction: dict[str, Any]) -> dict[str, Any]:
@@ -66,8 +71,57 @@ def loan_account_map(transactions: list[dict[str, Any]]) -> dict[str, str]:
     return {name: next(iter(codes)) if len(codes) == 1 else "ambiguous" for name, codes in accounts.items()}
 
 
+# Rules §12 Q4: a product sale with no cost uses the cost share of the sales with an entered cost in the
+# three complete months before the sale's month, or the 33% benchmark gross margin until there are any.
+BENCHMARK_COST_SHARE = (67, 100)
+COST_HISTORY_MONTHS = 3
+
+
+def _default_cost(amount: int) -> int:
+    cost, sales = BENCHMARK_COST_SHARE
+    return (amount * cost + sales // 2) // sales
+
+
+def _usd_cents(amount: int, transaction: dict[str, Any]) -> int:
+    if transaction.get("currency") == "USD":
+        return amount
+    return round(amount * 100 / (transaction.get("exchangeRate") or 1))
+
+
+def estimated_costs(transactions: list[dict[str, Any]]) -> dict[str, int]:
+    """Estimated cost of each product sale entered without one, keyed by the sale's id.
+
+    Depends only on the sale's own date and earlier entries, so a sale's journal does not change
+    as time passes, and a reversal (which posts from the original's id) mirrors it exactly.
+    """
+    live = [tx for tx in transactions if tx.get("deletedAt") is None and tx.get("typeId") == "product_sale"]
+    cancelled = reversed_ids([tx for tx in transactions if tx.get("deletedAt") is None])
+    entered: dict[int, list[int]] = {}  # month index -> [cost, sales] in USD cents
+    blank: list[tuple[dict[str, Any], int]] = []
+    for tx in live:
+        try:
+            cost = _meta(tx).get("cost")
+        except PostingError:
+            continue
+        when = datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=BUSINESS_TZ)
+        month = when.year * 12 + when.month - 1
+        if cost is None:
+            blank.append((tx, month))
+        elif isinstance(cost, int) and not isinstance(cost, bool) and cost >= 0 and tx["id"] not in cancelled:
+            totals = entered.setdefault(month, [0, 0])
+            totals[0] += _usd_cents(cost, tx)
+            totals[1] += _usd_cents(tx["amount"], tx)
+    estimates = {}
+    for tx, month in blank:
+        window = [entered.get(m, (0, 0)) for m in range(month - COST_HISTORY_MONTHS, month)]
+        cost, sales = sum(c for c, _ in window), sum(s for _, s in window)
+        estimates[tx["id"]] = (tx["amount"] * cost + sales // 2) // sales if sales > 0 else _default_cost(tx["amount"])
+    return estimates
+
+
 def build_journal(transaction: dict[str, Any], bank_kinds: dict[str, str] | None = None,
-                  loan_accounts: dict[str, str] | None = None) -> list[dict[str, Any]]:
+                  loan_accounts: dict[str, str] | None = None,
+                  cost_estimates: dict[str, int] | None = None) -> list[dict[str, Any]]:
     """Map one synced frontend transaction to the workbook's journal lines."""
     type_id = transaction["typeId"]
     amount = transaction["amount"]
@@ -89,7 +143,7 @@ def build_journal(transaction: dict[str, Any], bank_kinds: dict[str, str] | None
             raise PostingError("reversal amount and currency must match the original")
         swapped = {"debit": "credit", "credit": "debit"}
         return [{**line, "side": swapped[line["side"]]}
-                for line in build_journal({**original, "id": meta["reversesId"]}, bank_kinds, loan_accounts)]
+                for line in build_journal({**original, "id": meta["reversesId"]}, bank_kinds, loan_accounts, cost_estimates)]
 
     if type_id not in EXPECTED_DIRECTIONS:
         raise PostingError(f"unknown entry type: {type_id}")
@@ -97,6 +151,16 @@ def build_journal(transaction: dict[str, Any], bank_kinds: dict[str, str] | None
         raise PostingError(f"{type_id} must have direction {EXPECTED_DIRECTIONS[type_id]}")
     if amount <= 0:
         raise PostingError("amount must be positive")
+
+    if type_id == WRITE_OFF:
+        # No money moves: the unpaid amount becomes a bad-debt cost.
+        if pay_method != "later":
+            raise PostingError("a write-off moves no money; record it against the customer's account")
+        if not meta.get("settlesId"):
+            raise PostingError("a write-off must say which unpaid sale it clears")
+        if not (transaction.get("note") or "").strip():
+            raise PostingError("note is required")
+        return [_line("debit", "6990", amount), _line("credit", "1100", amount)]
 
     pay_later = {"product_sale", "service_income", "rent", "wages", "utilities", "transport", "marketing", "repairs", "other_cost", "stock_materials", "equipment_purchase"}
     if pay_method == "later" and type_id not in pay_later:
@@ -148,7 +212,9 @@ def build_journal(transaction: dict[str, Any], bank_kinds: dict[str, str] | None
         if type_id == "product_sale":
             cost = meta.get("cost")
             if cost is None:
-                cost = (amount * 67 + 50) // 100  # FINEXT rule: 33% gross margin until history exists.
+                cost = (cost_estimates or {}).get(transaction.get("id"))
+                if cost is None:
+                    cost = _default_cost(amount)
             if not isinstance(cost, int) or cost < 0:
                 raise PostingError("cost must be a non-negative integer minor amount")
             lines = [cash, _line("credit", "4000", amount)]
@@ -226,8 +292,10 @@ def preview_impact(payload: dict[str, Any], banks: list[dict[str, Any]],
         "bankId": bank_id, "toBankId": to_bank_id,
         "counterparty": payload.get("counterparty"), "note": payload.get("note"),
         "meta": payload.get("meta") or {},
+        "occurredAt": payload.get("occurredAt") if isinstance(payload.get("occurredAt"), int)
+        else int(datetime.now(BUSINESS_TZ).timestamp() * 1000),
     }
-    lines = journal_for(transaction, bank_kinds, loan_account_map(transactions))
+    lines = journal_for(transaction, bank_kinds, loan_account_map(transactions), estimated_costs(transactions + [transaction]))
     revenue_codes = {"4000", "4100", "4200", "4900"}
     expense_codes = {"5000", "6000", "6100", "6200", "6300", "6400", "6500", "6600", "6700", "6800", "6900", "6950", "6990", "7000", "7100"}
     impact = sum(
@@ -265,8 +333,9 @@ def validate_balanced(lines: list[dict[str, Any]]) -> None:
 
 
 def journal_for(transaction: dict[str, Any], bank_kinds: dict[str, str] | None = None,
-                loan_accounts: dict[str, str] | None = None) -> list[dict[str, Any]]:
-    lines = build_journal(transaction, bank_kinds, loan_accounts)
+                loan_accounts: dict[str, str] | None = None,
+                cost_estimates: dict[str, int] | None = None) -> list[dict[str, Any]]:
+    lines = build_journal(transaction, bank_kinds, loan_accounts, cost_estimates)
     validate_balanced(lines)
     return [{"lineNo": i + 1, **line, "currency": transaction["currency"]} for i, line in enumerate(lines)]
 
@@ -275,6 +344,7 @@ def journal_response(transactions: list[dict[str, Any]], banks: list[dict[str, A
     """Build journal entries for a user's synced, non-deleted transactions."""
     bank_kinds = {b["id"]: b["kind"] for b in banks if b.get("deletedAt") is None}
     loan_accounts = loan_account_map(transactions)
+    costs = estimated_costs(transactions)
     entries = []
     for transaction in transactions:
         if transaction.get("deletedAt") is not None:
@@ -285,7 +355,7 @@ def journal_response(transactions: list[dict[str, Any]], banks: list[dict[str, A
             "date": transaction["occurredAt"],
             "source": "user",
             "currency": transaction["currency"],
-            "lines": journal_for(transaction, bank_kinds, loan_accounts),
+            "lines": journal_for(transaction, bank_kinds, loan_accounts, costs),
         })
     entries.extend(depreciation_entries(transactions, after=depreciation_after))
     return entries
@@ -350,12 +420,12 @@ def open_items(transactions: list[dict[str, Any]]) -> list[dict[str, Any]]:
     cancelled = reversed_ids(live)
     paid: dict[str, int] = {}
     for tx in live:
-        if tx.get("typeId") in PAYMENT_TYPES and tx.get("id") not in cancelled:
+        if tx.get("typeId") in SETTLEMENT_TYPES and tx.get("id") not in cancelled:
             settles = str(_meta(tx).get("settlesId") or "")
             paid[settles] = paid.get(settles, 0) + tx["amount"]
     items = []
     for tx in live:
-        if tx.get("payMethod") != "later" or tx.get("id") in cancelled or tx.get("typeId") == REVERSAL:
+        if tx.get("payMethod") != "later" or tx.get("id") in cancelled or tx.get("typeId") in {REVERSAL, WRITE_OFF}:
             continue
         remaining = tx["amount"] - paid.get(tx["id"], 0)
         if remaining > 0:
@@ -366,29 +436,33 @@ def open_items(transactions: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def relation_errors(row: dict[str, Any], by_id: dict[str, dict[str, Any]]) -> str | None:
-    """Rules a payment or reversal must meet against the entry it points to (spec: Actions guards)."""
+    """Rules a payment, write-off or reversal must meet against the entry it points to (spec: Actions guards)."""
     type_id = row.get("typeId")
-    if type_id not in PAYMENT_TYPES and type_id != REVERSAL:
+    if type_id not in SETTLEMENT_TYPES and type_id != REVERSAL:
         return None
     meta = _meta(row)
     others = [tx for tx in by_id.values() if tx.get("id") != row.get("id") and tx.get("deletedAt") is None]
     cancelled = reversed_ids(others)
 
-    if type_id in PAYMENT_TYPES:
+    if type_id in SETTLEMENT_TYPES:
         original = by_id.get(str(meta.get("settlesId") or ""))
-        expected = "in" if type_id == "customer_payment" else "out"
+        expected = "out" if type_id == "supplier_payment" else "in"
         if not original or original.get("deletedAt") is not None:
             return "the pay-later entry this payment settles does not exist"
+        if original.get("typeId") in SETTLEMENT_TYPES or original.get("typeId") == REVERSAL:
+            return "payments can only settle a pay-later entry in the same direction"
         if original.get("payMethod") != "later" or original.get("direction") != expected:
+            if type_id == WRITE_OFF:
+                return "only an unpaid customer sale can be written off"
             return "payments can only settle a pay-later entry in the same direction"
         if original["id"] in cancelled:
             return "this entry was reversed and can no longer be paid"
         if row.get("currency") != original.get("currency"):
             return "a payment must use the same currency as the entry it settles"
-        paid = sum(tx["amount"] for tx in others if tx.get("typeId") == type_id and tx.get("id") not in cancelled
+        paid = sum(tx["amount"] for tx in others if tx.get("typeId") in SETTLEMENT_TYPES and tx.get("id") not in cancelled
                    and str(_meta(tx).get("settlesId") or "") == original["id"])
         if paid + row["amount"] > original["amount"]:
-            return "payment is more than the amount still owed"
+            return f"{'write-off' if type_id == WRITE_OFF else 'payment'} is more than the amount still owed"
         return None
 
     original = by_id.get(str(meta.get("reversesId") or ""))
@@ -401,8 +475,8 @@ def relation_errors(row: dict[str, Any], by_id: dict[str, dict[str, Any]]) -> st
     snapshot = meta.get("reverses") or {}
     if any(snapshot.get(key) != original.get(key) for key in ("typeId", "amount", "currency", "direction", "payMethod")):
         return "reversal does not match the original entry"
-    has_payments = any(tx.get("typeId") in PAYMENT_TYPES and tx.get("id") not in cancelled
+    has_payments = any(tx.get("typeId") in SETTLEMENT_TYPES and tx.get("id") not in cancelled
                        and str(_meta(tx).get("settlesId") or "") == original["id"] for tx in others)
     if has_payments:
-        return "reverse the payments recorded against this entry first"
+        return "reverse the payments recorded against this entry first (including write-offs)"
     return None

@@ -213,7 +213,7 @@ Guard: `FROM` ≠ `TO`. A transfer never appears in income or expense totals.
 | Entry | What it posts | When |
 |---|---|---|
 | **Opening balances** | The user enters year-end figures on the statement screens (the onboarding "Starting With Existing Balance" path → "1. Enter Business Assets"). One entry posts each balance; the difference goes to `3000` Owner's capital / `3100` Retained earnings. | Once per business, dated the day before the first daily entry. |
-| **Depreciation** | Straight-line from the asset register: Dr `6800` · Cr `1590`. Monthly charge = cost ÷ (useful life in years × 12). | Monthly, system generated. |
+| **Depreciation** | Straight-line from the asset register: Dr `6800` · Cr `1590`. Monthly charge = cost ÷ (useful life in years × 12), booked at each month end, starting with the month after the purchase. | Monthly, system generated. |
 | **Accruals** | Month-end prompt for bills used but not yet billed: Dr expense · Cr `2200`. | Monthly, user confirms. |
 | **Prepaid release** | Part of a prepaid amount used up: Dr expense · Cr `1300`. | Monthly, system suggested. |
 | **Stock count** | The user counts stock. The difference posts Dr `5000` · Cr `1200` (or the reverse if stock is higher than the books). | Month-end prompt. |
@@ -352,7 +352,7 @@ Use this as a test fixture. The engine must reproduce these numbers.
 | Budget progress bar | Period expenses ÷ user-set budget target |
 | Transaction list | One row per user transaction (not per journal line), with amount sign by direction: in = positive, out = negative, move = neutral |
 | Calendar "Categories" donut | Expense totals grouped by template line (§8.1) |
-| Financial Statements tiles | §8.1, §8.2, §8.3; Weekly / Monthly / Annual reports are the same statements over that period |
+| Financial Statements tiles | §8.1, §8.2, §8.3; Weekly / Monthly / Annual reports are the same statements over that period. The prior column covers the same stretch of the previous period (annual: 1 January to the same calendar date last year). |
 
 ---
 
@@ -383,7 +383,7 @@ Before a ratio's start point, show it as "Not enough data yet" rather than zero.
 Supporting figures:
 - **Revenue** = Sales revenue (§8.1).
 - **EBITDA** = Operating profit + Depreciation (6800).
-- **EBIT** = Operating profit + Other income *(assumption, see §12 Q7)*.
+- **EBIT** = Operating profit + Other income *(§12 Q7)*.
 - **Debt** = all loans received: 2400 + 2500 + 2600 + 2700 *(see §12 Q6)*.
 - **Equity** = Total owner's equity (§8.2).
 - **Average inventory / receivables** = (opening + closing) ÷ 2 for the period.
@@ -454,7 +454,7 @@ Each trigger has a yellow and red condition, what to check, a suggested action a
 
 **Helper definitions:**
 - **Cash on hand** = 1000 + 1010.
-- **Usual monthly expenses** = average monthly cash-out for operating expenses, interest and tax over the last 3 complete months *(assumption, see §12 Q8)*.
+- **Usual monthly expenses** = average monthly cash paid for operating expenses, interest and tax over the last 3 complete months *(§12 Q8)*.
 - **Cash runway** = Cash on hand ÷ usual monthly expenses, in months. Red line = 0.5 months (2 weeks); yellow = 1 month.
 - **Days past terms** = today − date of the open pay-later item (no due dates yet, see §12 Q9).
 - **Supplier bill age** = today − bill date of the open payable.
@@ -541,3 +541,11 @@ These are settled; the app and backend follow them.
 - **Q9 Payment terms: none for now.** Pay-later entries have no due date. Trigger 7 uses days since the entry (yellow 30, red 60 days, or receivable days at its line); trigger 8 uses days since the bill (yellow 45, red 60 days).
 - **Q13 Opening balance split: the user decides.** Onboarding shows a live balance check and offers to put the difference into Owner's capital; it cannot be finished until assets = liabilities + owner's equity.
 - **Q14 Opening balance date: at onboarding** (or the end of the entered period for an existing business).
+- **Q2 Write-off: include it.** "Write off unpaid amount" is its own entry linked to an unpaid customer sale (pay later, money in): Dr `6990` · Cr `1100`, no money moves. It needs a reason (the note), is flagged for review, and cannot exceed what is still owed after payments. Supplier bills cannot be written off. To undo it, reverse the write-off; the sale cannot be reversed while a payment or write-off stands against it.
+- **Q3 Unused expense accounts: keep the JSON rules.** `utilities` posts to `6200`, `fees_licences` to `6950`, and insurance stays in `other_cost` (`6990`). Accounts `6300`, `6700` and `6900` stay in the chart (opening balances and the statement map still use them) but no entry type posts to them.
+- **Q4 COGS estimate: own history, else the benchmark.** A product sale with no cost uses the cost share (cost ÷ sales) of the product sales *with an entered cost* in the 3 complete months before the sale's month, or 67% of the sale (the 33% benchmark gross margin) until there are any. Estimated sales are left out of the history, so estimates do not feed on themselves. A sale's estimate depends only on its own date and earlier entries, so its journal does not change as time passes, and a reversal mirrors it exactly. Mixed currencies are compared in USD.
+- **Q5 Currency: per-entry currency and rate.** Each entry keeps its own currency (USD or KHR) and the KHR-per-USD rate on the day. Statements, ratios and alerts are shown in the business's display currency, converting each entry at its own rate; opening balances use the settings rate.
+- **Q7 EBIT = Operating profit + Other income.** Interest coverage uses it. EBITDA stays Operating profit + Depreciation (no other income) for the EBITDA margin and DSCR.
+- **Q10 Loan schedule: optional on Loan received.** A loan can carry an instalment amount and a weekly or monthly frequency. DSCR uses the instalments due in the quarter; while any open loan has no schedule, DSCR shows "Not enough data yet".
+- **Q11 Sales spike: month-to-date, pro-rated.** Month-to-date sales revenue (`4000` + `4100`), scaled to the full month, compared with the average of the last 3 complete months: yellow at 150%, red at 200%. Only from month 4, once 3 complete months of records exist.
+- **Q12 Typos: DSCR.** "DCSR" in the source means DSCR; this document and the code use DSCR.
