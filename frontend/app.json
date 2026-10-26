@@ -26,7 +26,8 @@
       "expo-sqlite",
       "expo-font",
       "expo-splash-screen",
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-sharing"
     ],
     "scheme": "finext"
   }

@@ -81,6 +81,8 @@ tbody tr.clickable:hover { background: var(--primary-50); }
 tr.subtotal td { font-weight: 600; }
 tr.total td { font-weight: 700; color: var(--primary-900); border-top: 2px solid var(--primary-900); }
 .table-wrap { overflow-x: auto; }
+.statement-heading { font-weight: 700; color: var(--primary-900); line-height: 1.5; margin-top: 8px; }
+.statement-heading div:first-child { font-size: 16px; }
 
 .chip {
   display: inline-block; padding: 3px 10px; border-radius: 999px;

@@ -277,9 +277,12 @@ function trendSection(t) {
 
 function statementTable(s) {
   const prior = s.columnHeaders.length > 1;
+  // Formal heading (business, statement name, period); older responses only have a title.
+  const heading = s.heading ? `<div class="statement-heading">${s.heading.map((line) => `<div>${esc(line)}</div>`).join('')}</div>` : '';
   return `
+    ${heading}
     <div class="table-wrap"><table>
-      <thead><tr><th>${esc(s.title)} <span class="muted">· ${esc(s.periodLabel)}</span></th>${s.columnHeaders.map((c) => `<th class="num">${esc(c)}</th>`).join('')}</tr></thead>
+      <thead><tr><th>${s.heading ? '' : `${esc(s.title)} <span class="muted">· ${esc(s.periodLabel)}</span>`}</th>${s.columnHeaders.map((c) => `<th class="num">${esc(c)}</th>`).join('')}</tr></thead>
       <tbody>${s.sections.map((section) => `
         <tr><td colspan="${prior ? 3 : 2}"><strong class="muted small">${esc(section.heading.toUpperCase())}</strong></td></tr>
         ${section.lines.map((line) => `<tr class="${esc(line.style)}"><td>${esc(line.label)}</td><td class="num">${esc(money(line.current, s.currency))}</td>${prior ? `<td class="num muted">${esc(line.prior != null ? money(line.prior, s.currency) : '')}</td>` : ''}</tr>`).join('')}`).join('')}

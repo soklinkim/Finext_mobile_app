@@ -162,3 +162,17 @@ def test_cash_flow_matches_the_sample(current_year):
     assert (lines["operatingCash"], lines["investingCash"], lines["financingCash"]) == (usd(6_850), usd(-3_100), usd(-3_000))
     assert (lines["openingCash"], lines["closingCash"]) == (usd(4_200), usd(4_950))
     assert current_year["cashflow"]["check"]["difference"] == 0
+
+
+def test_statements_carry_the_formal_heading(current_year):
+    assert current_year["income"]["heading"] == ["FINEXT", "STATEMENT OF COMPREHENSIVE INCOME", "FOR THE YEAR ENDED 31 DECEMBER 2025"]
+    assert current_year["balance"]["heading"] == ["FINEXT", "STATEMENT OF FINANCIAL POSITION", "AS AT 31 DECEMBER 2025"]
+    assert current_year["cashflow"]["heading"] == ["FINEXT", "STATEMENT OF CASH FLOWS", "FOR THE YEAR ENDED 31 DECEMBER 2025"]
+
+
+def test_a_period_still_in_progress_is_not_called_ended():
+    def at(*args):
+        return datetime(*args, tzinfo=BUSINESS_TZ)
+    assert accounting_router._heading_period("annual", at(2026, 1, 1), at(2026, 10, 27, 9)) == "For the period from 1 January 2026 to 27 October 2026"
+    assert accounting_router._heading_period("monthly", at(2026, 10, 1), at(2026, 10, 31, 9)) == "For the month ended 31 October 2026"
+    assert accounting_router._heading_period("weekly", at(2026, 10, 26), at(2026, 11, 1, 9)) == "For the week ended 1 November 2026"

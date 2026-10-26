@@ -1,5 +1,5 @@
-import { useCallback } from 'react';
-import { Alert, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Button } from '@/components/Button';
 import { Icon } from '@/components/Icon';
@@ -14,6 +14,7 @@ import { useI18n } from '@/i18n';
 import { colors, tint } from '@/theme';
 import { getStatements, OnlineRequiredError, type Statement, type StatementKind, type StatementPeriod } from '@/services/analysis';
 import { formatMoneyWhole } from '@/services/bookkeeping';
+import { exportStatementPdf } from '@/services/statementPdf';
 import { useAppTheme } from '@/theme/AppTheme';
 
 function kpiValue(k: Statement['kpis'][number], currency: Statement['currency'], showPlus: boolean): string {
@@ -33,37 +34,63 @@ export default function StatementScreen() {
   const loadStatements = useCallback(() => getStatements(period), [period]);
   const q = useAnalysisQuery(loadStatements);
   const statement = q.data?.[kind];
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState(false);
+
+  const download = async () => {
+    if (!statement || !q.data) return;
+    setExporting(true);
+    setExportError(false);
+    try {
+      await exportStatementPdf(statement, q.data.business);
+    } catch {
+      setExportError(true);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <ScreenShell title={t('screen.statements')} backFallbackHref="/statements" nav="statements" lightHeader={false} padding={24}>
       <View style={{ gap: 16 }}>
         {q.source === 'cache' && <OfflineBanner fetchedAt={q.fetchedAt} />}
-        <Button label={t('stmt.download')} icon="download" onPress={() => Alert.alert(t('stmt.download'), t('stmt.downloadNote'))} />
+        <Button label={t('stmt.download')} icon="download" onPress={download} loading={exporting} disabled={!statement} />
+        {exportError ? <Text variant="micro" tone="danger">{t('stmt.downloadFailed')}</Text> : null}
         {q.loading && !q.data ? <LoadingState /> : null}
         {q.noCache ? <EmptyState titleKey="offline.noCache" bodyKey="offline.noCacheBody" icon="wifiOff" /> : null}
         {q.data === null && <EmptyState titleKey="data.noStatementsTitle" bodyKey="data.noStatementsBody" />}
         {q.error ? <ErrorState onRetry={q.reload} message={q.error.message} onlineRequired={q.error instanceof OnlineRequiredError} /> : null}
         {statement && q.data && (
           <>
-            <View>
-              <Text variant="micro" weight={300} tone="neutral-600">
-                {q.data.business}
-              </Text>
-              <View className="flex-row items-center justify-between">
-                <Text variant="title" tone="primary-900" style={{ flex: 1 }}>
-                  {periodTitle ?? statement.title}
-                </Text>
-                <View className="flex-row items-center bg-primary-50 rounded-pill" style={{ paddingHorizontal: 12, minHeight: 32, gap: 6, backgroundColor: dark ? colors.dark.surface : undefined }} accessibilityLabel={q.data.period}>
-                  <Text variant="caption" weight={500} tone="primary-900">
-                    {q.data.period}
+            {statement.heading ? (
+              <View accessibilityRole="header" style={{ gap: 4 }}>
+                {statement.heading.map((line, i) => (
+                  <Text key={i} variant={i === 0 ? 'body-lg' : 'body'} weight={700} tone="primary-900">
+                    {line}
                   </Text>
-                  <Icon name="chevronDown" size={14} />
-                </View>
+                ))}
               </View>
-              <Text variant="micro" weight={300} tone="neutral-600">
-                {statement.periodLabel}
-              </Text>
-            </View>
+            ) : (
+              <View>
+                <Text variant="micro" weight={300} tone="neutral-600">
+                  {q.data.business}
+                </Text>
+                <View className="flex-row items-center justify-between">
+                  <Text variant="title" tone="primary-900" style={{ flex: 1 }}>
+                    {periodTitle ?? statement.title}
+                  </Text>
+                  <View className="flex-row items-center bg-primary-50 rounded-pill" style={{ paddingHorizontal: 12, minHeight: 32, gap: 6, backgroundColor: dark ? colors.dark.surface : undefined }} accessibilityLabel={q.data.period}>
+                    <Text variant="caption" weight={500} tone="primary-900">
+                      {q.data.period}
+                    </Text>
+                    <Icon name="chevronDown" size={14} />
+                  </View>
+                </View>
+                <Text variant="micro" weight={300} tone="neutral-600">
+                  {statement.periodLabel}
+                </Text>
+              </View>
+            )}
             <View className="flex-row" style={{ gap: 8 }}>
               {statement.kpis.map((k) => (
                 <KpiTile key={k.label} label={k.label} value={kpiValue(k, statement.currency, kind === 'cashflow')} caption={k.caption} highlight={k.highlight} />

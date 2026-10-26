@@ -354,7 +354,7 @@ export const en = {
   'stmt.tabBalance': 'Balance sheet',
   'stmt.tabCashflow': 'Cash flow',
   'stmt.download': 'Download PDF',
-  'stmt.downloadNote': 'PDF export is planned. It needs a document library that is not part of this build.',
+  'stmt.downloadFailed': 'Could not create the PDF. Please try again.',
   'stmt.difference': 'difference',
   'stmt.quickRatios': 'Quick ratios',
 

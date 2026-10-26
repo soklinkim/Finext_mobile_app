@@ -154,6 +154,8 @@ export interface StatementKpi {
 export interface Statement {
   kind: StatementKind;
   title: string;
+  /** Formal heading lines: business name, statement name, period (e.g. "AS AT 31 DECEMBER 2024"). Absent in older cached data. */
+  heading?: [string, string, string];
   periodLabel: string;
   currency: Currency;
   kpis: StatementKpi[];

@@ -137,6 +137,23 @@ def _statement_period(now: datetime, period: str):
     raise HTTPException(status_code=400, detail="period must be weekly, monthly, or annual")
 
 
+def _long_date(moment: datetime) -> str:
+    return f"{moment.day} {moment.strftime('%B %Y')}"
+
+
+def _heading_period(period: str, start: datetime, today: datetime) -> str:
+    """"For the year ended 31 December 2025" once the period is over, else "For the period from ... to ..."."""
+    if period == "weekly":
+        last_day, word = start + timedelta(days=6), "week"
+    elif period == "monthly":
+        last_day, word = start.replace(day=monthrange(start.year, start.month)[1]), "month"
+    else:
+        last_day, word = start.replace(month=12, day=31), "year"
+    if today.date() == last_day.date():
+        return f"For the {word} ended {_long_date(today)}"
+    return f"For the period from {_long_date(start)} to {_long_date(today)}"
+
+
 @router.get("/statements")
 def statements(user_id: str = Depends(current_sme), period: Annotated[str, Query()] = "monthly"):
     """Return statements for a selected period and comparable prior-period totals."""
@@ -148,6 +165,12 @@ def statements(user_id: str = Depends(current_sme), period: Annotated[str, Query
     rate = settings.get("rateKhrPerUsd", 4000)
     today = datetime.now(BUSINESS_TZ)
     current_start, current_end, prior_start, prior_end, period_name, prior_name = _statement_period(today, period)
+    # Formal heading at the top of each statement: business, statement name, period (or "as at" date).
+    business = (settings.get("businessName") or "FINEXT").strip().upper()
+    for_period = _heading_period(period, current_start, today).upper()
+    headings = {"income": [business, "STATEMENT OF COMPREHENSIVE INCOME", for_period],
+                "balance": [business, "STATEMENT OF FINANCIAL POSITION", f"AS AT {_long_date(today).upper()}"],
+                "cashflow": [business, "STATEMENT OF CASH FLOWS", for_period]}
     current_lines: dict[str, int] = {}
     prior_lines: dict[str, int] = {}
     historical_lines: dict[str, int] = {}
@@ -234,7 +257,7 @@ def statements(user_id: str = Depends(current_sme), period: Annotated[str, Query
         ]
         return [line(key, label, -natural(codes, values), -natural(codes, previous_values)) for key, label, codes in groups]
 
-    income = {"kind": "income", "title": "Income Statement", "periodLabel": period_name, "currency": currency,
+    income = {"kind": "income", "title": "Income Statement", "heading": headings["income"], "periodLabel": period_name, "currency": currency,
         "kpis": [{"label": "Revenue", "value": cur["revenue"], "format": "money"}, {"label": "Net profit", "value": cur["net"], "format": "money", "highlight": True}],
         "columnHeaders": [period_name, prior_name], "sections": [
             {"heading": "Revenue", "lines": [line("sales", "Sales revenue", cur["revenue"], prev["revenue"]), line("cogs", "Cost of goods sold", -cur["cogs"], -prev["cogs"]), line("gross", "Gross profit", cur["gross"], prev["gross"], style="subtotal")]},
@@ -255,7 +278,7 @@ def statements(user_id: str = Depends(current_sme), period: Annotated[str, Query
     equity_before_profit = capital + retained - drawings
     equity = equity_before_profit + cur["net"]
     balance_check = assets - liabilities - equity
-    balance = {"kind": "balance", "title": "Balance Sheet", "periodLabel": f"As at {today.strftime('%d %B %Y')}", "currency": currency,
+    balance = {"kind": "balance", "title": "Balance Sheet", "heading": headings["balance"], "periodLabel": f"As at {today.strftime('%d %B %Y')}", "currency": currency,
         "kpis": [{"label": "Total assets", "value": assets, "format": "money"}, {"label": "Total liabilities", "value": liabilities, "format": "money"}, {"label": "Owner's equity", "value": equity, "format": "money"}],
         "columnHeaders": [today.strftime("%d %b %Y")], "sections": [
             {"heading": "Assets", "lines": [line("cash", "Cash & bank balances", natural(("1000", "1010"))), line("receivables", "Accounts receivable", natural(("1100",))), line("inventory", "Inventory", natural(("1200",))), line("prepaid", "Prepaid expenses", natural(("1300",))), line("currentAssets", "Total current assets", current_assets, style="subtotal"), line("equipment", "Property, equipment & vehicles (net)", natural(("1500",)) - natural(("1590",))), line("longAssets", "Other long-term assets", natural(("1600",))), line("assets", "TOTAL ASSETS", assets, style="total")]},
@@ -272,7 +295,7 @@ def statements(user_id: str = Depends(current_sme), period: Annotated[str, Query
                       + change("3000") - change("3200"))
     net_cash_change = cash_operating + cash_investing + cash_financing
     opening_cash = cash - natural(("1000", "1010"), current_lines)
-    cashflow = {"kind": "cashflow", "title": "Cash Flow Statement", "periodLabel": period_name, "currency": currency,
+    cashflow = {"kind": "cashflow", "title": "Cash Flow Statement", "heading": headings["cashflow"], "periodLabel": period_name, "currency": currency,
         "kpis": [{"label": "Net cash change", "value": net_cash_change, "format": "money", "highlight": True}], "columnHeaders": [period_name],
         "sections": [{"heading": "Operating activities", "lines": [line("netProfit", "Net profit", cur["net"]), line("depreciation", "Add back: depreciation", depreciation), line("receivables", "Change in accounts receivable", -change("1100")), line("inventory", "Change in inventory", -change("1200")), line("prepaid", "Change in prepaid assets", -change("1300")), line("payables", "Change in accounts payable", change("2000")), line("deposits", "Change in customer deposits", change("2100")), line("accrued", "Change in accrued expenses & tax", change("2200") + change("2300")), line("operatingCash", "Net cash from operating activities", cash_operating, style="subtotal")]},
                       {"heading": "Investing activities", "lines": [line("equipmentCash", "Property & equipment", -(change("1500") - change("1590") + depreciation)), line("otherAssetsCash", "Other long-term assets", -change("1600")), line("investingCash", "Net cash from investing activities", cash_investing, style="subtotal")]},

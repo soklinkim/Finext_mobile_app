@@ -339,7 +339,7 @@ export const km: Record<TKey, string> = {
   'stmt.tabBalance': 'តុល្យការ',
   'stmt.tabCashflow': 'លំហូរសាច់ប្រាក់',
   'stmt.download': 'ទាញយក PDF',
-  'stmt.downloadNote': 'ការនាំចេញ PDF កំពុងត្រូវបានគ្រោងទុក។ វាត្រូវការបណ្ណាល័យឯកសារដែលមិនមានក្នុងកំណែនេះ។',
+  'stmt.downloadFailed': 'មិនអាចបង្កើត PDF បានទេ។ សូមព្យាយាមម្ដងទៀត។',
   'stmt.difference': 'ភាពខុសគ្នា',
   'stmt.quickRatios': 'សមាមាត្ររហ័ស',
 
