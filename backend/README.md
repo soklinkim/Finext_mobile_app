@@ -17,6 +17,8 @@ python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 The web frontend defaults to `http://localhost:8000`. On a physical phone, set `EXPO_PUBLIC_API_URL` in `frontend/.env.local` to the computer's LAN address, such as `http://192.168.1.20:8000`, then restart Expo.
 
+Browsers may call the API only from the Expo web dev server (`:8081` on localhost or a private LAN address) and the same-origin lender portal. To allow another web front end, such as a deployed web app, list its origins in `ALLOWED_ORIGINS` in `backend/.env`, comma-separated. Native apps are not affected.
+
 ## Sync behavior
 
 Bookkeeping writes go to local SQLite first with `syncStatus = 'pending'`. The client pushes pending rows, marks only accepted rows as synced, then pulls server changes using a per-user sequence cursor. Invalid rows stay pending and are reported. If the server has a newer version of a row, it returns that version and the client merges it into SQLite. Soft deletes sync as tombstones.
@@ -33,7 +35,7 @@ Run [`sql/002_business_documents.sql`](sql/002_business_documents.sql) and [`sql
 
 **Sharing.** In the app (Analysis › Loan), an SME picks a partner bank, ticks what it may see (readiness, statements, health ratios, monthly trend, documents) and for how long (30, 90 or 180 days). Business name, owner name and contact details are always included. The SME can stop sharing at any time. Every time bank staff open the report, the view is logged, and the SME sees the view count.
 
-**Lender portal.** Bank staff use the web portal at `http://localhost:8000/portal/`. They see only businesses that are currently sharing with their bank, and only the parts each business consented to. They can record a decision (reviewing, approved or declined) with a note, which the SME sees in the app. Set `SUPABASE_PUBLISHABLE_KEY` in `backend/.env` (the same public key as the app's `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`) so staff can sign in.
+**Lender portal.** Bank staff use the web portal at `http://localhost:8000/portal/`. They see only businesses that are currently sharing with their bank, and only the parts each business consented to. They can record a decision (reviewing, approved or declined) with a note, which the SME sees in the app. Set `SUPABASE_PUBLISHABLE_KEY` in `backend/.env` (the same public key as the app's `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`) so staff can sign in. A bank staff login is refused by the SME app and its API (`403`); `GET /me` reports whether a login is `sme` or `lender`.
 
 To add a bank and its staff:
 

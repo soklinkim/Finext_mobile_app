@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 
 from app import loan_store
-from app.auth import current_user
+from app.auth import current_sme
 from app.loan_report import SCOPES, readiness_for
 
 router = APIRouter(prefix="/loan", tags=["loan"])
@@ -29,7 +29,7 @@ class ShareRequest(BaseModel):
 
 
 @router.get("/readiness")
-def readiness(user_id: str = Depends(current_user)):
+def readiness(user_id: str = Depends(current_sme)):
     result = readiness_for(user_id)
     # Keep the score lenders see in their applicant list in step with what the SME sees.
     loan_store.save_readiness_snapshot(user_id, result["score"], result["level"], _now())
@@ -37,19 +37,19 @@ def readiness(user_id: str = Depends(current_user)):
 
 
 @router.get("/lenders")
-def lenders(user_id: str = Depends(current_user)):
+def lenders(user_id: str = Depends(current_sme)):
     return {"lenders": loan_store.list_lenders()}
 
 
 @router.get("/shares")
-def shares(user_id: str = Depends(current_user)):
+def shares(user_id: str = Depends(current_sme)):
     now = _now()
     return {"shares": [{**share, "active": share["revokedAt"] is None and share["expiresAt"] > now}
                        for share in loan_store.list_shares_for_sme(user_id)]}
 
 
 @router.post("/shares")
-def share(req: ShareRequest, user_id: str = Depends(current_user)):
+def share(req: ShareRequest, user_id: str = Depends(current_sme)):
     """Give (or update) consent for one lender to see the chosen data until it expires or is revoked."""
     if not req.consent:
         raise HTTPException(status_code=400, detail="Consent is required to share your data.")
@@ -64,7 +64,7 @@ def share(req: ShareRequest, user_id: str = Depends(current_user)):
 
 
 @router.delete("/shares/{share_id}", status_code=204)
-def revoke(share_id: UUID, user_id: str = Depends(current_user)):
+def revoke(share_id: UUID, user_id: str = Depends(current_sme)):
     if not loan_store.revoke_share(user_id, share_id, _now()):
         raise HTTPException(status_code=404, detail="Share not found or already revoked.")
     return Response(status_code=204)

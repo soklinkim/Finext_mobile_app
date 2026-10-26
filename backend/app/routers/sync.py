@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 from app import db
 from app.bookkeeping import PostingError, journal_for, loan_account_map, relation_errors
-from app.auth import current_user
+from app.auth import current_sme
 from app.schemas.sync import (
     Bank, Budget, BusinessAsset, Category, OnboardingFinancialEntry,
     PullResponse, PushBatch, PushRequest, PushResponse, RejectedRow, Settings, SyncConflict, Transaction,
@@ -105,7 +105,7 @@ def _completed_onboarding_error(settings: Settings, user_id: str) -> str | None:
 
 
 @router.post("/push", response_model=PushResponse)
-def push(req: PushRequest, user_id: str = Depends(current_user)):
+def push(req: PushRequest, user_id: str = Depends(current_sme)):
     accepted: dict[str, list[str]] = {t: [] for t in MODELS}
     rejected: list[RejectedRow] = []
     conflicts: list[SyncConflict] = []
@@ -208,7 +208,7 @@ def push(req: PushRequest, user_id: str = Depends(current_user)):
 
 
 @router.get("/changes", response_model=PullResponse)
-def changes(since: str | None = Query(default=None), user_id: str = Depends(current_user)):
+def changes(since: str | None = Query(default=None), user_id: str = Depends(current_sme)):
     try:
         after = int(since) if since else 0
     except ValueError:

@@ -221,3 +221,26 @@ def test_notifications_never_break_when_store_fails(monkeypatch):
 
     monkeypatch.setattr(notes, "loan_store", Broken())
     assert notes.loan_notifications("sme") == []
+
+
+def test_bank_staff_are_kept_out_of_the_sme_api(monkeypatch):
+    from app import auth
+    monkeypatch.setattr(auth, "_membership_cache", {})
+    monkeypatch.setattr(loan_router, "loan_store", FakeStore())
+
+    class Members:
+        def lender_for_member(self, user_id):
+            return {"id": LENDER_ID, "name": "Test Bank"} if user_id == "bank-staff" else None
+
+    import app.loan_store as real_store
+    monkeypatch.setattr(real_store, "lender_for_member", Members().lender_for_member)
+    client = TestClient(app)
+    try:
+        app.dependency_overrides[current_user] = lambda: "bank-staff"
+        assert client.get("/me").json() == {"role": "lender"}
+        res = client.get("/loan/lenders")
+        assert res.status_code == 403 and "lender portal" in res.json()["detail"]
+        app.dependency_overrides[current_user] = lambda: "sme-user"
+        assert client.get("/me").json() == {"role": "sme"}
+    finally:
+        app.dependency_overrides.clear()

@@ -1,8 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants from 'expo-constants';
 import { and, eq } from 'drizzle-orm';
-import { Platform } from 'react-native';
 import { db, schema } from '@/db/client';
+import { API_BASE_URL } from '@/services/apiBase';
 import { SYNCED_TABLES, type SyncedTable } from '@/db/schema';
 import { emitChange } from '@/services/bookkeeping/events';
 import { getSession, refreshSession } from '@/services/auth';
@@ -111,13 +110,6 @@ export interface SyncService {
 const CURSOR_KEY = '@finext.sync.cursor.v1';
 /** Safety bound on one sync's catch-up (500 rows per page). */
 const MAX_PULL_PAGES = 50;
-const hostFromExpo = Constants.expoConfig?.hostUri?.split(':')[0];
-const defaultApiUrl = Platform.OS === 'web'
-  ? 'http://localhost:8000'
-  : hostFromExpo
-    ? `http://${hostFromExpo}:8000`
-    : 'http://localhost:8000';
-const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || defaultApiUrl).replace(/\/+$/, '');
 
 /** Shared structural view of the local tables; the API table names match these keys. */
 const tables: Record<SyncedTable, any> = {

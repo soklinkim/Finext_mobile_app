@@ -2,6 +2,7 @@ import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState, Platform } from 'react-native';
 import { createClient, type Session } from '@supabase/supabase-js';
+import { API_BASE_URL } from './apiBase';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const publishableKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -43,10 +44,26 @@ async function bindLocalLedger(userId: string) {
   if (!ownerId) await AsyncStorage.setItem(LOCAL_OWNER_KEY, userId);
 }
 
+/** Partner-bank staff use the lender portal. Unknown (e.g. offline) counts as a business owner. */
+async function isLenderAccount(accessToken: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/me`, { headers: { Authorization: 'Bearer ' + accessToken } });
+    if (!response.ok) return false;
+    return ((await response.json()) as { role?: string }).role === 'lender';
+  } catch {
+    return false;
+  }
+}
+
 export async function signIn(email: string, password: string): Promise<Session> {
   const { data, error } = await getClient().auth.signInWithPassword({ email: email.trim(), password });
   if (error) throw error;
   if (!data.session) throw new Error('Supabase did not return a signed-in session.');
+  // Check before binding this device's offline ledger, so a bank login never claims it.
+  if (await isLenderAccount(data.session.access_token)) {
+    await getClient().auth.signOut({ scope: 'local' });
+    throw new Error('This is a partner bank account. Please sign in to the FINEXT lender portal instead.');
+  }
   await bindLocalLedger(data.session.user.id);
   return data.session;
 }

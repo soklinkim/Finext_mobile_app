@@ -7,7 +7,7 @@ import json
 
 from app import db
 from app.bookkeeping import PostingError, depreciation_entries, journal_for, journal_response, loan_account_map, open_items, preview_impact, reversed_ids
-from app.auth import current_user
+from app.auth import current_sme
 from app.accounting_validation import validate_bookkeeping_data, validate_opening_balances
 from app.financial_statement import ACCOUNT_NAMES, DEBIT_NORMAL_ACCOUNTS, ONBOARDING_ACCOUNT_MAP, natural_balance
 from app.health_ratio import RATIO_RULES, ratio_status
@@ -35,7 +35,7 @@ def _ensure_valid_bookkeeping(user_id: str) -> None:
         raise HTTPException(status_code=422, detail=f"Bookkeeping validation failed: {detail}{extra}")
 
 @router.get("/journal")
-def journal(user_id: str = Depends(current_user)):
+def journal(user_id: str = Depends(current_sme)):
     """Return generated double-entry postings for the signed-in user's synced entries."""
     _ensure_valid_bookkeeping(user_id)
     transactions = db.get_table_rows(user_id, "transactions")
@@ -46,19 +46,19 @@ def journal(user_id: str = Depends(current_user)):
 
 
 @router.get("/validation")
-def validate_bookkeeping(user_id: str = Depends(current_user)):
+def validate_bookkeeping(user_id: str = Depends(current_sme)):
     issues = _validation_issues(user_id)
     return {"valid": not issues, "issues": issues}
 
 
 @router.get("/accounts")
-def accounts(user_id: str = Depends(current_user)):
+def accounts(user_id: str = Depends(current_sme)):
     # Authentication is intentional: all accounting endpoints share the same account boundary.
     return {"accounts": [{"code": code, "name": name} for code, name in ACCOUNT_NAMES.items()]}
 
 
 @router.post("/preview")
-def preview_entry(payload: dict = Body(...), user_id: str = Depends(current_user)):
+def preview_entry(payload: dict = Body(...), user_id: str = Depends(current_sme)):
     """Preview the profit impact using the same server journal rules used on sync."""
     try:
         return preview_impact(payload, db.get_table_rows(user_id, "banks"), db.get_table_rows(user_id, "transactions"))
@@ -134,7 +134,7 @@ def _statement_period(now: datetime, period: str):
 
 
 @router.get("/statements")
-def statements(user_id: str = Depends(current_user), period: Annotated[str, Query()] = "monthly"):
+def statements(user_id: str = Depends(current_sme), period: Annotated[str, Query()] = "monthly"):
     """Return statements for a selected period and comparable prior-period totals."""
     _ensure_valid_bookkeeping(user_id)
     transactions = db.get_table_rows(user_id, "transactions")
@@ -281,7 +281,7 @@ def statements(user_id: str = Depends(current_user), period: Annotated[str, Quer
 
 
 @router.get("/summary")
-def summary(user_id: str = Depends(current_user)):
+def summary(user_id: str = Depends(current_sme)):
     """Return server-calculated bookkeeping totals for the summary hero."""
     transactions = db.get_table_rows(user_id, "transactions")
     banks = db.get_table_rows(user_id, "banks", include_deleted=True)
@@ -428,7 +428,7 @@ def _scheduled_debt_service(user_id: str, currency: str, rate: int, start: datet
 
 
 @router.get("/ratios")
-def ratios(user_id: str = Depends(current_user)):
+def ratios(user_id: str = Depends(current_sme)):
     """Calculate supported workbook ratios and apply inclusive yellow/red thresholds."""
     report = statements(user_id, period="monthly")
     metrics = report["_metrics"]
@@ -513,7 +513,7 @@ def ratios(user_id: str = Depends(current_user)):
 
 
 @router.get("/health")
-def health(user_id: str = Depends(current_user)):
+def health(user_id: str = Depends(current_sme)):
     result = ratios(user_id)
     now_dt = datetime.now(BUSINESS_TZ)
     now = int(now_dt.timestamp() * 1000)
@@ -778,7 +778,7 @@ def _cash_profit_trend(user_id: str) -> list[dict]:
 
 
 @router.post("/health/{alert_id}/dismiss")
-def dismiss_health_alert(alert_id: str, user_id: str = Depends(current_user)):
+def dismiss_health_alert(alert_id: str, user_id: str = Depends(current_sme)):
     row = next((item for item in db.get_table_rows(user_id, "health_alerts") if item["id"] == alert_id), None)
     if row is None:
         from fastapi import HTTPException
@@ -825,7 +825,7 @@ def _activity_rows(user_id: str):
 
 
 @router.get("/forecast")
-def forecast(user_id: str = Depends(current_user)):
+def forecast(user_id: str = Depends(current_sme)):
     """Return an experimental, user-scoped income and expense trend forecast."""
     _ensure_valid_bookkeeping(user_id)
     transactions = db.get_table_rows(user_id, "transactions")
@@ -836,7 +836,7 @@ def forecast(user_id: str = Depends(current_user)):
 
 
 @router.get("/analysis")
-def analysis(period: str = "daily", user_id: str = Depends(current_user)):
+def analysis(period: str = "daily", user_id: str = Depends(current_sme)):
     if period not in {"daily", "weekly", "monthly", "yearly"}:
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="period must be daily, weekly, monthly, or yearly")
@@ -883,7 +883,7 @@ def analysis(period: str = "daily", user_id: str = Depends(current_user)):
 
 
 @router.get("/categories")
-def categories(user_id: str = Depends(current_user)):
+def categories(user_id: str = Depends(current_sme)):
     rows, currency = _activity_rows(user_id)
     now = datetime.now(BUSINESS_TZ)
     start = datetime(now.year, now.month, 1, tzinfo=BUSINESS_TZ)
