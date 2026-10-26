@@ -5,7 +5,7 @@ from app.business_time import BUSINESS_TZ
 from typing import Annotated
 import json
 
-from app import db
+from app import db, loan_schedule
 from app.bookkeeping import PostingError, depreciation_entries, estimated_costs, journal_for, journal_response, loan_account_map, open_items, preview_impact, reversed_ids
 from app.auth import current_sme
 from app.accounting_validation import validate_bookkeeping_data, validate_opening_balances
@@ -392,9 +392,11 @@ def _quarter_profit(user_id: str, currency: str, rate: int, start: datetime, end
     other = -activity.get("4200", 0)
     interest = natural(("7000",))
     operating_profit = revenue - cogs - operating
-    # Rules §9.3: EBIT = operating profit + other income (§12 Q7); EBITDA = operating profit + depreciation.
-    return {"revenue": revenue, "cogs": cogs, "operating": operating, "other": other,
-            "interest": interest, "ebit": operating_profit + other, "ebitda": operating_profit + natural(("6800",))}
+    depreciation = natural(("6800",))
+    # Rules §9.3 / §12 Q7: EBIT = operating profit and EBITDA = operating profit + depreciation, both without
+    # other income (4200), so a one-off grant or asset sale does not flatter normal performance.
+    return {"revenue": revenue, "cogs": cogs, "operating": operating, "other": other, "interest": interest,
+            "depreciation": depreciation, "ebit": operating_profit, "ebitda": operating_profit + depreciation}
 
 
 def _scheduled_debt_service(user_id: str, currency: str, rate: int, start: datetime, end: datetime) -> tuple[int, bool]:
@@ -421,40 +423,13 @@ def _scheduled_debt_service(user_id: str, currency: str, rate: int, start: datet
         principal = _minor_amount(loan["amount"], loan["currency"], currency, loan.get("exchangeRate", rate))
         if principal - repaid.get(name, 0) <= 0:
             continue
-        installment = meta.get("installmentAmount")
-        frequency = meta.get("repaymentFrequency")
-        if not isinstance(installment, int) or installment <= 0 or frequency not in {"weekly", "monthly"}:
+        instalments, source = loan_schedule.schedule(loan, meta)
+        if source == "missing":
             missing_schedule = True
             continue
-        installment = _minor_amount(installment, loan["currency"], currency, loan.get("exchangeRate", rate))
-        loan_date = datetime.fromtimestamp(loan["occurredAt"] / 1000, tz=BUSINESS_TZ)
-        term = max(1, int(meta.get("termMonths") or 12))
-        maturity_month_index = loan_date.year * 12 + loan_date.month - 1 + term
-        maturity_year, maturity_zero_month = divmod(maturity_month_index, 12)
-        maturity_month = maturity_zero_month + 1
-        maturity = loan_date.replace(year=maturity_year, month=maturity_month,
-                                     day=min(loan_date.day, monthrange(maturity_year, maturity_month)[1]))
-        if frequency == "weekly":
-            due = loan_date + timedelta(days=7)
-            step = timedelta(days=7)
-            while due < end and due <= maturity:
-                if due >= start:
-                    due_total += installment
-                due += step
-        else:
-            month_index = loan_date.year * 12 + loan_date.month
-            due_year, due_zero_month = divmod(month_index, 12)
-            due_month = due_zero_month + 1
-            due = loan_date.replace(year=due_year, month=due_month,
-                                    day=min(loan_date.day, monthrange(due_year, due_month)[1]))
-            while due < end and due <= maturity:
-                if due >= start:
-                    due_total += installment
-                month_index = due.year * 12 + due.month
-                due_year, due_zero_month = divmod(month_index, 12)
-                due_month = due_zero_month + 1
-                due = due.replace(year=due_year, month=due_month,
-                                  day=min(loan_date.day, monthrange(due_year, due_month)[1]))
+        for due, amount in instalments:
+            if start <= due < end:
+                due_total += _minor_amount(amount, loan["currency"], currency, loan.get("exchangeRate", rate))
     return due_total, missing_schedule
 
 
@@ -490,6 +465,9 @@ def ratios(user_id: str = Depends(current_sme)):
     current_assets = balance_lines.get("currentAssets", 0)
     current_liabilities = sum(balance_lines.get(k, 0) for k in ("payables", "deposits", "accrued", "shortLoans", "otherBorrowings"))
     debt = sum(max(0, -balances.get(k, 0)) for k in ("2400", "2500", "2600", "2700"))
+    # Balance-sheet ratios start at onboarding, but only once something is recorded: with nothing yet,
+    # equity is 0 and debt-to-equity would read as "negative equity".
+    has_position = assets > 0 or balance_lines.get("liabilities", 0) > 0
     interest = pnl["interest"]
     # Convert credit sales to the report currency using each transaction's saved rate.
     currency = report["balance"]["currency"]
@@ -515,7 +493,7 @@ def ratios(user_id: str = Depends(current_sme)):
         ("receivable_days", "Receivable days", average_receivable / credit_sales * days if credit_sales else None, enough_month),
         ("revenue_growth", "Revenue growth", (revenue - prev["revenue"]) / prev["revenue"] if prev["revenue"] else None, bool(prev["revenue"])),
         ("operating_expense_ratio", "Operating expense ratio", pnl["operating"] / revenue if revenue else None, enough_month),
-        ("debt_to_equity", "Debt-to-equity", debt / equity if equity > 0 else None, True),
+        ("debt_to_equity", "Debt-to-equity", debt / equity if equity > 0 else None, has_position),
         ("interest_coverage", "Interest coverage", quarter_pnl["ebit"] / quarter_pnl["interest"] if quarter_pnl["interest"] else None, enough_quarter),
         ("debt_to_asset", "Debt-to-asset", debt / assets if assets > 0 else None, True),
         ("dscr", "Debt service coverage", quarter_pnl["ebitda"] / scheduled_due if scheduled_due else None, enough_quarter and not missing_schedule),
@@ -523,7 +501,7 @@ def ratios(user_id: str = Depends(current_sme)):
     results = []
     for key, label, value, started in specs:
         rule = RATIO_RULES[key]
-        if key == "debt_to_equity" and equity <= 0:
+        if key == "debt_to_equity" and has_position and equity <= 0:
             status, message = "red", "Negative equity"
         elif key == "interest_coverage" and quarter_pnl["interest"] == 0:
             status, message = "green", "No interest"
@@ -541,6 +519,15 @@ def ratios(user_id: str = Depends(current_sme)):
                         "benchmark": rule["benchmark"], "yellow": rule["yellow"], "red": rule["red"], "betterWhen": rule["better"],
                         "message": message})
     return {"period": report["period"], "ratios": results}
+
+
+def either_or_both(first: str, second: str) -> str | None:
+    """Pipeline spec B2, triggers 4, 12 and 13: either ratio at its line raises the alert;
+    both at their lines raise its severity by one level (yellow becomes red)."""
+    flagged = [status for status in (first, second) if status in {"yellow", "red"}]
+    if not flagged:
+        return None
+    return "red" if "red" in flagged or len(flagged) == 2 else "yellow"
 
 
 @router.get("/health")
@@ -570,28 +557,20 @@ def health(user_id: str = Depends(current_sme)):
     single("stock_days", "inventory_days", "Stock is taking longer to sell", "Review slow-moving stock and check the latest stock count.")
     single("liquidity", "current_ratio", "Short-term bills may be at risk", "Collect receivables, reduce slow stock, and review short-term debt.")
 
-    net_margin, ebitda_margin = ratio_map["net_margin"], ratio_map["ebitda_margin"]
-    if net_margin["status"] in {"yellow", "red"} and ebitda_margin["status"] in {"yellow", "red"}:
-        level = "red" if net_margin["status"] == ebitda_margin["status"] == "red" else "yellow"
-        alert("thin_profit", "Profit margins need attention", level,
-              "Both net profit and EBITDA margins are below their watch levels.",
-              "Review which cost lines and products are driving the change.",
-              {"netMargin": net_margin["value"], "ebitdaMargin": ebitda_margin["value"]})
+    def paired(trigger: str, title: str, first_id: str, second_id: str, action: str) -> None:
+        first, second = ratio_map[first_id], ratio_map[second_id]
+        level = either_or_both(first["status"], second["status"])
+        if level:
+            flagged = [item["label"] for item in (first, second) if item["status"] in {"yellow", "red"}]
+            alert(trigger, title, level, " and ".join(flagged) + (" are" if len(flagged) == 2 else " is") + " past the watch level.",
+                  action, {first_id: first["value"], second_id: second["value"]})
 
-    debt_equity, debt_assets = ratio_map["debt_to_equity"], ratio_map["debt_to_asset"]
-    if debt_equity["status"] in {"yellow", "red"} and debt_assets["status"] in {"yellow", "red"}:
-        level = "red" if debt_equity["status"] == debt_assets["status"] == "red" else "yellow"
-        alert("debt_load", "Debt load is high", level, "Debt is high against both equity and assets.",
-              "Avoid new borrowing, retain earnings, and review owner drawings.",
-              {"debtToEquity": debt_equity["value"], "debtToAsset": debt_assets["value"]})
-
-    interest, dscr = ratio_map["interest_coverage"], ratio_map["dscr"]
-    if interest["status"] in {"yellow", "red"} and dscr["status"] in {"yellow", "red"}:
-        level = "red" if interest["status"] == dscr["status"] == "red" else "yellow"
-        alert("loan_coverage", "Loan payments may be difficult", level,
-              "Interest coverage and scheduled debt service coverage are both low.",
-              "Talk to the lender early, cut costs, and delay equipment purchases.",
-              {"interestCoverage": interest["value"], "dscr": dscr["value"]})
+    paired("thin_profit", "Profit margins need attention", "net_margin", "ebitda_margin",
+           "Review which cost lines and products are driving the change.")
+    paired("debt_load", "Debt load is high", "debt_to_equity", "debt_to_asset",
+           "Avoid new borrowing, retain earnings, and review owner drawings.")
+    paired("loan_coverage", "Loan payments may be difficult", "interest_coverage", "dscr",
+           "Talk to the lender early, cut costs, and delay equipment purchases.")
 
     runway, runway_values = _cash_runway(user_id)
     if runway is not None and runway < 1:
@@ -618,10 +597,12 @@ def health(user_id: str = Depends(current_sme)):
     settings_row = next((s for s in db.get_table_rows(user_id, "settings") if s.get("id") == "app"), {})
     display_currency = settings_row.get("displayCurrency", "USD")
     day_ms = 86_400_000
-    owed: dict[str, list[tuple[int, int]]] = {"in": [], "out": []}  # direction -> [(age in days, amount)]
+    # Customers: days past their payment terms (trigger 7). Suppliers: days since the bill (trigger 8).
+    owed: dict[str, list[tuple[int, int]]] = {"in": [], "out": []}  # direction -> [(days, amount)]
     for item in open_items(db.get_table_rows(user_id, "transactions")):
         amount = _minor_amount(item["open"], item["currency"], display_currency, item.get("exchangeRate") or settings_row.get("rateKhrPerUsd", 4000))
-        owed[item["direction"]].append(((now - item["occurredAt"]) // day_ms, amount))
+        since = item["dueAt"] if item["direction"] == "in" else item["occurredAt"]
+        owed[item["direction"]].append(((now - since) // day_ms, amount))
 
     def overdue(direction: str, yellow_days: int, red_days: int) -> tuple[str | None, dict]:
         late = [(age, amount) for age, amount in owed[direction] if age >= yellow_days]
@@ -637,7 +618,7 @@ def health(user_id: str = Depends(current_sme)):
         level = receivable
     if level:
         alert("slow_customers", "Customers are slow to pay", level,
-              f"{values['count']} unpaid customer balance(s) are {values['oldestDays']}+ days old." if values["count"]
+              f"{values['count']} unpaid customer balance(s) are {values['oldestDays']}+ days past their payment terms." if values["count"]
               else "Customers are taking longer than usual to pay.",
               "Remind the largest overdue accounts first, ask for a deposit, shorten terms, or pause credit.", values)
 
@@ -689,28 +670,12 @@ def _cash_runway(user_id: str) -> tuple[float | None, dict]:
     now = datetime.now(BUSINESS_TZ)
     current_month = datetime(now.year, now.month, 1, tzinfo=BUSINESS_TZ)
     month_index = current_month.year * 12 + current_month.month - 1
-    start_index = month_index - 3
-    year, month_zero = divmod(start_index, 12)
+    year, month_zero = divmod(month_index - 3, 12)
     start = datetime(year, month_zero + 1, 1, tzinfo=BUSINESS_TZ)
-    expense_types = {"rent", "wages", "utilities", "transport", "marketing", "repairs", "fees_licences", "other_cost", "income_tax"}
-    total = 0
-    # Rules §12 Q8: cash actually paid for operating expenses, interest and tax. Pay-later bills
-    # count when they are paid (supplier payments against an expense bill), not when recorded.
-    rows = _effective_transactions(user_id)
-    expense_bills = {tx["id"] for tx in rows if tx["typeId"] in expense_types and tx["payMethod"] == "later"}
-    for tx in rows:
-        occurred = datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=BUSINESS_TZ)
-        if not start <= occurred < current_month:
-            continue
-        settles = tx["typeId"] == "supplier_payment" and json.loads(tx.get("meta") or "{}").get("settlesId") in expense_bills
-        paid_now = tx["typeId"] in expense_types and tx["payMethod"] != "later"
-        amount = tx["amount"] if paid_now or settles else 0
-        if tx["typeId"] == "loan_repayment":
-            try:
-                amount = int(json.loads(tx.get("meta") or "{}").get("interest") or 0)
-            except (TypeError, ValueError, json.JSONDecodeError):
-                amount = 0
-        total += _minor_amount(amount, tx["currency"], currency, tx.get("exchangeRate", rate))
+    # Rules §12 Q8: usual monthly expenses = average over the last 3 complete months of COGS + operating
+    # expenses - depreciation (depreciation uses no cash). Interest and tax are left out.
+    months = _quarter_profit(user_id, currency, rate, start, current_month)
+    total = months["cogs"] + months["operating"] - months["depreciation"]
     average = total / 3
     return (cash / average if average > 0 else None), {"cash": cash, "usualMonthlyExpenses": average}
 

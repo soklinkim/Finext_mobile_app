@@ -383,7 +383,7 @@ Before a ratio's start point, show it as "Not enough data yet" rather than zero.
 Supporting figures:
 - **Revenue** = Sales revenue (§8.1).
 - **EBITDA** = Operating profit + Depreciation (6800).
-- **EBIT** = Operating profit + Other income *(§12 Q7)*.
+- **EBIT** = Operating profit, without other income *(§12 Q7)*.
 - **Debt** = all loans received: 2400 + 2500 + 2600 + 2700 *(see §12 Q6)*.
 - **Equity** = Total owner's equity (§8.2).
 - **Average inventory / receivables** = (opening + closing) ÷ 2 for the period.
@@ -440,7 +440,7 @@ Each trigger has a yellow and red condition, what to check, a suggested action a
 | 1 | Sales & margin | Sales fall | Revenue growth at yellow line | Revenue growth at red line | Seasonality, a top customer buying less, days with no sales entered | Compare with the same month last year; list top 5 customers and products vs last month; promote or restock | Monthly |
 | 2 | Sales & margin | Sales spike | Revenue 50% above the 3-month average | 100% above the 3-month average | Duplicate entries, one large one-off order, a deposit entered as a sale | Confirm the large entries and that none is duplicated | Every entry |
 | 3 | Sales & margin | Gross margin falls | Gross margin at yellow line | Gross margin at red line | Supplier price rise, heavy discounting, returns | Compare unit cost with the last purchase; review discounts; change supplier | Monthly |
-| 4 | Sales & margin | Thin or negative profit | Net margin **and** EBITDA margin at yellow line | Net margin **and** EBITDA margin at red line (loss) | Costs growing faster than sales, a one-off expense, low-margin mix | Find which cost lines or products drive the drop; cut low-return spend | Monthly |
+| 4 | Sales & margin | Thin or negative profit | Net margin **or** EBITDA margin at yellow line | Net margin **or** EBITDA margin at red line (loss) | Costs growing faster than sales, a one-off expense, low-margin mix | Find which cost lines or products drive the drop; cut low-return spend | Monthly |
 | 5 | Costs | Overheads rising | Operating expense ratio at yellow line | At red line | Price rises, one-off repairs, billing or meter error | Open the category, compare with bills, freeze non-essential spend | Monthly |
 | 6 | Stock | Stock building up | Inventory days at yellow line | At red line | Slower sales, over-ordering, buying ahead of a festival, unrecorded sales | Pause reorders on slowest items; promote aged stock; confirm the stock count | Monthly |
 | 7 | Customers | Slow-paying customers | Receivable days at yellow line, **or** any balance 30 days past terms | Receivable days at red line, **or** any balance 60 days past terms | Weak follow-up, a struggling customer, generous credit | Remind largest overdue accounts first; ask for a deposit; shorten terms; pause credit | Daily |
@@ -448,15 +448,16 @@ Each trigger has a yellow and red condition, what to check, a suggested action a
 | 9 | Cash | Cash running short | Cash on hand < 1 month of usual expenses | < 2 weeks of expenses | Costs above receipts, a large purchase, drawings | Delay non-urgent purchases and drawings; chase receivables; list payments due in 14 days | Every entry |
 | 10 | Cash | Profit not turning into cash | Profit positive but cash & bank fell 2 months in a row | Fell 3 months in a row | Stock build-up, unpaid customers, loan repayments, drawings, equipment | Show where the cash went (stock, customers, loans, owner) and act on the largest | Monthly |
 | 11 | Liquidity | Short-term bills at risk | Current ratio at yellow line | At red line | Short-term bills growing faster than cash, stock and receivables | Collect receivables; reduce slow stock; refinance short-term debt into long-term | Monthly |
-| 12 | Debt | Debt load high | Debt-to-equity **and** Debt-to-asset at yellow line | Both at red line | Borrowing out of proportion to owner's stake or assets | Avoid new borrowing; retain earnings; reduce drawings | Quarterly |
-| 13 | Debt | Struggling to pay the lender | Interest coverage **and** DSCR at yellow line | Both at red line | Falling profit, borrowing to repay borrowing | Talk to the lender early; cut costs; delay equipment purchases | Quarterly, reviewed monthly |
+| 12 | Debt | Debt load high | Debt-to-equity **or** Debt-to-asset at yellow line | Either at red line | Borrowing out of proportion to owner's stake or assets | Avoid new borrowing; retain earnings; reduce drawings | Quarterly |
+| 13 | Debt | Struggling to pay the lender | Interest coverage **or** DSCR at yellow line | Either at red line | Falling profit, borrowing to repay borrowing | Talk to the lender early; cut costs; delay equipment purchases | Quarterly, reviewed monthly |
 | 14 | Debt | New loan while weak | — | A loan is received while DSCR is below its yellow line **or** cash runway is at its red line | Borrowing to repay borrowing | Show what the new instalment does to coverage and cash before the owner commits | Every entry |
 
 **Helper definitions:**
 - **Cash on hand** = 1000 + 1010.
-- **Usual monthly expenses** = average monthly cash paid for operating expenses, interest and tax over the last 3 complete months *(§12 Q8)*.
+- **Usual monthly expenses** = average over the last 3 complete months of COGS + operating expenses − depreciation *(§12 Q8)*.
+- **Triggers 4, 12, 13** fire when either ratio reaches its line; when both do, the severity goes up one level (yellow becomes red).
 - **Cash runway** = Cash on hand ÷ usual monthly expenses, in months. Red line = 0.5 months (2 weeks); yellow = 1 month.
-- **Days past terms** = today − date of the open pay-later item (no due dates yet, see §12 Q9).
+- **Days past terms** = today − (date of the open pay-later item + its payment terms in days) *(§12 Q9)*.
 - **Supplier bill age** = today − bill date of the open payable.
 
 Every trigger result is stored with its date, level, the values used and whether the user dismissed it, so the app does not repeat the same alert.
@@ -537,15 +538,16 @@ These are settled; the app and backend follow them.
 
 - **Q1 Service income: keep.** `service_income` posts to `4100` Service revenue, and Sales revenue = `4000` + `4100` − `4900`. Many SMEs sell services; add the type and account to the Excel Types and Accounts sheets.
 - **Q6 Debt: includes leases.** Debt = `2400` + `2500` + `2600` + `2700` (loans and lease obligations). A lease is a fixed obligation lenders count as debt. The statement's quick ratio is labelled "Liabilities-to-equity".
-- **Q8 Usual expenses: cash paid.** Average over the last 3 complete months of cash paid for operating expenses, interest and tax. Pay-later bills count when they are paid (supplier payments against an expense bill).
-- **Q9 Payment terms: none for now.** Pay-later entries have no due date. Trigger 7 uses days since the entry (yellow 30, red 60 days, or receivable days at its line); trigger 8 uses days since the bill (yellow 45, red 60 days).
+- **Q8 Usual expenses: COGS + operating expenses − depreciation** (AI pipeline spec, replacing the earlier cash-paid basis). Average over the last 3 complete months; depreciation is left out because it uses no cash, and interest and tax are left out. Cash runway = cash ÷ usual monthly expenses.
+- **Q9 Payment terms: on every pay-later entry** (AI pipeline spec, replacing "none for now"). The owner picks 7, 15, 30 or 60 days (default 30); entries recorded before terms existed count as 30 days. Trigger 7 uses days past terms (yellow 30, red 60, or receivable days at its line); trigger 8 still uses days since the bill (yellow 45, red 60).
 - **Q13 Opening balance split: the user decides.** Onboarding shows a live balance check and offers to put the difference into Owner's capital; it cannot be finished until assets = liabilities + owner's equity.
 - **Q14 Opening balance date: at onboarding** (or the end of the entered period for an existing business).
 - **Q2 Write-off: include it.** "Write off unpaid amount" is its own entry linked to an unpaid customer sale (pay later, money in): Dr `6990` · Cr `1100`, no money moves. It needs a reason (the note), is flagged for review, and cannot exceed what is still owed after payments. Supplier bills cannot be written off. To undo it, reverse the write-off; the sale cannot be reversed while a payment or write-off stands against it.
 - **Q3 Unused expense accounts: keep the JSON rules.** `utilities` posts to `6200`, `fees_licences` to `6950`, and insurance stays in `other_cost` (`6990`). Accounts `6300`, `6700` and `6900` stay in the chart (opening balances and the statement map still use them) but no entry type posts to them.
 - **Q4 COGS estimate: own history, else the benchmark.** A product sale with no cost uses the cost share (cost ÷ sales) of the product sales *with an entered cost* in the 3 complete months before the sale's month, or 67% of the sale (the 33% benchmark gross margin) until there are any. Estimated sales are left out of the history, so estimates do not feed on themselves. A sale's estimate depends only on its own date and earlier entries, so its journal does not change as time passes, and a reversal mirrors it exactly. Mixed currencies are compared in USD.
 - **Q5 Currency: per-entry currency and rate.** Each entry keeps its own currency (USD or KHR) and the KHR-per-USD rate on the day. Statements, ratios and alerts are shown in the business's display currency, converting each entry at its own rate; opening balances use the settings rate.
-- **Q7 EBIT = Operating profit + Other income.** Interest coverage uses it. EBITDA stays Operating profit + Depreciation (no other income) for the EBITDA margin and DSCR.
-- **Q10 Loan schedule: optional on Loan received.** A loan can carry an instalment amount and a weekly or monthly frequency. DSCR uses the instalments due in the quarter; while any open loan has no schedule, DSCR shows "Not enough data yet".
+- **Q7 EBIT = Operating profit, without other income** (AI pipeline spec, replacing "+ Other income"). EBITDA = Operating profit + Depreciation. Other income (`4200`) is shown separately, so a one-off grant or asset sale does not make normal performance look better. Interest coverage uses EBIT; the EBITDA margin and DSCR use EBITDA.
+- **Q10 Loan fields: required on Loan received** (AI pipeline spec). Term in months, annual interest rate (0 allowed, e.g. family loans), rate type (flat or declining balance), repayment frequency (weekly or monthly) and first due date. The lender's instalment is optional: if given it is used, otherwise the instalment is calculated and marked estimated (flat: principal plus interest for the whole term, spread evenly; declining: the standard annuity payment). DSCR uses the instalments due in the quarter; loans recorded before these fields existed may have no schedule, and DSCR then shows "Not enough data yet". Finance still to confirm which rate type lenders in the target market usually quote. Fees are not collected yet.
+- **Triggers 4, 12, 13: either condition** (AI pipeline spec). Either ratio at its line raises the alert; both together raise its severity one level.
 - **Q11 Sales spike: month-to-date, pro-rated.** Month-to-date sales revenue (`4000` + `4100`), scaled to the full month, compared with the average of the last 3 complete months: yellow at 150%, red at 200%. Only from month 4, once 3 complete months of records exist.
 - **Q12 Typos: DSCR.** "DCSR" in the source means DSCR; this document and the code use DSCR.

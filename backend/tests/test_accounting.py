@@ -71,7 +71,7 @@ class LedgerDB:
 
 
 def test_quarter_ebitda_leaves_out_other_income(monkeypatch):
-    """Rules §9.3: EBITDA = operating profit + depreciation; EBIT adds other income (§12 Q7)."""
+    """Rules §9.3 / §12 Q7: EBIT = operating profit and EBITDA = operating profit + depreciation, no other income."""
     from datetime import datetime
     from app.business_time import BUSINESS_TZ
     from tests.test_settlement import entry
@@ -81,7 +81,7 @@ def test_quarter_ebitda_leaves_out_other_income(monkeypatch):
             entry("g", "other_income", "in", 1_000, at=on(2025, 2, 3))]
     monkeypatch.setattr(accounting_router, "db", LedgerDB(rows))
     q = accounting_router._quarter_profit("u", "USD", 4000, datetime(2025, 1, 1, tzinfo=BUSINESS_TZ), datetime(2025, 4, 1, tzinfo=BUSINESS_TZ))
-    assert (q["ebit"], q["ebitda"]) == (7_000, 6_000)
+    assert (q["ebit"], q["ebitda"]) == (6_000, 6_000)
 
 
 def test_sales_spike_waits_for_three_complete_months(monkeypatch):

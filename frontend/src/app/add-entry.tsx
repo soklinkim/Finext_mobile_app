@@ -66,9 +66,13 @@ export default function AddEntry() {
   const [costText, setCostText] = useState('');
   const [lender, setLender] = useState('');
   const [lenderType, setLenderType] = useState<'bank_mfi' | 'informal'>('bank_mfi');
-  const [longTerm, setLongTerm] = useState(false);
+  const [termText, setTermText] = useState('12');
+  const [rateText, setRateText] = useState('');
+  const [rateType, setRateType] = useState<'flat' | 'declining' | null>(null);
+  const [firstDueMs, setFirstDueMs] = useState<number | null>(null);
   const [installmentText, setInstallmentText] = useState('');
   const [repaymentFrequency, setRepaymentFrequency] = useState<'weekly' | 'monthly'>('monthly');
+  const [termsDays, setTermsDays] = useState(30);
   const [assetName, setAssetName] = useState('');
   const [usefulLife, setUsefulLife] = useState('');
   const [loanName, setLoanName] = useState('');
@@ -129,9 +133,14 @@ export default function AddEntry() {
           cost: costText ? parseAmountInput(costText, currency) : undefined,
           lender: lender || undefined,
           lenderType: type.extraFields.includes('lenderType') ? lenderType : undefined,
-          termMonths: type.extraFields.includes('term') ? (longTerm ? 24 : 12) : undefined,
+          termMonths: type.extraFields.includes('term') ? (termText ? Number(termText) : 0) : undefined,
+          // Loan fields from the AI pipeline spec; the lender's instalment is optional (estimated if blank).
+          annualInterestRate: type.extraFields.includes('repaymentSchedule') && rateText ? Number(rateText.replace(',', '.')) : undefined,
+          rateType: type.extraFields.includes('repaymentSchedule') ? rateType ?? undefined : undefined,
+          firstDueDate: type.extraFields.includes('repaymentSchedule') ? firstDueMs ?? undefined : undefined,
           installmentAmount: installmentText ? parseAmountInput(installmentText, currency) : undefined,
-          repaymentFrequency: installmentText ? repaymentFrequency : undefined,
+          repaymentFrequency: type.extraFields.includes('repaymentSchedule') ? repaymentFrequency : undefined,
+          termsDays: pay === 'later' ? termsDays : undefined,
           assetName: assetName || undefined,
           usefulLifeYears: usefulLife ? Number(usefulLife) : undefined,
           loanName: loanName || undefined,
@@ -243,6 +252,12 @@ export default function AddEntry() {
       {pay === 'later' && (
         <View style={{ gap: 8 }}>
           <TextField label={type.party === 'supplier' ? t('entry.supplier') : t('entry.customer')} value={party} onChangeText={setParty} error={err('counterparty')} />
+          <Text variant="micro" weight={300} tone="neutral-600">{t('entry.paymentTerms')}</Text>
+          <ChipRow>
+            {[7, 15, 30, 60].map((days) => (
+              <Chip key={days} label={t('entry.termsDays', { days })} selected={termsDays === days} onPress={() => setTermsDays(days)} />
+            ))}
+          </ChipRow>
           <Text variant="micro" weight={300} tone="neutral-600">
             {direction === 'in' ? t('entry.laterHintIn') : t('entry.laterHintOut')}
           </Text>
@@ -273,24 +288,34 @@ export default function AddEntry() {
         </View>
       )}
       {type.extraFields.includes('term') && (
-        <View style={{ gap: 6 }}>
-          <Text variant="body" weight={500} tone="primary-900" style={{ fontSize: 14 }}>
-            {t('entry.term')}
-          </Text>
-          <ChipRow>
-            <Chip label={t('entry.upTo12')} selected={!longTerm} onPress={() => setLongTerm(false)} />
-            <Chip label={t('entry.longer12')} selected={longTerm} onPress={() => setLongTerm(true)} />
-          </ChipRow>
-        </View>
+        <TextField label={t('entry.termMonths')} value={termText} onChangeText={(v) => setTermText(v.replace(/\D/g, ''))} keyboardType="number-pad" error={err('term')} />
       )}
       {type.extraFields.includes('repaymentSchedule') && (
-        <View style={{ gap: 6 }}>
-          <TextField label={t('entry.installmentAmount')} value={installmentText} onChangeText={(v) => setInstallmentText(v.replace(/[^0-9.,]/g, ''))} keyboardType="decimal-pad" />
-          <Text variant="micro" weight={300} tone="neutral-600">{t('entry.repaymentFrequency')}</Text>
-          <ChipRow>
-            <Chip label={t('entry.frequencyMonthly')} selected={repaymentFrequency === 'monthly'} onPress={() => setRepaymentFrequency('monthly')} />
-            <Chip label={t('entry.frequencyWeekly')} selected={repaymentFrequency === 'weekly'} onPress={() => setRepaymentFrequency('weekly')} />
-          </ChipRow>
+        <View style={{ gap: 12 }}>
+          <View style={{ gap: 4 }}>
+            <TextField label={t('entry.interestRate')} value={rateText} onChangeText={(v) => setRateText(v.replace(/[^0-9.,]/g, ''))} keyboardType="decimal-pad" error={err('rate')} />
+            <Text variant="micro" weight={300} tone="neutral-600">{t('entry.interestRateHint')}</Text>
+          </View>
+          <View style={{ gap: 6 }}>
+            <Text variant="micro" weight={300} tone="neutral-600">{t('entry.rateType')}</Text>
+            <ChipRow>
+              <Chip label={t('entry.rateFlat')} selected={rateType === 'flat'} onPress={() => setRateType('flat')} />
+              <Chip label={t('entry.rateDeclining')} selected={rateType === 'declining'} onPress={() => setRateType('declining')} />
+            </ChipRow>
+            {err('rateType') ? <Text variant="micro" tone="danger">{err('rateType')}</Text> : null}
+          </View>
+          <View style={{ gap: 6 }}>
+            <Text variant="micro" weight={300} tone="neutral-600">{t('entry.repaymentFrequency')}</Text>
+            <ChipRow>
+              <Chip label={t('entry.frequencyMonthly')} selected={repaymentFrequency === 'monthly'} onPress={() => setRepaymentFrequency('monthly')} />
+              <Chip label={t('entry.frequencyWeekly')} selected={repaymentFrequency === 'weekly'} onPress={() => setRepaymentFrequency('weekly')} />
+            </ChipRow>
+          </View>
+          <DateInput label={t('entry.firstDue')} value={firstDueMs} onChange={setFirstDueMs} error={err('firstDue')} />
+          <View style={{ gap: 4 }}>
+            <TextField label={t('entry.installmentAmount')} value={installmentText} onChangeText={(v) => setInstallmentText(v.replace(/[^0-9.,]/g, ''))} keyboardType="decimal-pad" />
+            <Text variant="micro" weight={300} tone="neutral-600">{t('entry.installmentHint')}</Text>
+          </View>
         </View>
       )}
       {type.extraFields.includes('assetName') && <TextField label={t('entry.assetName')} value={assetName} onChangeText={setAssetName} error={err('assetName')} />}

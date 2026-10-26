@@ -613,10 +613,15 @@ export interface AddTransactionInput {
     interest?: number;
     installmentAmount?: number;
     repaymentFrequency?: 'weekly' | 'monthly';
+    annualInterestRate?: number;
+    rateType?: 'flat' | 'declining';
+    firstDueDate?: number;
+    /** pay-later entries: days until payment is due */
+    termsDays?: number;
   };
 }
 
-export type ValidationErrors = Partial<Record<'amount' | 'bank' | 'toBank' | 'counterparty' | 'note' | 'payMethod' | 'assetName' | 'usefulLife' | 'lender' | 'interest' | 'date', string>>;
+export type ValidationErrors = Partial<Record<'amount' | 'bank' | 'toBank' | 'counterparty' | 'note' | 'payMethod' | 'assetName' | 'usefulLife' | 'lender' | 'interest' | 'date' | 'term' | 'rate' | 'rateType' | 'firstDue', string>>;
 
 export type AddResult = { ok: true; id: string } | { ok: false; errors: ValidationErrors };
 
@@ -634,6 +639,19 @@ export function validateTransaction(input: AddTransactionInput): ValidationError
   if (type.extraFields.includes('usefulLife') && !(input.meta?.usefulLifeYears && input.meta.usefulLifeYears > 0)) e.usefulLife = 'error.required';
   if (type.extraFields.includes('lender') && !input.meta?.lender?.trim()) e.lender = 'error.required';
   if (input.typeId === 'loan_repayment' && (input.meta?.interest ?? 0) > input.amount) e.interest = 'error.interestTooHigh';
+  if (type.extraFields.includes('term')) {
+    const term = input.meta?.termMonths ?? 0;
+    if (!(Number.isInteger(term) && term >= 1 && term <= 360)) e.term = 'error.termMonths';
+  }
+  if (type.extraFields.includes('repaymentSchedule')) {
+    // AI pipeline spec: rate, rate type and first due date are required so repayments can be scheduled.
+    const rate = input.meta?.annualInterestRate;
+    if (rate === undefined || !(rate >= 0 && rate <= 100)) e.rate = 'error.interestRate';
+    if (!input.meta?.rateType) e.rateType = 'error.required';
+    const firstDue = input.meta?.firstDueDate;
+    if (!firstDue) e.firstDue = 'error.required';
+    else if (firstDue < (input.occurredAt ?? Date.now()) - DAY) e.firstDue = 'error.firstDueBeforeLoan';
+  }
   if (type.direction === 'move') {
     if (!input.bankId) e.bank = 'error.required';
     if (!input.toBankId) e.toBank = 'error.required';

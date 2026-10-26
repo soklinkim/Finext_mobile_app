@@ -33,6 +33,8 @@ PAYMENT_TYPES = {"customer_payment", "supplier_payment"}
 WRITE_OFF = "write_off"
 # Entries that reduce what is still owed on a pay-later entry.
 SETTLEMENT_TYPES = PAYMENT_TYPES | {WRITE_OFF}
+# Pay-later entries carry payment terms (meta.termsDays); entries recorded before terms existed get this.
+DEFAULT_TERMS_DAYS = 30
 
 
 def _meta(transaction: dict[str, Any]) -> dict[str, Any]:
@@ -167,6 +169,10 @@ def build_journal(transaction: dict[str, Any], bank_kinds: dict[str, str] | None
         raise PostingError(f"{type_id} does not allow pay later")
     if pay_method == "later" and not (transaction.get("counterparty") or "").strip():
         raise PostingError("counterparty is required for pay later")
+    if pay_method == "later" and meta.get("termsDays") is not None:
+        terms = meta["termsDays"]
+        if not isinstance(terms, int) or isinstance(terms, bool) or not 0 <= terms <= 365:
+            raise PostingError("payment terms must be 0 to 365 days")
     if type_id in {"customer_deposit"} and not (transaction.get("counterparty") or "").strip():
         raise PostingError("customer is required")
     if type_id in {"other_income", "other_cost"} and not (transaction.get("note") or "").strip():
@@ -232,6 +238,18 @@ def build_journal(transaction: dict[str, Any], bank_kinds: dict[str, str] | None
             lender_type = meta.get("lenderType")
             if lender_type not in {"bank_mfi", "informal"} or term <= 0:
                 raise PostingError("lender type and positive loan term are required")
+            # Loan fields from the AI pipeline spec. Checked when present: loans recorded before they existed
+            # still post, and their DSCR shows "not enough data" (app.loan_schedule).
+            rate = meta.get("annualInterestRate")
+            if rate is not None and (not isinstance(rate, (int, float)) or isinstance(rate, bool) or not 0 <= rate <= 100):
+                raise PostingError("annual interest rate must be 0 to 100 percent")
+            if meta.get("rateType") is not None and meta["rateType"] not in {"flat", "declining"}:
+                raise PostingError("rate type must be flat or declining balance")
+            if meta.get("repaymentFrequency") is not None and meta["repaymentFrequency"] not in {"weekly", "monthly"}:
+                raise PostingError("repayment frequency must be weekly or monthly")
+            first_due = meta.get("firstDueDate")
+            if first_due is not None and (not isinstance(first_due, int) or isinstance(first_due, bool) or first_due < transaction["occurredAt"] - 86_400_000):
+                raise PostingError("first due date must be on or after the date the loan was received")
             if meta.get("installmentAmount") is not None:
                 try:
                     installment = int(meta["installmentAmount"])
@@ -429,9 +447,12 @@ def open_items(transactions: list[dict[str, Any]]) -> list[dict[str, Any]]:
             continue
         remaining = tx["amount"] - paid.get(tx["id"], 0)
         if remaining > 0:
+            terms = _meta(tx).get("termsDays")
+            terms = terms if isinstance(terms, int) and not isinstance(terms, bool) else DEFAULT_TERMS_DAYS
             items.append({"id": tx["id"], "direction": tx["direction"], "counterparty": tx.get("counterparty"),
                           "open": remaining, "currency": tx["currency"], "exchangeRate": tx.get("exchangeRate"),
-                          "occurredAt": tx["occurredAt"]})
+                          "occurredAt": tx["occurredAt"], "termsDays": terms,
+                          "dueAt": tx["occurredAt"] + terms * 86_400_000})
     return items
 
 
