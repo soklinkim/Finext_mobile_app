@@ -7,6 +7,7 @@ import json
 from typing import Any
 from calendar import monthrange
 from datetime import datetime, timezone
+from app.business_time import BUSINESS_TZ
 
 
 class PostingError(ValueError):
@@ -292,9 +293,9 @@ def journal_response(transactions: list[dict[str, Any]], banks: list[dict[str, A
 
 def depreciation_entries(transactions: list[dict[str, Any]], after: int = 0, through: int | None = None) -> list[dict[str, Any]]:
     """Generate deterministic monthly straight-line depreciation for recorded equipment."""
-    through = through or int(datetime.now(timezone.utc).timestamp() * 1000)
+    through = through or int(datetime.now(BUSINESS_TZ).timestamp() * 1000)
     output = []
-    end = datetime.fromtimestamp(through / 1000, tz=timezone.utc)
+    end = datetime.fromtimestamp(through / 1000, tz=BUSINESS_TZ)
     reversed_entries = reversed_ids(transactions)
     for tx in transactions:
         if tx.get("deletedAt") is not None or tx.get("typeId") != "equipment_purchase" or tx["occurredAt"] < after:
@@ -308,7 +309,7 @@ def depreciation_entries(transactions: list[dict[str, Any]], after: int = 0, thr
             continue
         if life_months <= 0:
             continue
-        purchase = datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=timezone.utc)
+        purchase = datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=BUSINESS_TZ)
         amount_per_month = max(1, round(tx["amount"] / life_months))
         month_index = purchase.year * 12 + purchase.month
         emitted = 0
@@ -317,7 +318,7 @@ def depreciation_entries(transactions: list[dict[str, Any]], after: int = 0, thr
             year, zero_month = divmod(index, 12)
             month = zero_month + 1
             day = monthrange(year, month)[1]
-            booked = datetime(year, month, day, 23, 59, 59, tzinfo=timezone.utc)
+            booked = datetime(year, month, day, 23, 59, 59, tzinfo=BUSINESS_TZ)
             if booked > end:
                 break
             value = min(amount_per_month, tx["amount"] - emitted)

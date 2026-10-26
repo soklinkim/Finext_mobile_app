@@ -1,6 +1,7 @@
 import calendar
 from collections import defaultdict
 from datetime import datetime, timezone
+from app.business_time import BUSINESS_TZ
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import ValidationError
@@ -43,8 +44,8 @@ INCOME_STATEMENT_KEYS = {
 
 def _at_least_one_month(start_ms: int, end_ms: int) -> bool:
     try:
-        start = datetime.fromtimestamp(start_ms / 1000, tz=timezone.utc)
-        end = datetime.fromtimestamp(end_ms / 1000, tz=timezone.utc)
+        start = datetime.fromtimestamp(start_ms / 1000, tz=BUSINESS_TZ)
+        end = datetime.fromtimestamp(end_ms / 1000, tz=BUSINESS_TZ)
         year = start.year + (1 if start.month == 12 else 0)
         month = start.month % 12 + 1
         day = min(start.day, calendar.monthrange(year, month)[1])

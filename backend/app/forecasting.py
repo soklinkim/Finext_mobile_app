@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from app.business_time import BUSINESS_TZ
 from math import sqrt
 
 from app.bookkeeping import depreciation_entries, journal_for, loan_account_map
@@ -40,7 +41,7 @@ def forecast_income_expense(
     opening_entries: list[dict] | None = None, *, now: datetime | None = None,
 ) -> dict:
     """Forecast the next three months from the six most recently completed months."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(BUSINESS_TZ)
     currency = settings.get("displayCurrency", "USD")
     rate = settings.get("rateKhrPerUsd", 4000)
     current_index = now.year * 12 + now.month - 1
@@ -49,7 +50,7 @@ def forecast_income_expense(
     active_indices: set[int] = set()
 
     def month_index(timestamp: int) -> int:
-        date = datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc)
+        date = datetime.fromtimestamp(timestamp / 1000, tz=BUSINESS_TZ)
         return date.year * 12 + date.month - 1
 
     bank_kinds = {bank["id"]: bank["kind"] for bank in banks}

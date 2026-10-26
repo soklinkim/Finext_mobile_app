@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from calendar import monthrange
 from datetime import datetime, timedelta, timezone
+from app.business_time import BUSINESS_TZ
 from typing import Annotated
 import json
 
@@ -92,18 +93,18 @@ def _statement_period(now: datetime, period: str):
                 f"Week of {current_start.strftime('%d %b %Y')}", f"Week of {prior_start.strftime('%d %b %Y')}")
 
     if period == "monthly":
-        current_start = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+        current_start = datetime(now.year, now.month, 1, tzinfo=BUSINESS_TZ)
         prior_month = 12 if now.month == 1 else now.month - 1
         prior_year = now.year - 1 if now.month == 1 else now.year
-        prior_start = datetime(prior_year, prior_month, 1, tzinfo=timezone.utc)
+        prior_start = datetime(prior_year, prior_month, 1, tzinfo=BUSINESS_TZ)
         elapsed = now - current_start + timedelta(milliseconds=1)
         prior_end = min(prior_start + elapsed, current_start)
         return (current_start, now + timedelta(milliseconds=1), prior_start, prior_end,
                 current_start.strftime("%B %Y"), prior_start.strftime("%B %Y"))
 
     if period == "annual":
-        current_start = datetime(now.year, 1, 1, tzinfo=timezone.utc)
-        prior_start = datetime(now.year - 1, 1, 1, tzinfo=timezone.utc)
+        current_start = datetime(now.year, 1, 1, tzinfo=BUSINESS_TZ)
+        prior_start = datetime(now.year - 1, 1, 1, tzinfo=BUSINESS_TZ)
         elapsed = now - current_start + timedelta(milliseconds=1)
         return (current_start, now + timedelta(milliseconds=1), prior_start, prior_start + elapsed,
                 f"Year to date {now.year}", f"Year to date {now.year - 1}")
@@ -120,7 +121,7 @@ def statements(user_id: str = Depends(current_user), period: Annotated[str, Quer
     settings = next((r for r in db.get_table_rows(user_id, "settings") if r.get("id") == "app"), {})
     currency = settings.get("displayCurrency", "USD")
     rate = settings.get("rateKhrPerUsd", 4000)
-    today = datetime.now(timezone.utc)
+    today = datetime.now(BUSINESS_TZ)
     current_start, current_end, prior_start, prior_end, period_name, prior_name = _statement_period(today, period)
     current_lines: dict[str, int] = {}
     prior_lines: dict[str, int] = {}
@@ -136,7 +137,7 @@ def statements(user_id: str = Depends(current_user), period: Annotated[str, Quer
         if tx.get("deletedAt") is not None:
             continue
         lines = journal_for(tx, bank_kinds, loan_accounts)
-        when = datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=timezone.utc)
+        when = datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=BUSINESS_TZ)
         for line in lines:
             amount = _minor_amount(line["amount"], tx["currency"], currency, tx.get("exchangeRate", rate))
             code = line["accountCode"]
@@ -153,7 +154,7 @@ def statements(user_id: str = Depends(current_user), period: Annotated[str, Quer
                if r.get("section") == "balance_sheet" and (r.get("asOf") or 0) <= int(today.timestamp() * 1000)]
     opening_as_of = max((row.get("asOf") or 0 for row in opening), default=0)
     for entry in depreciation_entries(transactions, after=opening_as_of):
-        when = datetime.fromtimestamp(entry["date"] / 1000, tz=timezone.utc)
+        when = datetime.fromtimestamp(entry["date"] / 1000, tz=BUSINESS_TZ)
         for line in entry["lines"]:
             amount = _minor_amount(line["amount"], entry["currency"], currency, rate)
             code = line["accountCode"]
@@ -299,13 +300,13 @@ def summary(user_id: str = Depends(current_user)):
 
 def _complete_quarter(now: datetime) -> tuple[datetime, datetime]:
     first_month = ((now.month - 1) // 3) * 3 + 1
-    end = datetime(now.year, first_month, 1, tzinfo=timezone.utc)
+    end = datetime(now.year, first_month, 1, tzinfo=BUSINESS_TZ)
     start_month = first_month - 3
     year = now.year
     if start_month <= 0:
         start_month += 12
         year -= 1
-    return datetime(year, start_month, 1, tzinfo=timezone.utc), end
+    return datetime(year, start_month, 1, tzinfo=BUSINESS_TZ), end
 
 
 def _quarter_profit(user_id: str, currency: str, rate: int, start: datetime, end: datetime) -> dict[str, int]:
@@ -317,7 +318,7 @@ def _quarter_profit(user_id: str, currency: str, rate: int, start: datetime, end
     for tx in tx_rows:
         if tx.get("deletedAt") is not None:
             continue
-        occurred = datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=timezone.utc)
+        occurred = datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=BUSINESS_TZ)
         if not start <= occurred < end:
             continue
         for posting in journal_for(tx, bank_kinds, loan_accounts):
@@ -326,7 +327,7 @@ def _quarter_profit(user_id: str, currency: str, rate: int, start: datetime, end
     opening = db.get_table_rows(user_id, "onboarding_financial_entries")
     opening_as_of = max((row.get("asOf") or 0 for row in opening if row.get("section") == "balance_sheet"), default=0)
     for entry in depreciation_entries(tx_rows, after=opening_as_of):
-        booked = datetime.fromtimestamp(entry["date"] / 1000, tz=timezone.utc)
+        booked = datetime.fromtimestamp(entry["date"] / 1000, tz=BUSINESS_TZ)
         if not start <= booked < end:
             continue
         for posting in entry["lines"]:
@@ -374,7 +375,7 @@ def _scheduled_debt_service(user_id: str, currency: str, rate: int, start: datet
             missing_schedule = True
             continue
         installment = _minor_amount(installment, loan["currency"], currency, loan.get("exchangeRate", rate))
-        loan_date = datetime.fromtimestamp(loan["occurredAt"] / 1000, tz=timezone.utc)
+        loan_date = datetime.fromtimestamp(loan["occurredAt"] / 1000, tz=BUSINESS_TZ)
         term = max(1, int(meta.get("termMonths") or 12))
         maturity_month_index = loan_date.year * 12 + loan_date.month - 1 + term
         maturity_year, maturity_zero_month = divmod(maturity_month_index, 12)
@@ -416,15 +417,15 @@ def ratios(user_id: str = Depends(current_user)):
     movements = metrics["periodMovements"]
     income_lines = {line["key"]: line["current"] for section in report["income"]["sections"] for line in section["lines"]}
     balance_lines = {line["key"]: line["current"] for section in report["balance"]["sections"] for line in section["lines"]}
-    days = datetime.now(timezone.utc).day
-    month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    now = datetime.now(timezone.utc)
+    days = datetime.now(BUSINESS_TZ).day
+    month_start = datetime.now(BUSINESS_TZ).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    now = datetime.now(BUSINESS_TZ)
     start_operation = next((s.get("startOperationDate") for s in db.get_table_rows(user_id, "settings") if s.get("id") == "app"), None)
     enough_month = False
     enough_quarter = False
     if start_operation:
         try:
-            began = datetime.fromisoformat(start_operation).replace(tzinfo=timezone.utc)
+            began = datetime.fromisoformat(start_operation).replace(tzinfo=BUSINESS_TZ)
             due_year = began.year + (1 if began.month == 12 else 0)
             due_month = 1 if began.month == 12 else began.month + 1
             due_day = min(began.day, monthrange(due_year, due_month)[1])
@@ -434,7 +435,7 @@ def ratios(user_id: str = Depends(current_user)):
     quarter_start, quarter_end = _complete_quarter(now)
     if start_operation:
         try:
-            began = datetime.fromisoformat(start_operation).replace(tzinfo=timezone.utc)
+            began = datetime.fromisoformat(start_operation).replace(tzinfo=BUSINESS_TZ)
             enough_quarter = began <= quarter_start
         except ValueError:
             pass
@@ -454,7 +455,7 @@ def ratios(user_id: str = Depends(current_user)):
     credit_sales = sum(_minor_amount(tx["amount"], tx["currency"], currency, tx.get("exchangeRate", rate))
                        for tx in _effective_transactions(user_id)
                        if tx.get("payMethod") == "later" and tx.get("typeId") in {"product_sale", "service_income"}
-                       and datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=timezone.utc) >= month_start)
+                       and datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=BUSINESS_TZ) >= month_start)
     current_inventory = balance_lines.get("inventory", 0)
     opening_inventory = current_inventory - movements.get("1200", 0)
     average_inventory = (current_inventory + opening_inventory) / 2
@@ -501,7 +502,7 @@ def ratios(user_id: str = Depends(current_user)):
 @router.get("/health")
 def health(user_id: str = Depends(current_user)):
     result = ratios(user_id)
-    now_dt = datetime.now(timezone.utc)
+    now_dt = datetime.now(BUSINESS_TZ)
     now = int(now_dt.timestamp() * 1000)
     ratio_map = {item["id"]: item for item in result["ratios"]}
     generated: list[dict] = []
@@ -602,9 +603,9 @@ def health(user_id: str = Depends(current_user)):
               f"{values['count']} supplier bill(s) unpaid for {values['oldestDays']}+ days.",
               "Pay the oldest and smallest bills first, and record payments with Mark as paid.", values)
 
-    month_start = datetime(now_dt.year, now_dt.month, 1, tzinfo=timezone.utc)
+    month_start = datetime(now_dt.year, now_dt.month, 1, tzinfo=BUSINESS_TZ)
     new_loan = any(tx["typeId"] == "loan_received"
-                   and datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=timezone.utc) >= month_start
+                   and datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=BUSINESS_TZ) >= month_start
                    for tx in _effective_transactions(user_id))
     if new_loan and (ratio_map["dscr"]["status"] in {"yellow", "red"} or (runway is not None and runway < 0.5)):
         alert("new_loan_while_weak", "New borrowing while cash is tight", "red",
@@ -641,12 +642,12 @@ def _cash_runway(user_id: str) -> tuple[float | None, dict]:
     cash = next((line["current"] for section in report["balance"]["sections"] for line in section["lines"] if line["key"] == "cash"), 0)
     settings = next((s for s in db.get_table_rows(user_id, "settings") if s.get("id") == "app"), {})
     rate = settings.get("rateKhrPerUsd", 4000)
-    now = datetime.now(timezone.utc)
-    current_month = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+    now = datetime.now(BUSINESS_TZ)
+    current_month = datetime(now.year, now.month, 1, tzinfo=BUSINESS_TZ)
     month_index = current_month.year * 12 + current_month.month - 1
     start_index = month_index - 3
     year, month_zero = divmod(start_index, 12)
-    start = datetime(year, month_zero + 1, 1, tzinfo=timezone.utc)
+    start = datetime(year, month_zero + 1, 1, tzinfo=BUSINESS_TZ)
     expense_types = {"rent", "wages", "utilities", "transport", "marketing", "repairs", "fees_licences", "other_cost", "income_tax"}
     total = 0
     # Rules §12 Q8: cash actually paid for operating expenses, interest and tax. Pay-later bills
@@ -654,7 +655,7 @@ def _cash_runway(user_id: str) -> tuple[float | None, dict]:
     rows = _effective_transactions(user_id)
     expense_bills = {tx["id"] for tx in rows if tx["typeId"] in expense_types and tx["payMethod"] == "later"}
     for tx in rows:
-        occurred = datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=timezone.utc)
+        occurred = datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=BUSINESS_TZ)
         if not start <= occurred < current_month:
             continue
         settles = tx["typeId"] == "supplier_payment" and json.loads(tx.get("meta") or "{}").get("settlesId") in expense_bills
@@ -674,24 +675,24 @@ def _sales_spike(user_id: str) -> tuple[float | None, dict]:
     settings = next((s for s in db.get_table_rows(user_id, "settings") if s.get("id") == "app"), {})
     currency = settings.get("displayCurrency", "USD")
     rate = settings.get("rateKhrPerUsd", 4000)
-    now = datetime.now(timezone.utc)
-    month_start = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+    now = datetime.now(BUSINESS_TZ)
+    month_start = datetime(now.year, now.month, 1, tzinfo=BUSINESS_TZ)
     month_index = now.year * 12 + now.month - 1
     months: list[tuple[datetime, datetime]] = []
     for offset in (3, 2, 1):
         index = month_index - offset
         year, month_zero = divmod(index, 12)
-        start = datetime(year, month_zero + 1, 1, tzinfo=timezone.utc)
+        start = datetime(year, month_zero + 1, 1, tzinfo=BUSINESS_TZ)
         end_index = index + 1
         end_year, end_month_zero = divmod(end_index, 12)
-        months.append((start, datetime(end_year, end_month_zero + 1, 1, tzinfo=timezone.utc)))
+        months.append((start, datetime(end_year, end_month_zero + 1, 1, tzinfo=BUSINESS_TZ)))
     txs = _effective_transactions(user_id)
     history = [0, 0, 0]
     current = 0
     for tx in txs:
         if tx["typeId"] not in {"product_sale", "service_income"}:
             continue
-        occurred = datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=timezone.utc)
+        occurred = datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=BUSINESS_TZ)
         amount = _minor_amount(tx["amount"], tx["currency"], currency, tx.get("exchangeRate", rate))
         if month_start <= occurred < now:
             current += amount
@@ -708,17 +709,17 @@ def _sales_spike(user_id: str) -> tuple[float | None, dict]:
 
 
 def _cash_profit_trend(user_id: str) -> list[dict]:
-    now = datetime.now(timezone.utc)
-    current = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+    now = datetime.now(BUSINESS_TZ)
+    current = datetime(now.year, now.month, 1, tzinfo=BUSINESS_TZ)
     month_index = current.year * 12 + current.month - 1
     windows = []
     for offset in (3, 2, 1):
         index = month_index - offset
         year, month_zero = divmod(index, 12)
-        start = datetime(year, month_zero + 1, 1, tzinfo=timezone.utc)
+        start = datetime(year, month_zero + 1, 1, tzinfo=BUSINESS_TZ)
         end_index = index + 1
         end_year, end_month_zero = divmod(end_index, 12)
-        windows.append((start, datetime(end_year, end_month_zero + 1, 1, tzinfo=timezone.utc)))
+        windows.append((start, datetime(end_year, end_month_zero + 1, 1, tzinfo=BUSINESS_TZ)))
     tx_rows = db.get_table_rows(user_id, "transactions")
     banks = db.get_table_rows(user_id, "banks", include_deleted=True)
     settings = next((s for s in db.get_table_rows(user_id, "settings") if s.get("id") == "app"), {})
@@ -735,7 +736,7 @@ def _cash_profit_trend(user_id: str) -> list[dict]:
         for tx in tx_rows:
             if tx.get("deletedAt") is not None:
                 continue
-            occurred = datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=timezone.utc)
+            occurred = datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=BUSINESS_TZ)
             if not start <= occurred < end:
                 continue
             for line in journal_for(tx, bank_kinds, loan_accounts):
@@ -749,7 +750,7 @@ def _cash_profit_trend(user_id: str) -> list[dict]:
         opening = db.get_table_rows(user_id, "onboarding_financial_entries")
         opening_as_of = max((row.get("asOf") or 0 for row in opening if row.get("section") == "balance_sheet"), default=0)
         for entry in depreciation_entries(tx_rows, after=opening_as_of):
-            booked = datetime.fromtimestamp(entry["date"] / 1000, tz=timezone.utc)
+            booked = datetime.fromtimestamp(entry["date"] / 1000, tz=BUSINESS_TZ)
             if start <= booked < end:
                 amount = _minor_amount(entry["lines"][0]["amount"], entry["currency"], currency, rate)
                 p_and_l["6800"] = p_and_l.get("6800", 0) + amount
@@ -769,7 +770,7 @@ def dismiss_health_alert(alert_id: str, user_id: str = Depends(current_user)):
     if row is None:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="alert not found")
-    now = int(datetime.now(timezone.utc).timestamp() * 1000)
+    now = int(datetime.now(BUSINESS_TZ).timestamp() * 1000)
     row["dismissedAt"] = now
     row["updatedAt"] = now
     db.upsert_rows(user_id, "health_alerts", [row])
@@ -827,7 +828,7 @@ def analysis(period: str = "daily", user_id: str = Depends(current_user)):
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="period must be daily, weekly, monthly, or yearly")
     rows, currency = _activity_rows(user_id)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(BUSINESS_TZ)
     if period == "daily":
         # This week, Monday to Sunday (days still to come show as empty bars), matching "weekly".
         today = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -844,20 +845,20 @@ def analysis(period: str = "daily", user_id: str = Depends(current_user)):
         buckets = starts
         ends = starts[1:] + [starts[-1] + timedelta(days=7)]
     elif period == "monthly":
-        starts = [datetime(now.year, m, 1, tzinfo=timezone.utc) for m in range(1, 13)]
+        starts = [datetime(now.year, m, 1, tzinfo=BUSINESS_TZ) for m in range(1, 13)]
         labels = [d.strftime("%b") for d in starts]
         buckets = starts
-        ends = starts[1:] + [datetime(now.year + 1, 1, 1, tzinfo=timezone.utc)]
+        ends = starts[1:] + [datetime(now.year + 1, 1, 1, tzinfo=BUSINESS_TZ)]
     else:
         years = list(range(now.year - 4, now.year + 1))
-        starts = [datetime(y, 1, 1, tzinfo=timezone.utc) for y in years]
+        starts = [datetime(y, 1, 1, tzinfo=BUSINESS_TZ) for y in years]
         labels = [str(y) for y in years]
         buckets = starts
-        ends = starts[1:] + [datetime(now.year + 1, 1, 1, tzinfo=timezone.utc)]
+        ends = starts[1:] + [datetime(now.year + 1, 1, 1, tzinfo=BUSINESS_TZ)]
     incomes = [0] * len(buckets)
     expenses = [0] * len(buckets)
     for row in rows:
-        date = datetime.fromtimestamp(row["date"] / 1000, tz=timezone.utc)
+        date = datetime.fromtimestamp(row["date"] / 1000, tz=BUSINESS_TZ)
         for i, (start, end) in enumerate(zip(buckets, ends)):
             if start <= date < end:
                 incomes[i] += row["income"]
@@ -871,8 +872,8 @@ def analysis(period: str = "daily", user_id: str = Depends(current_user)):
 @router.get("/categories")
 def categories(user_id: str = Depends(current_user)):
     rows, currency = _activity_rows(user_id)
-    now = datetime.now(timezone.utc)
-    start = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+    now = datetime.now(BUSINESS_TZ)
+    start = datetime(now.year, now.month, 1, tzinfo=BUSINESS_TZ)
     account_groups: dict[str, int] = {}
     transactions = {tx["id"]: tx for tx in db.get_table_rows(user_id, "transactions") if tx.get("deletedAt") is None}
     banks = db.get_table_rows(user_id, "banks", include_deleted=True)
@@ -882,7 +883,7 @@ def categories(user_id: str = Depends(current_user)):
     rate = settings.get("rateKhrPerUsd", 4000)
     expenses = {"5000", "6000", "6100", "6200", "6300", "6400", "6500", "6600", "6700", "6800", "6900", "6950", "6990", "7000", "7100"}
     for tx in transactions.values():
-        if datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=timezone.utc) < start:
+        if datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=BUSINESS_TZ) < start:
             continue
         for line in journal_for(tx, kinds, loan_accounts):
             if line["accountCode"] not in expenses or line["side"] != "debit":
@@ -893,7 +894,7 @@ def categories(user_id: str = Depends(current_user)):
     opening = db.get_table_rows(user_id, "onboarding_financial_entries")
     opening_as_of = max((row.get("asOf") or 0 for row in opening if row.get("section") == "balance_sheet"), default=0)
     for entry in depreciation_entries(list(transactions.values()), after=opening_as_of):
-        if datetime.fromtimestamp(entry["date"] / 1000, tz=timezone.utc) >= start:
+        if datetime.fromtimestamp(entry["date"] / 1000, tz=BUSINESS_TZ) >= start:
             code = "6800"
             amount = _minor_amount(entry["lines"][0]["amount"], entry["currency"], currency, rate)
             account_groups[code] = account_groups.get(code, 0) + amount
