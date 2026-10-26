@@ -147,7 +147,9 @@ export default function AddEntry() {
 
   const accountOptions = (banks ?? []).map((b) => ({ value: b.id, label: b.name }));
 
-  const previewKey = input && amount > 0 ? JSON.stringify({ ...input, title: undefined, note: undefined, categoryId: undefined, occurredAt: undefined }) : null;
+  // Only preview a complete entry: e.g. "Pay later" before the customer is typed would be rejected by the server.
+  const previewReady = input !== null && amount > 0 && Object.keys(validateTransaction(input)).length === 0;
+  const previewKey = previewReady ? JSON.stringify({ ...input, title: undefined, note: undefined, categoryId: undefined, occurredAt: undefined }) : null;
   useEffect(() => {
     if (!previewKey) {
       const reset = setTimeout(() => setImpact(null), 0);

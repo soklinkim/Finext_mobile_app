@@ -75,6 +75,27 @@ def _effective_transactions(user_id: str) -> list[dict]:
     return [tx for tx in rows if tx["id"] not in cancelled]
 
 
+def _business_start(user_id: str) -> datetime | None:
+    """When the business's records begin, for the ratio timeline (rules §10: "after the first complete month").
+
+    Uses the profile's start date (the app stores DD/MM/YY; ISO is also accepted). A business that
+    started fresh in Finext has none, so fall back to its opening balance date, then its first entry.
+    """
+    settings = next((s for s in db.get_table_rows(user_id, "settings") if s.get("id") == "app"), {})
+    raw = (settings.get("startOperationDate") or "").strip()
+    for fmt in ("%Y-%m-%d", "%d/%m/%y", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(raw[:10], fmt).replace(tzinfo=BUSINESS_TZ)
+        except ValueError:
+            continue
+    opening = [row.get("asOf") for row in db.get_table_rows(user_id, "onboarding_financial_entries") if row.get("asOf")]
+    first_entry = [tx["occurredAt"] for tx in _effective_transactions(user_id)]
+    candidates = opening or first_entry
+    if not candidates:
+        return None
+    return datetime.fromtimestamp(min(candidates) / 1000, tz=BUSINESS_TZ)
+
+
 def _minor_amount(amount: int, source: str, target: str, rate: int) -> int:
     if source == target:
         return amount
@@ -420,25 +441,17 @@ def ratios(user_id: str = Depends(current_user)):
     days = datetime.now(BUSINESS_TZ).day
     month_start = datetime.now(BUSINESS_TZ).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     now = datetime.now(BUSINESS_TZ)
-    start_operation = next((s.get("startOperationDate") for s in db.get_table_rows(user_id, "settings") if s.get("id") == "app"), None)
     enough_month = False
     enough_quarter = False
-    if start_operation:
-        try:
-            began = datetime.fromisoformat(start_operation).replace(tzinfo=BUSINESS_TZ)
-            due_year = began.year + (1 if began.month == 12 else 0)
-            due_month = 1 if began.month == 12 else began.month + 1
-            due_day = min(began.day, monthrange(due_year, due_month)[1])
-            enough_month = now >= began.replace(year=due_year, month=due_month, day=due_day)
-        except ValueError:
-            pass
+    began = _business_start(user_id)
+    if began:
+        due_year = began.year + (1 if began.month == 12 else 0)
+        due_month = 1 if began.month == 12 else began.month + 1
+        due_day = min(began.day, monthrange(due_year, due_month)[1])
+        enough_month = now >= began.replace(year=due_year, month=due_month, day=due_day)
     quarter_start, quarter_end = _complete_quarter(now)
-    if start_operation:
-        try:
-            began = datetime.fromisoformat(start_operation).replace(tzinfo=BUSINESS_TZ)
-            enough_quarter = began <= quarter_start
-        except ValueError:
-            pass
+    if began:
+        enough_quarter = began <= quarter_start
     revenue = pnl["revenue"]
     ebitda = pnl["operating_profit"] + movements.get("6800", 0)
     assets = balance_lines.get("assets", 0)

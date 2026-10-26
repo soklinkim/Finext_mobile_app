@@ -43,3 +43,19 @@ def test_daily_analysis_runs_monday_to_sunday(monkeypatch):
         assert labels == ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     finally:
         app.dependency_overrides.clear()
+
+
+def test_business_start_reads_app_dates_and_falls_back_to_opening(monkeypatch):
+    class DB:
+        def __init__(self, settings, opening):
+            self.settings, self.opening = settings, opening
+
+        def get_table_rows(self, user_id, table, include_deleted=False):
+            return {"settings": [self.settings], "onboarding_financial_entries": self.opening}.get(table, [])
+
+    monkeypatch.setattr(accounting_router, "db", DB({"id": "app", "startOperationDate": "05/03/25"}, []))
+    assert accounting_router._business_start("u").strftime("%Y-%m-%d") == "2025-03-05"  # app's DD/MM/YY
+    monkeypatch.setattr(accounting_router, "db", DB({"id": "app", "startOperationDate": "2024-12-01"}, []))
+    assert accounting_router._business_start("u").strftime("%Y-%m-%d") == "2024-12-01"  # ISO
+    monkeypatch.setattr(accounting_router, "db", DB({"id": "app"}, [{"asOf": 1_700_000_000_000}]))
+    assert accounting_router._business_start("u").year == 2023  # no profile date: opening balance date

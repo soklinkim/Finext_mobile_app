@@ -6,6 +6,7 @@
 import { and, desc, eq, gte, isNull, lte, like, or } from 'drizzle-orm';
 import { db, initDatabase, newRowMeta, schema } from '@/db/client';
 import { seedInitialData } from '@/db/seed';
+import { formatInputDate } from '@/lib/format';
 import type { Bank, BusinessAsset, Category, Settings, Transaction } from '@/db/schema';
 import { emitChange } from './events';
 import { getEntryType, type Direction, type GroupId } from './entryTypes';
@@ -93,7 +94,10 @@ export async function completeOnboarding(input: OnboardingInput): Promise<void> 
       .values({ ...newRowMeta(now), ...entry, asOf: entry.asOf ?? input.asOf ?? null, periodStart: entry.periodStart ?? null, periodEnd: entry.periodEnd ?? null })
       .run();
   }
-  await updateSettings({ ...input.profile, startOption: input.startOption, onboardingStatus: 'completed' });
+  // A business starting fresh in Finext begins today; ratios start "after the first complete month" from here.
+  const current = await getSettings();
+  const startOperationDate = input.profile.startOperationDate ?? current.startOperationDate ?? (input.startOption === 'new' ? formatInputDate(now) : null);
+  await updateSettings({ ...input.profile, startOperationDate, startOption: input.startOption, onboardingStatus: 'completed' });
 }
 
 // ---------------------------------------------------------------- reference data
