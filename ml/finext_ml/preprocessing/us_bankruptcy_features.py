@@ -71,7 +71,7 @@ def _streak(condition: pd.Series, company: pd.Series, consecutive: pd.Series) ->
 
 
 def build(df: pd.DataFrame) -> pd.DataFrame:
-    """Add FEATURES to a frame of company-years sorted by company and year (as `us_dataset.load` returns)."""
+    """Add FEATURES to a frame of company-years sorted by company and year (as `us_bankruptcy_dataset.load` returns)."""
     out = df.copy()
     revenue = out["revenue"]
     equity = out["total_assets"] - out["total_liabilities"]

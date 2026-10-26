@@ -24,7 +24,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-DEFAULT_PATH = Path(__file__).resolve().parents[1] / "data" / "raw" / "us_bankruptcy" / "american_bankruptcy_dataset.csv"
+DEFAULT_PATH = Path(__file__).resolve().parents[2] / "data" / "raw" / "us_bankruptcy" / "american_bankruptcy_dataset.csv"
 
 COLUMNS = {
     "X1": "current_assets", "X2": "total_assets", "X3": "cogs", "X4": "long_term_debt",
@@ -76,3 +76,53 @@ def identity_shares(df: pd.DataFrame, tolerance: float = 0.003) -> dict[str, flo
         "revenue - operating_expenses = ebitda": holds(df["revenue"] - df["operating_expenses"], df["ebitda"]),
         "total_assets >= current_assets": float((df["total_assets"] >= df["current_assets"] - 1e-6).mean()),
     }
+
+
+TRAIN_END, VALIDATION_END = 2011, 2014  # README split: train 1999-2011, validation 2012-2014, test 2015-2018
+
+
+def dataset(path: str | Path = DEFAULT_PATH, seed: int = 20261027):
+    """The corrected data as a training Dataset: 20% of companies held out, the rest split by year."""
+    from finext_ml.preprocessing import us_bankruptcy_features
+    from finext_ml.data.dataset_definition import Dataset, holdout_groups, size_bands
+
+    df = us_bankruptcy_features.build(load(path))
+    held = df["company"].isin(holdout_groups(df, "company", "ever_failed", 0.2, seed))
+    parts = {
+        "train": df[~held & (df["year"] <= TRAIN_END)].reset_index(drop=True),
+        "validation": df[~held & df["year"].between(TRAIN_END + 1, VALIDATION_END)],
+        "time_holdout": df[~held & (df["year"] > VALIDATION_END)],
+        "company_holdout": df[held],
+    }
+    rows, positives = len(df), int(df["fails_next_year"].sum())
+    return Dataset(
+        name="us_bankruptcy", target="fails_next_year", group="company", features=us_bankruptcy_features.FEATURES,
+        labels=us_bankruptcy_features.LABELS, monotone=us_bankruptcy_features.MONOTONE, parts=parts,
+        segments={"industry": lambda frame, train: frame["division"].to_numpy(), "size": size_bands("total_assets")},
+        confidence=lambda row: "low" if pd.isna(row.get("revenue_growth_volatility")) else "normal",  # under 4 years of history
+        card={
+            "warning": "**Research baseline, not for scoring FINEXT businesses.** Trained on annual accounts of US listed "
+                       "companies to predict bankruptcy within one year. FINEXT's target (stress in the next 3 months for an "
+                       "MSME, from monthly snapshots) needs FINEXT-shaped data; this run proves the training, selection and "
+                       "explanation pipeline. Describe any output as *likely deterioration*, never as a prediction of loan default.",
+            "data": [
+                f"US Company Bankruptcy Prediction (sowide/bankruptcy_dataset, CC BY 4.0; Lombardo et al. 2022). "
+                f"{rows:,} company-years, {df['company'].nunique():,} companies, 1999–2018.",
+                "Corrections applied before training: lost decimal points restored (cells 1000× too large), and X1–X18 "
+                "remapped to their real meanings. Identity checks after correction: "
+                + ", ".join(f"{k} {v:.2%}" for k, v in identity_shares(df).items()) + ".",
+                f"**Target** `fails_next_year`: 1 on a failed company's last reported year only ({positives} positives, "
+                f"{positives / rows:.2%}). The raw `status_label` marks every year of a failed company and is not used as the target.",
+            ],
+            "splits": "Train 1999–2011 (grouped CV by company inside), validation 2012–2014, time holdout 2015–2018; "
+                      "company holdout = 20% of companies never seen in training.",
+            "limitations": [
+                "US listed companies, annual accounts, 1999–2018: far larger and differently financed than Cambodian MSMEs.",
+                "No cash, operating cash flow, interest, payables or loan schedules in the data, so the spec's cash ratio, OCF, "
+                "DSCR, cash runway and repayment-burden features are missing, and the `stress_3m` label cannot be built from it.",
+                "\"Failed\" means a Chapter 7 / 11 filing; companies that left the market for other reasons count as not failed.",
+                "Layer 1 (rule) features are not tested here: the US data has no FINEXT signals.",
+            ],
+            "file": Path(path),
+        },
+    )

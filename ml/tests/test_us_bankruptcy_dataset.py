@@ -2,26 +2,27 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from finext_ml import features, us_dataset
-from finext_ml.train import choose_winner, split
+from finext_ml.preprocessing import us_bankruptcy_features
+from finext_ml.data import us_bankruptcy_dataset
+from finext_ml.train_and_compare import choose_winner
 
-HAVE_DATA = us_dataset.DEFAULT_PATH.exists()
+HAVE_DATA = us_bankruptcy_dataset.DEFAULT_PATH.exists()
 
 
 def test_restore_decimals_divides_cells_that_lost_their_point():
     cells = pd.Series(["511267", "701.854", "-12345", "0", "1.5e-05", "336.01800000000003"])
-    assert us_dataset._restore_decimals(cells).tolist() == pytest.approx([511.267, 701.854, -12.345, 0.0, 1.5e-05, 336.018])
+    assert us_bankruptcy_dataset._restore_decimals(cells).tolist() == pytest.approx([511.267, 701.854, -12.345, 0.0, 1.5e-05, 336.018])
 
 
 @pytest.mark.skipif(not HAVE_DATA, reason="raw US dataset not downloaded (see ml/README.md)")
 def test_corrected_data_satisfies_accounting_identities():
-    shares = us_dataset.identity_shares(us_dataset.load())
+    shares = us_bankruptcy_dataset.identity_shares(us_bankruptcy_dataset.load())
     assert all(share > 0.999 for share in shares.values()), shares
 
 
 def frame(rows):
     df = pd.DataFrame(rows, columns=["company", "year", "ever_failed"])
-    for name in us_dataset.COLUMNS.values():
+    for name in us_bankruptcy_dataset.COLUMNS.values():
         df[name] = 100.0
     df["division"] = "D"
     return df
@@ -29,24 +30,24 @@ def frame(rows):
 
 def test_only_a_failed_companys_last_year_is_positive():
     df = frame([("A", 2001, True), ("A", 2002, True), ("A", 2003, True), ("B", 2001, False), ("B", 2002, False)])
-    assert us_dataset.fails_next_year(df).tolist() == [0, 0, 1, 0, 0]
+    assert us_bankruptcy_dataset.fails_next_year(df).tolist() == [0, 0, 1, 0, 0]
 
 
 def test_features_use_only_the_current_and_earlier_years():
     df = frame([("A", year, False) for year in range(2001, 2008)])
     df["revenue"] = [100, 120, 90, 80, 150, 60, 200]
     df["net_income"] = [5, -1, -2, 3, -4, -5, -6]
-    full = features.build(df)
+    full = us_bankruptcy_features.build(df)
     for cutoff in range(2001, 2008):
-        partial = features.build(df[df["year"] <= cutoff].reset_index(drop=True))
-        pd.testing.assert_series_equal(full.loc[full["year"] == cutoff, features.FEATURES].iloc[0],
-                                       partial.loc[partial["year"] == cutoff, features.FEATURES].iloc[0], check_names=False)
+        partial = us_bankruptcy_features.build(df[df["year"] <= cutoff].reset_index(drop=True))
+        pd.testing.assert_series_equal(full.loc[full["year"] == cutoff, us_bankruptcy_features.FEATURES].iloc[0],
+                                       partial.loc[partial["year"] == cutoff, us_bankruptcy_features.FEATURES].iloc[0], check_names=False)
 
 
 def test_trends_and_streaks_restart_after_a_gap_in_the_years():
     df = frame([("A", 2001, False), ("A", 2002, False), ("A", 2005, False)])
     df["net_income"] = -1.0
-    out = features.build(df)
+    out = us_bankruptcy_features.build(df)
     assert out["loss_streak"].tolist() == [1, 2, 1]
     assert np.isnan(out["revenue_growth"].iloc[2])  # no 2004 figures to compare with
 
@@ -54,14 +55,14 @@ def test_trends_and_streaks_restart_after_a_gap_in_the_years():
 def test_ratios_with_no_meaningful_denominator_are_missing_not_zero():
     df = frame([("A", 2001, False)])
     df["revenue"], df["inventory"], df["total_liabilities"] = 0.0, 0.0, 150.0
-    out = features.build(df).iloc[0]
+    out = us_bankruptcy_features.build(df).iloc[0]
     assert np.isnan(out["net_margin"]) and np.isnan(out["inventory_days"]) and np.isnan(out["liabilities_to_equity"])
     assert out["negative_equity"] == 1
 
 
 @pytest.mark.skipif(not HAVE_DATA, reason="raw US dataset not downloaded (see ml/README.md)")
 def test_splits_keep_holdout_companies_and_later_years_out_of_training():
-    parts = split(us_dataset.load())
+    parts = us_bankruptcy_dataset.dataset().parts
     train = set(parts["train"]["company"])
     assert not train & set(parts["company_holdout"]["company"])
     assert parts["train"]["year"].max() <= 2011 < parts["validation"]["year"].min()

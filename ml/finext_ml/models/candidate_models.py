@@ -14,7 +14,6 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import QuantileTransformer
 from xgboost import XGBClassifier
 
-from finext_ml.features import FEATURES, MONOTONE
 
 CHAMPION = "xgboost"
 
@@ -22,46 +21,42 @@ CHAMPION = "xgboost"
 @dataclass
 class Candidate:
     name: str
-    make: Callable[[dict[str, Any], float, int], Any]  # (params, negatives per positive, seed) -> unfitted model
+    make: Callable[..., Any]  # (params, negatives per positive, seed, features, monotone) -> unfitted model
     space: dict[str, list]
     notes: str
     explainer: str  # "tree" or "linear"
 
 
-def _monotone() -> list[int]:
-    return [MONOTONE.get(name, 0) for name in FEATURES]
-
-
-def _xgboost(params: dict, imbalance: float, seed: int = 0) -> XGBClassifier:
-    return XGBClassifier(**params, scale_pos_weight=imbalance, monotone_constraints=tuple(_monotone()),
+def _xgboost(params: dict, imbalance: float, seed: int, features: list[str], monotone: dict[str, int]) -> XGBClassifier:
+    return XGBClassifier(**params, scale_pos_weight=imbalance, monotone_constraints=tuple(monotone.get(f, 0) for f in features),
                          tree_method="hist", eval_metric="aucpr", n_jobs=-1, random_state=seed)
 
 
-def _lightgbm(params: dict, imbalance: float, seed: int = 0) -> LGBMClassifier:
-    return LGBMClassifier(**params, scale_pos_weight=imbalance, monotone_constraints=_monotone(),
+def _lightgbm(params: dict, imbalance: float, seed: int, features: list[str], monotone: dict[str, int]) -> LGBMClassifier:
+    return LGBMClassifier(**params, scale_pos_weight=imbalance, monotone_constraints=[monotone.get(f, 0) for f in features],
                           subsample_freq=1, n_jobs=-1, random_state=seed, verbose=-1)
 
 
-def _random_forest(params: dict, imbalance: float, seed: int = 0) -> RandomForestClassifier:
+def _random_forest(params: dict, imbalance: float, seed: int, features: list[str], monotone: dict[str, int]) -> RandomForestClassifier:
     # Handles missing values natively (scikit-learn >= 1.4); no monotonic constraints.
     return RandomForestClassifier(**params, n_estimators=300, class_weight="balanced_subsample", n_jobs=-1, random_state=seed)
 
 
-def _logistic(params: dict, imbalance: float, seed: int = 0) -> Pipeline:
+def _logistic(params: dict, imbalance: float, seed: int, features: list[str], monotone: dict[str, int]) -> Pipeline:
     # Needs imputation and scaling. Ratios have very long tails, so a rank-based transform replaces z-scores;
     # a missing-value flag per feature stands in for the reason codes (no previous period, zero denominator).
     prepare = ColumnTransformer([
         ("value", Pipeline([("impute", SimpleImputer(strategy="median")),
-                            ("scale", QuantileTransformer(output_distribution="normal", n_quantiles=1000, random_state=seed))]), FEATURES),
-        ("missing", MissingIndicator(features="all"), FEATURES),
+                            ("scale", QuantileTransformer(output_distribution="normal", n_quantiles=1000, random_state=seed))]), features),
+        ("missing", MissingIndicator(features="all"), features),
     ])
     return Pipeline([("prepare", prepare),
                      ("model", LogisticRegression(**params, class_weight="balanced", max_iter=5000, random_state=seed))])
 
 
 CANDIDATES: list[Candidate] = [
-    # Spaces lean towards strong regularisation: with a few hundred positives and heavy class weights,
-    # deep trees memorise the training failures (train ROC-AUC 0.996 vs 0.84 unseen in the first run).
+    # Spaces lean towards strong regularisation: with a few hundred positives and heavy class weights, deep
+    # trees memorised the US training failures (train ROC-AUC 0.996 vs 0.84 unseen in the first run).
     Candidate("xgboost", _xgboost, {
         "n_estimators": [100, 200, 400], "learning_rate": [0.02, 0.05, 0.1], "max_depth": [2, 3, 4],
         "min_child_weight": [10, 30, 60], "subsample": [0.6, 0.8], "colsample_bytree": [0.5, 0.8],
