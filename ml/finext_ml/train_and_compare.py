@@ -31,7 +31,8 @@ from finext_ml.data.dataset_definition import Dataset
 from finext_ml.models.candidate_models import CANDIDATES, CHAMPION, PlattCalibrator, TrainedModel
 
 SEED = 20261027
-RECALL_TARGET = 0.70        # alert threshold: catch at least 70% of positives on validation (recall matters most)
+RECALL_TARGET = 0.85        # alert threshold: catch at least 85% of positives on validation (spec: missing a stressed
+                            # business costs more than a false alarm; 70% caught only 54% of unseen businesses)
 MIN_PRECISION = 0.20        # reported: recall while at least 1 in 5 alerts is right
 SELECTION = {"margin": 0.02, "folds_lost_allowed": 1}  # spec C5b: +0.02 PR-AUC, consistent across folds [Decision]
 LAYER1_MARGIN = 0.01        # optional (Layer 1) features are kept only if they add at least this much CV PR-AUC
@@ -167,7 +168,7 @@ def run(data: Dataset, n_iter: int, n_folds: int, out_dir: Path) -> dict:
         f"p_{target}": float(row["p"]),
         "risk_class": "high" if row["p"] > 0.6 else "moderate" if row["p"] >= 0.3 else "low",
         "confidence": data.confidence(row),
-        "top_drivers": shap_explanations.top_drivers(winner_shap[i], row, features, data.labels),
+        "top_drivers": shap_explanations.top_drivers(winner_shap[i], row, features, data.labels, data.missing_text),
     } for i, (_, row) in enumerate(riskiest.iterrows())]
 
     all_rows = pd.concat(parts.values())

@@ -22,6 +22,7 @@ class Dataset:
     card: dict                         # model card text: title, warning, data, target, splits, limitations
     optional_features: list[str] = field(default_factory=list)  # tested with and without (spec C5: Layer 1)
     confidence: Callable[[pd.Series], str] = lambda row: "normal"
+    missing_text: dict[str, str] = field(default_factory=dict)  # why a feature can be missing, in plain words
 
 
 def size_bands(column: str) -> Callable[[pd.DataFrame, pd.DataFrame], np.ndarray]:

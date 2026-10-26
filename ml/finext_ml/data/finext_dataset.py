@@ -13,7 +13,7 @@ import pandas as pd
 
 from finext_ml.data import sme_simulator
 from finext_ml.data.dataset_definition import Dataset, holdout_groups, size_bands
-from finext_ml.preprocessing.finext_features import FEATURES, LABELS, LAYER1, MONOTONE, build_features
+from finext_ml.preprocessing.finext_features import FEATURES, LABELS, LAYER1, MISSING_TEXT, MONOTONE, build_features
 
 CACHE = Path(__file__).resolve().parents[2] / "data" / "synthetic"
 MIN_HISTORY = 6
@@ -48,7 +48,7 @@ def dataset(n: int = 400, months: int = 42, seed: int = 20261027) -> Dataset:
     shocked = df["shocks"].fillna("").ne("")
     return Dataset(
         name="finext_synthetic", target="stress_3m", group="business", features=FEATURES, labels=LABELS, monotone=MONOTONE,
-        parts=parts, optional_features=LAYER1,
+        parts=parts, optional_features=LAYER1, missing_text=MISSING_TEXT,
         segments={"business type": lambda frame, train: frame["kind"].to_numpy(),
                   "size": size_bands("revenue_avg_3m")},
         # Spec C1: lower confidence with gaps or estimated records.

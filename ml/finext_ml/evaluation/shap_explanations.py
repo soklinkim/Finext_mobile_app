@@ -32,15 +32,32 @@ def global_importance(values: np.ndarray, features: list[str], labels: dict[str,
     return [{"feature": features[i], "label": labels[features[i]], "mean_abs_shap": float(mean_abs[i])} for i in order]
 
 
-def top_drivers(values_row: np.ndarray, features_row: pd.Series, features: list[str], labels: dict[str, str], top: int = 5) -> list[dict]:
-    """Spec C6: feature, its value, direction and contribution, with a business-friendly label."""
+# Snapshot reason codes (backend/app/snapshots.py) in plain words.
+REASON_TEXT = {"not_yet_available": "not enough history yet", "not_applicable": "does not apply this month",
+               "no_data": "not recorded"}
+
+
+def missing_text(feature: str, features_row: pd.Series, missing: dict[str, str]) -> str:
+    """Why a value is missing, in plain words: a missing value is often a signal in itself (e.g. no profit)."""
+    if feature in missing:
+        return missing[feature]
+    reason = features_row.get(f"reason_{feature}")
+    return REASON_TEXT.get(reason, "not available") if isinstance(reason, str) else "not available"
+
+
+def top_drivers(values_row: np.ndarray, features_row: pd.Series, features: list[str], labels: dict[str, str],
+                missing: dict[str, str] | None = None, top: int = 5) -> list[dict]:
+    """Spec C6: feature, its value, direction and contribution, with a business-friendly label.
+    `value_text` is what to show: the number, or why there is none."""
     order = np.argsort(np.abs(values_row))[::-1][:top]
     drivers = []
     for i in order:
-        value = features_row[features[i]]
+        feature, value = features[i], features_row[features[i]]
+        present = not pd.isna(value)
         drivers.append({
-            "feature": features[i], "label": labels[features[i]],
-            "value": None if pd.isna(value) else float(value),
+            "feature": feature, "label": labels[feature],
+            "value": float(value) if present else None,
+            "value_text": f"{float(value):.2f}" if present else missing_text(feature, features_row, missing or {}),
             "direction": "raises risk" if values_row[i] > 0 else "lowers risk",
             "contribution": float(values_row[i]),
         })

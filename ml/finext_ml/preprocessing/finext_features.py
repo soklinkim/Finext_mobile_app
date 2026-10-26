@@ -60,6 +60,23 @@ LABELS = {
 }
 
 
+# Why a value is missing, in plain words, where the reason is specific to the feature. Missing is often a signal:
+# no profit, negative cash flow, liabilities above assets. Others fall back to the snapshot's reason code.
+MISSING_TEXT = {
+    "gross_margin": "no revenue this month", "net_margin": "no revenue this month", "ebitda_margin": "no revenue this month",
+    "operating_expense_ratio": "no revenue this month", "ocf_margin": "no revenue this month",
+    "ocf_margin_3m": "no revenue in the last 3 months", "revenue_growth": "no revenue last month",
+    "revenue_change_pct": "no revenue last month", "drawings_to_profit": "no profit this month",
+    "drawings_to_ocf": "operating cash flow was negative or zero", "debt_to_ocf": "operating cash flow was negative or zero",
+    "liabilities_to_equity": "liabilities are higher than assets", "debt_to_equity": "liabilities are higher than assets",
+    "current_ratio": "no short-term bills", "cash_ratio": "no short-term bills", "cash_runway": "not enough history yet",
+    "inventory_days": "no stock held", "receivable_days": "no credit sales this month", "payable_days": "no cost of goods this month",
+    "interest_coverage": "no interest paid", "dscr": "no loan repayments due, or no repayment schedule recorded",
+    "repayment_burden": "no loan repayments due, or no repayment schedule recorded",
+    "instalments_due_14d_to_cash": "no cash, or no repayment schedule recorded",
+}
+
+
 def _share(numerator: pd.Series, denominator: pd.Series) -> pd.Series:
     return (numerator / denominator).where(denominator > 0)
 

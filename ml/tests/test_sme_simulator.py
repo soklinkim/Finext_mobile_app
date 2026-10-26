@@ -47,3 +47,14 @@ def test_three_month_trends_compare_with_exactly_three_months_earlier():
     assert change.iloc[:3].isna().all()          # no month three earlier
     assert change.iloc[3] == 3.0                 # t=3 against t=0
     assert change.iloc[4] == 6.0                 # t=5 against t=2, although t=4 is missing
+
+
+def test_explanations_say_why_a_value_is_missing():
+    from finext_ml.evaluation.shap_explanations import top_drivers
+    features = ["drawings_to_profit", "cash_runway", "receipt_share"]
+    labels = {f: f for f in features}
+    row = pd.Series({"drawings_to_profit": np.nan, "cash_runway": 0.25, "receipt_share": np.nan, "reason_receipt_share": "no_data"})
+    drivers = {d["feature"]: d for d in top_drivers(np.array([0.5, 2.0, 0.1]), row, features, labels, finext_features.MISSING_TEXT)}
+    assert drivers["drawings_to_profit"]["value_text"] == "no profit this month"  # specific to the feature
+    assert drivers["receipt_share"]["value_text"] == "not recorded"              # from the snapshot's reason code
+    assert drivers["cash_runway"]["value_text"] == "0.25" and drivers["cash_runway"]["direction"] == "raises risk"
