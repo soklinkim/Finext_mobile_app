@@ -1,0 +1,9 @@
+# Folders outside the apps (frontend/ and backend/ keep their own ignore files)
+/AI/
+/ml/
+/data/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
