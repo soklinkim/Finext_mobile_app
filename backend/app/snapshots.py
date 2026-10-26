@@ -1,8 +1,8 @@
 """Stage A of the AI pipeline: one financial feature snapshot per business per month.
 
 Pure functions over the same rows the API stores (transactions, banks, settings, onboarding entries), using
-the same posting rules as the statements, so the app, the lender portal and the ML simulator all compute
-features identically. No database access here.
+the same posting rules as the statements, so the app, the lender portal and any future model trained on
+FINEXT records all compute features identically. No database access here.
 
 A snapshot is created only when the books balance at that month end (trial balance and assets =
 liabilities + equity); otherwise the month gets an integrity warning instead of features.

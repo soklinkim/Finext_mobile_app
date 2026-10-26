@@ -1,17 +1,21 @@
 # FINEXT ML: Layer 2 (future financial risk)
 
 Implements the training side of the AI pipeline spec, Stage C: four candidate models (XGBoost, Logistic Regression,
-Random Forest, LightGBM), grouped cross-validation, a time holdout, PR-AUC selection with calibration and segment checks,
+Random Forest, LightGBM), grouped cross-validation, holdouts, PR-AUC selection with calibration and segment checks,
 SHAP explanations for every candidate, and a model card.
 
-Two datasets:
+**Only real data is used.** Nothing is simulated or generated. Two public datasets of real company accounts with
+real bankruptcy outcomes:
 
-- **FINEXT synthetic MSMEs** (`--data synthetic`, the default): simulated grocery stores, bakeries, service
-  businesses and traders, recorded as ordinary FINEXT entries and run through the backend's own posting rules and
-  Stage A snapshots (`backend/app/snapshots.py`), labelled with the spec's `stress_3m`. **Synthetic**: say so wherever
-  results are shown, and describe predictions as *likely deterioration*.
-- **US Company Bankruptcy Prediction** (`--data us`): a research baseline on real accounts. It proved the pipeline;
-  it does **not** produce a model for scoring FINEXT businesses.
+- **Polish companies bankruptcy** (`--data polish`; UCI 365, CC BY 4.0; Tomczak, Zięba et al. 2016): about 5,900
+  companies, ratios from their last reported year, bankrupt within one year or not. Only the 23 ratios FINEXT can
+  also compute from an MSME's books are inputs.
+- **US Company Bankruptcy Prediction** (`--data us`, the default; sowide/bankruptcy_dataset, CC BY 4.0; Lombardo et
+  al. 2022): about 78,700 company-years of US listed companies, 1999–2018, bankrupt within one year or not. Has years,
+  so it also gets a time holdout.
+
+Both are larger companies in other economies than Cambodian MSMEs: describe output as *likely deterioration*, never
+as a prediction of loan default.
 
 ## Setup
 
@@ -23,15 +27,19 @@ py -3.11 -m venv .venv
 .venv/Scripts/python -m pip install -r requirements.txt
 ```
 
-Data (not in git): download `american_bankruptcy_dataset.csv` from https://github.com/sowide/bankruptcy_dataset
-(CC BY 4.0) to `ml/data/raw/us_bankruptcy/`.
+Data (not in git):
+
+- `american_bankruptcy_dataset.csv` from https://github.com/sowide/bankruptcy_dataset to `ml/data/raw/us_bankruptcy/`.
+- The zip from https://archive.ics.uci.edu/dataset/365, unpacked to `ml/data/raw/polish_bankruptcy/` (`5year.arff` is used).
 
 ## Run
 
 ```sh
-.venv/Scripts/python -m finext_ml.train_and_compare --data synthetic          # simulates 400 businesses on first use (~5 min, cached in data/synthetic/)
-.venv/Scripts/python -m finext_ml.train_and_compare --data us                 # US baseline (~10 min)
-.venv/Scripts/python -m finext_ml.train_and_compare --data synthetic --quick  # smoke test
+.venv/Scripts/python -m finext_ml.train_and_compare --data polish          # ~10 min
+.venv/Scripts/python -m finext_ml.train_and_compare --data us              # ~40 min
+.venv/Scripts/python -m finext_ml.train_and_compare --data polish --quick  # smoke test
+.venv/Scripts/python -m finext_ml.transfer_test                            # train in one country, score the other (~20 min)
+.venv/Scripts/python -m finext_ml.export_model artifacts/<dataset>/<run id> # model for the backend
 .venv/Scripts/python -m pytest tests
 ```
 
@@ -42,40 +50,40 @@ calibration bins and example predictions in the spec's C6 format) and `model.job
 
 ```
 ml/finext_ml/
-  data/                         where the training data comes from
-    sme_simulator.py            simulates Cambodian MSMEs as FINEXT entries, runs them through the backend snapshots,
-                                builds the stress_3m label (spec C3, C4)
-    finext_dataset.py           FINEXT training set: rows from month 6, splits by business and by time (C1, C5)
-    us_bankruptcy_dataset.py    loads the US CSV, restores lost decimal points, names X1-X18, builds its label
-    dataset_definition.py       what training needs to know about any dataset (features, splits, segments, card text)
-  preprocessing/                turning data into model inputs
-    finext_features.py          ratios, shares, streaks and 3-month trends from the snapshots; Layer 1 features (A2, A3)
-    us_bankruptcy_features.py   ratios, year-on-year changes, volatility and streaks for the US data
+  data/                           where the training data comes from
+    polish_bankruptcy_dataset.py  reads the ARFF file, names the ratios, checks their meanings, drops duplicates, splits
+    us_bankruptcy_dataset.py      loads the US CSV, restores lost decimal points, names X1-X18, builds its label
+    dataset_definition.py         what training needs to know about any dataset (features, splits, segments, baselines,
+                                  card text); Altman's Z-score baseline
+  preprocessing/                  turning data into model inputs
+    us_bankruptcy_features.py     ratios, year-on-year changes, volatility and streaks for the US data
   models/
-    candidate_models.py         the four candidates, tuning spaces, monotonic constraints, LR imputation and scaling,
-                                Platt calibration (C5, C5b)
+    candidate_models.py           the four candidates, tuning spaces, early stopping, monotonic constraints,
+                                  LR imputation and scaling, Platt calibration (C5, C5b)
   evaluation/
-    evaluation_metrics.py       PR-AUC, ROC-AUC, calibration, threshold metrics, risk bands, segments (C5)
-    shap_explanations.py        SHAP for all four models in one format; top-5 drivers in plain words (C5b, C6)
-    model_card.py               the model card
-  train_and_compare.py          runs it all: Layer 1 test, tuning, selection rule, holdouts, artifacts (C5, C5b)
+    evaluation_metrics.py         PR-AUC, ROC-AUC, calibration, threshold metrics, risk bands, segments,
+                                  bootstrap intervals (C5)
+    shap_explanations.py          SHAP for all four models in one format; top-5 drivers in plain words (C5b, C6)
+    model_card.py                 the model card
+  train_and_compare.py            runs it all: tuning, selection rule, holdouts, checks, artifacts (C5, C5b)
+  transfer_test.py                trains XGBoost in one country and scores the other, against Altman's formula
+  export_model.py                 writes the winner as portable XGBoost JSON + metadata; RiskModel scores and
+                                  explains with only xgboost and numpy (C6)
 ```
 
-**Preprocessing, step by step (FINEXT):**
+**Preprocessing, step by step:**
 
-1. `backend/app/snapshots.py` (Stage A, in the backend because the live app uses it too, and the simulator imports
-   that same code so training and real data are computed identically): turns entries into monthly figures, skips
-   months whose books do not balance, leaves missing values as None with a reason, never 0.
-2. `preprocessing/finext_features.py`: makes businesses of any size comparable (amounts become ratios and shares)
-   and adds 3-month trends.
-3. `data/finext_dataset.py`: keeps rows from month 6 that have a label, holds out 20% of businesses, splits the rest
-   by time with 3-month gaps.
+1. Load and correct (`data/`): fix known errors in the source files, check column meanings against accounting
+   identities, build a label that does not leak the future, drop exact duplicates.
+2. Features (`preprocessing/` for the US data; the Polish file already holds ratios): ratios whose denominator is
+   zero or negative are left missing, never 0. Size is a reporting segment, not an input.
+3. Splits: companies held out entirely, and for the US data a later period too.
 4. `models/candidate_models.py`: Logistic Regression alone needs median imputation, missing-value flags and
    rank-based scaling; the tree models take missing and extreme values as they are.
 
 ## The US dataset needs correcting
 
-Checked against accounting identities in `tests/test_us_dataset.py`:
+Checked against accounting identities in `tests/test_us_bankruptcy_dataset.py`:
 
 1. **Lost decimal points.** About 65% of cells were written without their decimal point (`511.267` → `511267`), so values
    jump 1000× between a company's years. Cells with no decimal point are divided by 1000; afterwards revenue − COGS =
@@ -86,21 +94,41 @@ Checked against accounting identities in `tests/test_us_dataset.py`:
    Training on it row by row would leak the future. The target is `fails_next_year`: only a failed company's last
    reported year (609 of 78,682 rows).
 
-## The synthetic data
+## The Polish dataset
 
-`sme_simulator.py` simulates each business day by day: sales with seasons (Khmer New Year, Pchum Ben, rainy season) and
-noise, credit customers with payment terms, weekly restocking with supplier credit, rent, wages, utilities, transport,
-tax, owner drawings and loans with real schedules. Bills are paid only when there is cash; otherwise they are recorded
-as unpaid, restocking shrinks and instalments fall into arrears. About half the businesses get one or two problems
-(falling demand, supplier price rise, late or defaulting customers, over-borrowing, a large equipment purchase,
-rising drawings), and records are imperfect (late entries, duplicates mostly reversed, sales without a cost).
+`5year.arff` is used: ratios from a company's last year of reports, labelled bankrupt within one year (the same
+horizon as the US data). The other four files look further ahead and repeat the same companies, so mixing them would
+put one company in both training and test. Attribute meanings are checked in `tests/test_polish_bankruptcy_dataset.py`
+(e.g. assets/liabilities = 1/(liabilities/assets) and sales/receivables = 365/receivable days hold in 99.98% of rows).
+60 exact duplicate rows are dropped. The file has no years, so there is no time holdout. In Polish accounting
+"gross profit" (*zysk brutto*) is profit **before tax**, so X19 is the pre-tax margin, not a gross margin.
 
-`stress_3m` (spec C3) for month t uses months t+1..t+3 only: cash runway under two weeks in any of them, operating
-cash flow negative in all three, or DSCR ≤ 1.0 over them. Rows start at month 6 (spec C1).
+## Transfer test
+
+FINEXT will score Cambodian MSMEs, which neither dataset contains. `transfer_test.py` reduces both datasets to the
+same 15 ratios (Polish definitions, computed from the US amounts), trains XGBoost on one country and scores the
+other with the threshold unchanged, next to a model trained on the target country itself and Altman's Z' score.
+Compare ROC-AUC: unlike PR-AUC it does not depend on how common bankruptcy is in each country.
+
+## Overfitting, underfitting and trust checks
+
+Every run reports these in the model card:
+
+| Check | What it guards against | How |
+|---|---|---|
+| Train vs CV gap per model | memorising training companies | each model scored on the rows it was fitted on and on unseen companies |
+| One-standard-error rule | picking a lucky, over-complex configuration | among configurations within one standard error of the best CV PR-AUC, the one with the smallest gap |
+| Early stopping (XGBoost, LightGBM) | too many trees | trees are added until PR-AUC stops improving on training companies held back for it |
+| Shallow trees, large leaves, L2, monotonic constraints | fitting noise; explanations that contradict finance | built into the tuning spaces and model setup |
+| Alert threshold from unseen companies | recall dropping on new customers | the lower of the thresholds reaching 85% recall on validation and on out-of-fold scores |
+| Learning curve | telling underfitting from overfitting | CV and train PR-AUC at 25–100% of training companies |
+| Bootstrap intervals, seed spread | trusting one lucky number | 95% intervals resampling whole companies; the winner refitted with 5 seeds |
+| Simple-rule baselines | a model that adds nothing | Altman's Z-score (the textbook bankruptcy formula) and "loss-making this year" |
+| Transfer test | a model that only works where it was trained | train in Poland, score the US, and the other way round |
 
 ## Next steps toward the spec
 
-1. **Serving (C6)**: score at month-end close from `GET /accounting/snapshots`, store predictions and SHAP drivers,
-   show them on the dashboard; low-confidence flag for gaps and estimated records.
-2. **Real outcomes**: replace or blend the synthetic labels with missed or late repayments, restructuring and
-   closures from partner banks; retrain and monitor drift (C7).
+1. **Serving (C6)**: compute the same ratios from a FINEXT business's last 12 months of books, score them, store
+   predictions and SHAP drivers, show them on the dashboard.
+2. **Real FINEXT outcomes**: once partner banks share missed or late repayments, restructuring and closures, train on
+   FINEXT's own monthly snapshots (`backend/app/snapshots.py`) with the spec's `stress_3m` label; monitor drift (C7).

@@ -77,3 +77,20 @@ def segments(y, p, labels, min_positives: int = 15) -> dict[str, dict]:
         if y[mask].sum() >= min_positives:
             out[str(label)] = {"rows": int(mask.sum()), "positives": int(y[mask].sum()), "pr_auc": pr_auc(y[mask], p[mask])}
     return out
+
+
+def bootstrap_intervals(y, p, groups, threshold: float, draws: int = 500, seed: int = 0) -> dict[str, list[float]]:
+    """95% intervals for PR-AUC, precision and recall, resampling whole businesses (their months are not independent)."""
+    y, p, groups = np.asarray(y), np.asarray(p), np.asarray(groups)
+    rows_of = [np.flatnonzero(groups == g) for g in np.unique(groups)]
+    rng = np.random.default_rng(seed)
+    stats = {"pr_auc": [], "precision": [], "recall": []}
+    for _ in range(draws):
+        rows = np.concatenate([rows_of[i] for i in rng.integers(len(rows_of), size=len(rows_of))])
+        if y[rows].sum() == 0:
+            continue
+        t = at_threshold(y[rows], p[rows], threshold)
+        stats["pr_auc"].append(pr_auc(y[rows], p[rows]))
+        stats["precision"].append(t["precision"])
+        stats["recall"].append(t["recall"])
+    return {k: [float(np.percentile(v, 2.5)), float(np.percentile(v, 97.5))] for k, v in stats.items()}

@@ -23,6 +23,10 @@ class Dataset:
     optional_features: list[str] = field(default_factory=list)  # tested with and without (spec C5: Layer 1)
     confidence: Callable[[pd.Series], str] = lambda row: "normal"
     missing_text: dict[str, str] = field(default_factory=dict)  # why a feature can be missing, in plain words
+    # Simple rules the model must beat: name -> (score per row, alert when score >= this).
+    baselines: dict[str, tuple[Callable[[pd.DataFrame], np.ndarray], float]] = field(default_factory=dict)
+    # Rows already in trouble now; the rest measure early warning (the label looks ahead).
+    already_stressed: Callable[[pd.DataFrame], np.ndarray] | None = None
 
 
 def size_bands(column: str) -> Callable[[pd.DataFrame, pd.DataFrame], np.ndarray]:
@@ -42,3 +46,16 @@ def holdout_groups(frame: pd.DataFrame, group: str, stratify: str, share: float,
         names = np.sort(by_group[by_group.astype(bool) == flag].index.to_numpy())
         held |= set(rng.choice(names, size=round(len(names) * share), replace=False))
     return held
+
+
+def altman_score(working_capital, retained_earnings, ebit, equity, sales, total_assets, total_liabilities,
+                 weights: tuple[float, ...], cutoff: float) -> tuple[Callable[[pd.DataFrame], np.ndarray], float]:
+    """Altman's Z (a weighted sum of five ratios) as a baseline: returns −Z per row (higher = riskier) and the
+    alert point (−cutoff: Z below the distress cutoff). Rows it cannot compute count as no alert."""
+    def score(frame: pd.DataFrame) -> np.ndarray:
+        assets, liabilities = frame[total_assets], frame[total_liabilities]
+        ratios = [frame[working_capital] / assets, frame[retained_earnings] / assets, frame[ebit] / assets,
+                  frame[equity] / liabilities, frame[sales] / assets]
+        z = sum(w * r for w, r in zip(weights, ratios)).replace([np.inf, -np.inf], np.nan)
+        return (-z).fillna(-1e9).to_numpy(dtype=float)
+    return score, -cutoff

@@ -84,9 +84,10 @@ TRAIN_END, VALIDATION_END = 2011, 2014  # README split: train 1999-2011, validat
 def dataset(path: str | Path = DEFAULT_PATH, seed: int = 20261027):
     """The corrected data as a training Dataset: 20% of companies held out, the rest split by year."""
     from finext_ml.preprocessing import us_bankruptcy_features
-    from finext_ml.data.dataset_definition import Dataset, holdout_groups, size_bands
+    from finext_ml.data.dataset_definition import Dataset, altman_score, holdout_groups, size_bands
 
     df = us_bankruptcy_features.build(load(path))
+    df["working_capital"] = df["current_assets"] - df["current_liabilities"]
     held = df["company"].isin(holdout_groups(df, "company", "ever_failed", 0.2, seed))
     parts = {
         "train": df[~held & (df["year"] <= TRAIN_END)].reset_index(drop=True),
@@ -100,6 +101,13 @@ def dataset(path: str | Path = DEFAULT_PATH, seed: int = 20261027):
         labels=us_bankruptcy_features.LABELS, monotone=us_bankruptcy_features.MONOTONE, parts=parts,
         segments={"industry": lambda frame, train: frame["division"].to_numpy(), "size": size_bands("total_assets")},
         confidence=lambda row: "low" if pd.isna(row.get("revenue_growth_volatility")) else "normal",  # under 4 years of history
+        baselines={
+            # Altman (1968) for listed companies: market value of equity, distress below 1.81.
+            "Altman Z-score (textbook bankruptcy formula)": altman_score(
+                "working_capital", "retained_earnings", "ebit", "market_value", "revenue", "total_assets", "total_liabilities",
+                weights=(1.2, 1.4, 3.3, 0.6, 1.0), cutoff=1.81),
+            "Loss-making this year": (lambda frame: (frame["net_income"] < 0).to_numpy(dtype=float), 1.0),
+        },
         card={
             "warning": "**Research baseline, not for scoring FINEXT businesses.** Trained on annual accounts of US listed "
                        "companies to predict bankruptcy within one year. FINEXT's target (stress in the next 3 months for an "

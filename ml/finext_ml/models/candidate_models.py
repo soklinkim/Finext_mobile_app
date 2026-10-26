@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 import numpy as np
-from lightgbm import LGBMClassifier
+from lightgbm import LGBMClassifier, early_stopping
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import MissingIndicator, SimpleImputer
@@ -16,6 +16,8 @@ from xgboost import XGBClassifier
 
 
 CHAMPION = "xgboost"
+MAX_ROUNDS = 1000      # boosted models: an upper bound; early stopping picks the number of trees
+STOPPING_ROUNDS = 50   # stop after this many rounds without a better PR-AUC on held-back businesses
 
 
 @dataclass
@@ -25,6 +27,20 @@ class Candidate:
     space: dict[str, list]
     notes: str
     explainer: str  # "tree" or "linear"
+    boosted: bool = False  # number of trees chosen by early stopping instead of tuned
+
+
+def fit_early_stopping(model, X_fit, y_fit, X_stop, y_stop) -> tuple[Any, int]:
+    """Fit a boosted model, adding trees until PR-AUC on the stopping rows stops improving.
+    Returns the model (predicting with its best number of trees) and that number."""
+    if isinstance(model, XGBClassifier):
+        model.set_params(n_estimators=MAX_ROUNDS, early_stopping_rounds=STOPPING_ROUNDS)
+        model.fit(X_fit, y_fit, eval_set=[(X_stop, y_stop)], verbose=False)
+        return model, int(model.best_iteration) + 1
+    model.set_params(n_estimators=MAX_ROUNDS)
+    model.fit(X_fit, y_fit, eval_X=(X_stop,), eval_y=(y_stop,), eval_metric="average_precision",
+              callbacks=[early_stopping(STOPPING_ROUNDS, first_metric_only=True, verbose=False)])
+    return model, int(model.best_iteration_)
 
 
 def _xgboost(params: dict, imbalance: float, seed: int, features: list[str], monotone: dict[str, int]) -> XGBClassifier:
@@ -57,11 +73,12 @@ def _logistic(params: dict, imbalance: float, seed: int, features: list[str], mo
 CANDIDATES: list[Candidate] = [
     # Spaces lean towards strong regularisation: with a few hundred positives and heavy class weights, deep
     # trees memorised the US training failures (train ROC-AUC 0.996 vs 0.84 unseen in the first run).
+    # Boosted models: the number of trees comes from early stopping, not the search.
     Candidate("xgboost", _xgboost, {
-        "n_estimators": [100, 200, 400], "learning_rate": [0.02, 0.05, 0.1], "max_depth": [2, 3, 4],
-        "min_child_weight": [10, 30, 60], "subsample": [0.6, 0.8], "colsample_bytree": [0.5, 0.8],
-        "reg_lambda": [5.0, 20.0, 50.0], "gamma": [0.0, 1.0, 5.0],
-    }, "Default champion: native missing values, monotonic constraints.", "tree"),
+        "learning_rate": [0.03, 0.05, 0.1], "max_depth": [2, 3, 4],
+        "min_child_weight": [10, 30, 60, 100], "subsample": [0.6, 0.8], "colsample_bytree": [0.3, 0.5, 0.8],
+        "reg_lambda": [5.0, 20.0, 50.0], "reg_alpha": [0.0, 1.0, 5.0], "gamma": [0.0, 1.0, 5.0],
+    }, "Default champion: native missing values, monotonic constraints.", "tree", boosted=True),
     Candidate("logistic_regression", _logistic, {
         "C": [0.01, 0.03, 0.1, 0.3, 1.0, 3.0],
     }, "Explainable baseline: median imputation + missing flags, rank-normal scaling.", "linear"),
@@ -69,10 +86,10 @@ CANDIDATES: list[Candidate] = [
         "max_depth": [4, 6, 10], "min_samples_leaf": [50, 100, 200, 400], "max_features": ["sqrt", 0.3, 0.5],
     }, "Native missing values; no monotonic constraints.", "tree"),
     Candidate("lightgbm", _lightgbm, {
-        "n_estimators": [100, 200, 400], "learning_rate": [0.02, 0.05, 0.1], "num_leaves": [3, 7, 15],
-        "min_child_samples": [100, 200, 400], "subsample": [0.6, 0.8], "colsample_bytree": [0.5, 0.8],
-        "reg_lambda": [5.0, 20.0, 50.0],
-    }, "Gradient-boosting alternative: native missing values, monotonic constraints.", "tree"),
+        "learning_rate": [0.03, 0.05, 0.1], "num_leaves": [3, 7, 15],
+        "min_child_samples": [100, 200, 400], "subsample": [0.6, 0.8], "colsample_bytree": [0.3, 0.5, 0.8],
+        "reg_lambda": [5.0, 20.0, 50.0], "reg_alpha": [0.0, 1.0, 5.0],
+    }, "Gradient-boosting alternative: native missing values, monotonic constraints.", "tree", boosted=True),
 ]
 
 
