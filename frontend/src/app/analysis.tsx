@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { BarChartCard } from '@/components/BarChartCard';
 import { AnalysisLoading } from '@/components/AnalysisLoading';
 import { FinancialHealthChart } from '@/components/FinancialHealthChart';
+import { FutureRiskSection } from '@/components/FutureRiskSection';
 import { IncomeExpenseForecastCard } from '@/components/IncomeExpenseForecastCard';
 import { LoanReadinessSection } from '@/components/LoanReadinessSection';
 import { OfflineBanner } from '@/components/OfflineBanner';
@@ -106,6 +107,7 @@ export default function Analysis() {
           {ratios.noCache ? <EmptyState titleKey="offline.noCache" bodyKey="offline.noCacheBody" icon="wifiOff" /> : null}
           {ratios.error ? <ErrorState onRetry={ratios.reload} message={ratios.error.message} onlineRequired={ratios.error instanceof OnlineRequiredError} /> : null}
           {ratios.data && ratios.data.length > 0 && <FinancialHealthChart ratios={ratios.data} />}
+          {!ratios.loading && <View style={{ marginTop: 12 }}><FutureRiskSection /></View>}
         </View>
       )}
 

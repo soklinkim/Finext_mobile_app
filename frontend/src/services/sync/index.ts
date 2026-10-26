@@ -5,7 +5,7 @@ import { API_BASE_URL } from '@/services/apiBase';
 import { SYNCED_TABLES, type SyncedTable } from '@/db/schema';
 import { emitChange } from '@/services/bookkeeping/events';
 import { getSession, refreshSession } from '@/services/auth';
-import { AccountingDataError, ApiRequestError, type AnalysisPeriod, type AnalysisResult, type AppNotification, type CategorySlice, type IncomeExpenseForecast, type LoanReadiness, type RatioSnapshot, type StatementPeriod, type Statements, type Summary } from '@/services/analysis/types';
+import { AccountingDataError, ApiRequestError, type AnalysisPeriod, type AnalysisResult, type AppNotification, type CategorySlice, type FutureRisk, type IncomeExpenseForecast, type LoanReadiness, type ProposedLoan, type RatioSnapshot, type StatementPeriod, type Statements, type Summary } from '@/services/analysis/types';
 
 export type SyncRow = Record<string, unknown> & {
   id: string;
@@ -98,6 +98,10 @@ export interface SyncService {
   getSummary(): Promise<Summary>;
   /** Sync pending rows then retrieve the server's experimental trend forecast. */
   getForecast(): Promise<IncomeExpenseForecast>;
+  /** Sync pending rows then retrieve the future risk: distress model score and debt capacity. */
+  getFutureRisk(): Promise<FutureRisk>;
+  /** The same as if a proposed loan were taken (nothing is saved). */
+  checkLoan(loan: ProposedLoan): Promise<FutureRisk>;
   /** Sync pending rows then retrieve the server's loan-readiness assessment. */
   getLoanReadiness(): Promise<LoanReadiness>;
   /** Retrieve ratio snapshots and health alerts calculated by the backend. */
@@ -354,6 +358,16 @@ async function getForecast(): Promise<IncomeExpenseForecast> {
   return requestJson('/accounting/forecast');
 }
 
+async function getFutureRisk(): Promise<FutureRisk> {
+  await syncForAccountingReports();
+  return requestJson('/accounting/risk');
+}
+
+async function checkLoan(loan: ProposedLoan): Promise<FutureRisk> {
+  await syncForAccountingReports();
+  return requestJson('/accounting/risk/loan-check', { method: 'POST', body: JSON.stringify(loan) });
+}
+
 async function getLoanReadiness(): Promise<LoanReadiness> {
   await syncForAccountingReports();
   return requestJson('/loan/readiness');
@@ -391,4 +405,4 @@ async function dismissAlert(id: string): Promise<void> {
   await requestJson(`/accounting/health/${encodeURIComponent(id)}/dismiss`, { method: 'POST' });
 }
 
-export const syncService: SyncService = { pushPending, pullChanges, sync, getJournal, previewImpact, getStatements, getSummary, getForecast, getLoanReadiness, getFinancialHealth, getAnalysis, getCategories, dismissAlert };
+export const syncService: SyncService = { pushPending, pullChanges, sync, getJournal, previewImpact, getStatements, getSummary, getForecast, getFutureRisk, checkLoan, getLoanReadiness, getFinancialHealth, getAnalysis, getCategories, dismissAlert };

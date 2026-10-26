@@ -21,7 +21,9 @@ import type {
   AppNotification,
   CachedResult,
   CategorySlice,
+  FutureRisk,
   IncomeExpenseForecast,
+  ProposedLoan,
   Statements,
   StatementPeriod,
   Target,
@@ -51,6 +53,15 @@ export function getStatements(period: StatementPeriod = 'monthly'): Promise<Cach
 
 export function getIncomeExpenseForecast(): Promise<CachedResult<IncomeExpenseForecast>> {
   return withCache('accounting:forecast:linear-trend:v1', () => syncService.getForecast(), { requireOnline: true });
+}
+
+export function getFutureRisk(): Promise<CachedResult<FutureRisk>> {
+  return withCache('accounting:risk:v1', () => syncService.getFutureRisk(), { requireOnline: true });
+}
+
+/** What-if for a loan not yet taken: online only, never cached. */
+export function checkLoan(loan: ProposedLoan): Promise<FutureRisk> {
+  return syncService.checkLoan(loan);
 }
 
 export function getSummary(): Promise<CachedResult<Summary>> {

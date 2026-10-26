@@ -137,6 +137,9 @@ def score(snapshots: list[dict], model=None) -> dict:
         model = default_model()
     features, notes = model_inputs(inputs, model.meta.get("range", {}))
     result = model.score([features], notes=notes)[0]
+    for driver in result["top_drivers"]:  # the reason code, so the app can say it in the user's language
+        driver["reason"] = inputs["reasons"].get(driver["feature"])
+        driver["value"] = inputs["features"][driver["feature"]]  # the business's own figure, not a substitute
     return {"available": True, "asOf": inputs["asOf"], "months": inputs["months"], "confidence": inputs["confidence"],
             "probability": result["probability"], "riskClass": result["risk_class"], "alert": result["alert"],
             "topDrivers": result["top_drivers"], "modelVersion": result["model_version"], "horizonMonths": 12, "note": NOTE}

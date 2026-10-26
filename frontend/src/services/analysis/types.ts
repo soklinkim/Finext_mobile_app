@@ -49,6 +49,77 @@ export interface IncomeExpenseForecast {
   forecast: ForecastPoint[];
 }
 
+export type RiskLevel = 'low' | 'moderate' | 'high';
+
+/** One reason behind the distress score; `reason` is set when the business's own figure is missing (why). */
+export interface RiskDriver {
+  feature: string;
+  label: string;
+  value: number | null;
+  reason: string | null;
+  direction: 'raises risk' | 'lowers risk';
+  contribution: number;
+}
+
+export interface RiskReason {
+  code: string;
+  text: string;
+  params: Record<string, number>;
+}
+
+export interface ProposedLoan {
+  amount: number;
+  termMonths: number;
+  annualInterestRate: number;
+  rateType: 'flat' | 'declining';
+  repaymentFrequency: 'weekly' | 'monthly';
+  installmentAmount?: number;
+}
+
+/** GET /accounting/risk and POST /accounting/risk/loan-check (Layer 2). Amounts in the display currency's minor units. */
+export interface FutureRisk {
+  model:
+    | { available: false; reason: 'not_enough_history'; months: number; text: string }
+    | {
+        available: true;
+        asOf: string;
+        months: number;
+        confidence: 'low' | 'normal';
+        probability: number;
+        riskClass: RiskLevel;
+        alert: boolean;
+        topDrivers: RiskDriver[];
+        modelVersion: string;
+        horizonMonths: number;
+        note: string;
+      };
+  debtCapacity:
+    | { available: false; reason: 'not_enough_history'; months: number; text: string }
+    | {
+        available: true;
+        asOf: string;
+        currency: Currency;
+        level: RiskLevel;
+        monthlyCapacity: number;
+        existingMonthlyInstalments: number;
+        dscr: number | null;
+        targetDscr: number;
+        affordableMonthlyInstalment: number;
+        instalmentsToRevenue: number | null;
+        debt: number;
+        scheduleMissing: boolean;
+        weakening: boolean;
+        reasons: RiskReason[];
+        proposed?: {
+          monthlyInstalment: number;
+          dscrWith: number | null;
+          fits: boolean;
+          maxAmount: number | null;
+          model?: { probabilityBefore: number; probabilityAfter: number; riskClassBefore: RiskLevel; riskClassAfter: RiskLevel; assumption: string };
+        };
+      };
+}
+
 export type ReadinessLevel = 'ready' | 'almost' | 'not_ready' | 'insufficient_data';
 export type ReadinessPillarId = 'repayment' | 'strength' | 'profitability' | 'records' | 'documents';
 
