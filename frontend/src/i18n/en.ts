@@ -642,7 +642,8 @@ export const en = {
   'risk.level.low': 'Low risk',
   'risk.level.moderate': 'Moderate risk',
   'risk.level.high': 'High risk',
-  'risk.chance': '{percent}% estimated chance',  'risk.lowConfidence': 'Low confidence: based on {count} months of records. It firms up at 12.',
+  'risk.chance': '{percent}% estimated chance',
+  'risk.lowConfidence': 'Low confidence: based on {count} months of records. It firms up at 12.',
   'risk.needsHistory': 'Record at least 6 complete months to see this estimate ({count} so far).',
   'risk.whyTitle': 'Main reasons',
   'risk.raises': 'raises risk',
@@ -768,6 +769,8 @@ export const en = {
   'advice.cash3m': 'Cash expected in 3 months',
   'state.serverUnreachableTitle': 'Can’t reach the FINEXT server',
   'state.serverUnreachable': 'You’re online, but the server didn’t answer. Check that it’s running and that this device can reach it (same Wi-Fi, firewall allows it), then try again. You can still record bookkeeping entries.',
+  'stress.noConditions': 'None of the stress signs appear in any of the possible futures.',
+  'debt.check.open': 'Check a new loan',
 } as const;
 
 export type TKey = keyof typeof en;

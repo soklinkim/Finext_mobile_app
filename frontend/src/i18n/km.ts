@@ -622,7 +622,8 @@ export const km: Record<TKey, string> = {
   'risk.level.low': 'ហានិភ័យទាប',
   'risk.level.moderate': 'ហានិភ័យមធ្យម',
   'risk.level.high': 'ហានិភ័យខ្ពស់',
-  'risk.chance': 'ឱកាសប៉ាន់ស្មាន {percent}%',  'risk.lowConfidence': 'ទំនុកចិត្តទាប៖ ផ្អែកលើកំណត់ត្រា {count} ខែ។ វានឹងកាន់តែច្បាស់នៅ ១២ ខែ។',
+  'risk.chance': 'ឱកាសប៉ាន់ស្មាន {percent}%',
+  'risk.lowConfidence': 'ទំនុកចិត្តទាប៖ ផ្អែកលើកំណត់ត្រា {count} ខែ។ វានឹងកាន់តែច្បាស់នៅ ១២ ខែ។',
   'risk.needsHistory': 'កត់ត្រាយ៉ាងហោចណាស់ ៦ ខែពេញ ដើម្បីមើលការប៉ាន់ស្មាននេះ (បច្ចុប្បន្ន {count} ខែ)។',
   'risk.whyTitle': 'មូលហេតុសំខាន់ៗ',
   'risk.raises': 'បង្កើនហានិភ័យ',
@@ -743,4 +744,6 @@ export const km: Record<TKey, string> = {
   'advice.cash3m': 'សាច់ប្រាក់រំពឹងទុកក្នុង ៣ ខែ',
   'state.serverUnreachableTitle': 'មិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេ FINEXT បានទេ',
   'state.serverUnreachable': 'អ្នកមានអ៊ីនធឺណិត ប៉ុន្តែម៉ាស៊ីនមេមិនឆ្លើយតបទេ។ សូមពិនិត្យថាវាកំពុងដំណើរការ ហើយឧបករណ៍នេះអាចភ្ជាប់ទៅវាបាន (Wi-Fi ដូចគ្នា និង firewall អនុញ្ញាត) រួចព្យាយាមម្តងទៀត។ អ្នកនៅតែអាចកត់ត្រាបញ្ជីគណនេយ្យបាន។',
+  'stress.noConditions': 'គ្មានសញ្ញាតានតឹងណាមួយលេចឡើងក្នុងលទ្ធភាពអនាគតណាមួយឡើយ។',
+  'debt.check.open': 'ពិនិត្យកម្ចីថ្មី',
 };
