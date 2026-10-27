@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from 'react';
-import { View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { Button } from './Button';
 import { Chip, ChipRow } from './Chip';
 import { OfflineBanner } from './OfflineBanner';
 import { SegmentedControl } from './SegmentedControl';
+import { EmptyState, ErrorState } from './StateViews';
 import { Text } from './Text';
 import { TextField } from './TextField';
 import { useAnalysisQuery } from '@/hooks/useAnalysisQuery';
@@ -404,7 +405,17 @@ export function FutureRiskSection() {
   const { t } = useI18n();
   const query = useAnalysisQuery(getFutureRisk);
   const risk = query.data;
-  if (query.noCache || query.error || !risk) return null;
+  // Say what is happening rather than hiding the section: loading, offline with nothing saved, or the error itself.
+  if (!risk) {
+    return (
+      <View style={{ gap: 12 }}>
+        <Text variant="body" weight={700} tone="primary-900">{t('analysis.futureRisk')}</Text>
+        {query.loading ? <ActivityIndicator color={colors.primary[500]} style={{ paddingVertical: 24 }} /> : null}
+        {!query.loading && query.noCache ? <EmptyState titleKey="offline.noCache" bodyKey="offline.noCacheBody" icon="wifiOff" /> : null}
+        {!query.loading && query.error ? <ErrorState onRetry={query.reload} error={query.error} /> : null}
+      </View>
+    );
+  }
   return (
     <View style={{ gap: 12 }}>
       <Text variant="body" weight={700} tone="primary-900">{t('analysis.futureRisk')}</Text>
