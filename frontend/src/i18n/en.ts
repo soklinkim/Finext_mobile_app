@@ -812,6 +812,9 @@ export const en = {
   'docs.fromFiles': 'Choose a file (PDF or image)',
   'docs.cameraDenied': 'FINEXT needs camera access to take a photo. Allow it in your phone settings, or choose a file instead.',
   'docs.photosDenied': 'FINEXT needs access to your photos. Allow it in your phone settings, or choose a file instead.',
+  'risk.lockedLabel': 'AI risk check',
+  'risk.lockedTitle': 'Unlocks after {months} complete months',
+  'risk.lockedProgress': '{count} of {months} complete months recorded. Debt capacity unlocks at 3 months; stress probability and advice at {months}.',
 } as const;
 
 export type TKey = keyof typeof en;

@@ -4,7 +4,6 @@ import { Button } from './Button';
 import { Chip, ChipRow } from './Chip';
 import { Icon } from './Icon';
 import { OfflineBanner } from './OfflineBanner';
-import { SegmentedControl } from './SegmentedControl';
 import { EmptyState, ErrorState } from './StateViews';
 import { Text } from './Text';
 import { TextField } from './TextField';
@@ -173,6 +172,25 @@ function LongTermView({ model }: { model: Model }) {
 }
 
 /** Spec C3: probability of financial stress, over the next 3 months (projection) or 12 months (trained model). */
+/** Small two-option toggle that sits in a card header (the big SegmentedControl is for page-level tabs). */
+function HorizonToggle({ value, onChange }: { value: '3' | '12'; onChange: (value: '3' | '12') => void }) {
+  const { t } = useI18n();
+  const { soft } = useCard();
+  return (
+    <View accessibilityRole="tablist" style={{ flexDirection: 'row', alignSelf: 'flex-start', padding: 3, gap: 2, borderRadius: 999, backgroundColor: soft }}>
+      {(['3', '12'] as const).map((option) => {
+        const selected = value === option;
+        return (
+          <Pressable key={option} accessibilityRole="tab" accessibilityState={{ selected }} onPress={() => onChange(option)}
+            style={{ paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, ...(selected ? { backgroundColor: colors.primary[900] } : {}) }}>
+            <Text variant="micro" weight={600} tone={selected ? 'white' : 'primary-900'}>{t(option === '3' ? 'stress.tab3' : 'stress.tab12')}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 function RiskCard({ risk }: { risk: FutureRisk }) {
   const { t } = useI18n();
   const { card } = useCard();
@@ -180,11 +198,7 @@ function RiskCard({ risk }: { risk: FutureRisk }) {
   return (
     <View style={card}>
       <CardHeader title={t(horizon === '3' ? 'stress.title' : 'risk.title')} subtitle={t(horizon === '3' ? 'stress.horizon' : 'risk.horizon')} />
-      <SegmentedControl
-        options={[{ value: '3', label: t('stress.tab3') }, { value: '12', label: t('stress.tab12') }]}
-        value={horizon}
-        onChange={setHorizon}
-      />
+      <HorizonToggle value={horizon} onChange={setHorizon} />
       {horizon === '3'
         ? risk.stress3m.available
           ? <ShortTermView stress={risk.stress3m} />
@@ -383,12 +397,36 @@ function NotYet({ title, body }: { title: string; body: string }) {
   );
 }
 
+const UNLOCK_MONTHS = 6;
+
+/** Before there are enough complete months: what unlocks and how far along the business is (like the health snapshot). */
+function LockedCard({ months }: { months: number }) {
+  const { t } = useI18n();
+  const { dark } = useCard();
+  const done = Math.min(months, UNLOCK_MONTHS);
+  return (
+    <View style={{ padding: 18, borderRadius: radius.card, backgroundColor: dark ? colors.dark.surface : colors.primary[50], gap: 12 }}>
+      <View style={{ gap: 3 }}>
+        <Text variant="caption" tone="neutral-600">{t('risk.lockedLabel')}</Text>
+        <Text variant="title" tone="primary-900">{t('risk.lockedTitle', { months: UNLOCK_MONTHS })}</Text>
+      </View>
+      <View accessibilityRole="progressbar" accessibilityLabel={t('risk.lockedProgress', { count: done, months: UNLOCK_MONTHS })} style={{ flexDirection: 'row', gap: 4 }}>
+        {Array.from({ length: UNLOCK_MONTHS }, (_, index) => (
+          <View key={index} style={{ flex: 1, height: 6, borderRadius: 99, backgroundColor: index < done ? colors.primary[500] : dark ? colors.dark.field : colors.white }} />
+        ))}
+      </View>
+      <Text variant="micro" tone="neutral-600">{t('risk.lockedProgress', { count: done, months: UNLOCK_MONTHS })}</Text>
+    </View>
+  );
+}
+
 /** Financial health, looking ahead: stress in 3 and 12 months, how to lower it, and the debt capacity check. */
 export function FutureRiskSection() {
   const { t } = useI18n();
   const query = useAnalysisQuery(getFutureRisk);
   const risk = query.data;
-  const heading = <Text variant="title-lg" weight={700} tone="primary-900">{t('analysis.futureRisk')}</Text>;
+  // Same weight as the other Health headings (Profitability, Liquidity…).
+  const heading = <Text variant="body-lg" weight={600} tone="primary-900">{t('analysis.futureRisk')}</Text>;
   // Say what is happening rather than hiding the section: loading, offline with nothing saved, or the error itself.
   if (!risk) {
     return (
@@ -400,8 +438,17 @@ export function FutureRiskSection() {
       </View>
     );
   }
+  // Not enough records for any of it yet: one compact card with progress, not empty cards and tabs.
+  if (!risk.stress3m.available && !risk.model.available && !risk.debtCapacity.available) {
+    return (
+      <View style={{ gap: 9 }}>
+        {heading}
+        <LockedCard months={risk.stress3m.months} />
+      </View>
+    );
+  }
   return (
-    <View style={{ gap: 16 }}>
+    <View style={{ gap: 12 }}>
       {heading}
       {query.source === 'cache' && <OfflineBanner fetchedAt={query.fetchedAt} />}
       <RiskCard risk={risk} />
