@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, View } from 'react-native';
+import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ScreenShell } from '@/components/ScreenShell';
 import { StatementTile } from '@/components/StatementTile';
@@ -36,7 +36,10 @@ export default function Statements() {
             }}
           />
         ))}
-        <StatementTile add label={t('stmt.addTemplate')} onPress={() => Alert.alert(t('stmt.addTemplate'), t('common.comingSoon'))} />
+        {/* One PDF for a lender: statements, ratios and the AI risk assessment (replaces the planned 'Add New Template'). */}
+        <StatementTile label={t('pack.tile')} icon="file" selected={selected === 'pack'} onPress={() => { setSelected('pack'); router.push('/loan-pack'); }} />
+        {/* Fill the last row to 3 slots so its tiles line up with the columns above. */}
+        {Array.from({ length: (3 - ((TILES.length + 1) % 3)) % 3 }, (_, i) => <View key={`filler-${i}`} style={{ width: 105 }} />)}
       </View>
     </ScreenShell>
   );

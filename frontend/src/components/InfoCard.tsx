@@ -8,7 +8,7 @@ import { useAppTheme } from '@/theme/AppTheme';
 export function InfoCard({ children }: { children: string }) {
   const dark = useAppTheme();
   return (
-    <View className="flex-row items-center bg-white border border-primary-200 rounded-lg" style={{ padding: 10, gap: 8, backgroundColor: dark ? colors.dark.surface : undefined, borderColor: dark ? colors.dark.border : undefined }}>
+    <View className="flex-row items-center bg-white border border-primary-200 rounded-lg" style={{ padding: 10, gap: 8, ...(dark ? { backgroundColor: colors.dark.surface } : {}), ...(dark ? { borderColor: colors.dark.border } : {}) }}>
       <Icon name="info" size={16} color={dark ? colors.dark.primary : colors.primary[500]} />
       <View className="flex-1">
         <Text variant="caption" tone="primary-900" weight={400}>

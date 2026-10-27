@@ -41,7 +41,7 @@ export default function SettingsScreen() {
       accessibilityRole="button"
       onPress={() => router.push(`/edit-profile?section=${sectionKey}` as never)}
       className="flex-row items-center justify-between rounded-lg bg-primary-50"
-      style={{ minHeight: 56, paddingHorizontal: 16, backgroundColor: dark ? colors.dark.surface : undefined }}
+      style={{ minHeight: 56, paddingHorizontal: 16, ...(dark ? { backgroundColor: colors.dark.surface } : {}) }}
     >
       <Text variant="body" weight={500} tone="primary-900">{label}</Text>
       <Icon name="chevronRight" size={18} color={colors.primary[900]} />

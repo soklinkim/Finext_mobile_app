@@ -34,9 +34,9 @@ export default function Notifications() {
             {t(GROUP_KEY[g])}
           </Text>
           {items.map((n) => (
-            <View key={n.id} className="border-b border-primary-200" style={{ paddingVertical: 12, gap: 4, borderColor: dark ? colors.dark.border : undefined }} accessible accessibilityLabel={`${n.title}. ${n.body}`}>
+            <View key={n.id} className="border-b border-primary-200" style={{ paddingVertical: 12, gap: 4, ...(dark ? { borderColor: colors.dark.border } : {}) }} accessible accessibilityLabel={`${n.title}. ${n.body}`}>
               <View className="flex-row" style={{ gap: 12 }}>
-                <View className="items-center justify-center bg-primary-200 rounded-field" style={{ width: 38, height: 38, backgroundColor: dark ? colors.dark.field : undefined }}>
+                <View className="items-center justify-center bg-primary-200 rounded-field" style={{ width: 38, height: 38, ...(dark ? { backgroundColor: colors.dark.field } : {}) }}>
                   <Icon name={ICON[n.type]} size={22} color={dark ? colors.dark.primary : colors.primary[900]} strokeWidth={1.5} />
                 </View>
                 <View className="flex-1">

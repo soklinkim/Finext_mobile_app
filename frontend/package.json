@@ -13,9 +13,13 @@
     "expo-crypto": "~58.0.7",
     "expo-document-picker": "~58.0.4",
     "expo-font": "~58.0.10",
+    "expo-image-manipulator": "~58.0.15",
+    "expo-image-picker": "~58.0.10",
     "expo-linking": "~58.0.14",
     "expo-network": "~58.0.4",
+    "expo-print": "~58.0.7",
     "expo-router": "~58.0.26",
+    "expo-sharing": "~58.0.20",
     "expo-splash-screen": "~58.0.11",
     "expo-sqlite": "~58.0.14",
     "expo-status-bar": "~58.0.4",
@@ -46,6 +50,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "dev": "node scripts/start-phone.mjs",
+    "phone": "node scripts/start-phone.mjs",
     "lint": "expo lint"
   },
   "private": true

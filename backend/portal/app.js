@@ -55,6 +55,12 @@ const SCOPE_LABELS = {
   readiness: 'Loan readiness', statements: 'Financial statements', health: 'Financial health ratios',
   trend: 'Monthly income & expenses', documents: 'Business documents',
 };
+// Same labels as the app's industry picker (profile.industry options).
+const INDUSTRY_LABELS = {
+  convenience: 'Mini Mart / Convenience Store', restaurant: 'Restaurant or Café', retail: 'Retail',
+  wholesale: 'Wholesale', services: 'Services', manufacturing: 'Manufacturing', other: 'Other',
+};
+const industry = (code) => INDUSTRY_LABELS[code] || code;
 const DOC_LABELS = { patent_tax: 'Patent Tax certificate', certificate_of_incorporation: 'Certificate of Incorporation' };
 
 const chip = (cls, text) => `<span class="chip ${esc(cls)}">${esc(text)}</span>`;
@@ -122,7 +128,7 @@ async function start() {
     await supabase.auth.signOut();
     return renderLogin(error.status === 403 ? 'This account is not linked to a partner bank. Ask Finext to add you.' : error.message);
   }
-  account.innerHTML = `<span><strong>${esc(lender.name)}</strong> · ${esc(data.session.user.email)}</span><button class="soft" id="signout">Sign out</button>`;
+  account.innerHTML = `<span><strong>${esc(lender.name)}</strong><span class="who-email"> · ${esc(data.session.user.email)}</span></span><button class="soft" id="signout">Sign out</button>`;
   document.getElementById('signout').addEventListener('click', signOut);
   route();
 }
@@ -166,8 +172,8 @@ async function renderList() {
           <tbody>${rows.map((a) => `
             <tr class="clickable" data-id="${esc(a.id)}" tabindex="0">
               <td><strong>${esc(a.businessName || 'Unnamed business')}</strong></td>
-              <td class="hide-sm muted">${esc([a.industry, a.location].filter(Boolean).join(' · ') || '—')}</td>
-              <td>${a.readinessScore != null ? `<strong>${esc(a.readinessScore)}</strong> ${chip(a.readinessLevel, LEVELS[a.readinessLevel] || '')}` : a.readinessLevel ? chip(a.readinessLevel, LEVELS[a.readinessLevel]) : '<span class="muted">Not shared</span>'}</td>
+              <td class="hide-sm muted">${esc([industry(a.industry), a.location].filter(Boolean).join(' · ') || '—')}</td>
+              <td>${a.readinessScore != null && a.readinessLevel !== 'insufficient_data' ? `<strong>${esc(a.readinessScore)}</strong> ${chip(a.readinessLevel, LEVELS[a.readinessLevel] || '')}` : a.readinessLevel ? chip(a.readinessLevel, LEVELS[a.readinessLevel]) : '<span class="muted">Not shared</span>'}</td>
               <td>${chip(a.decision, DECISIONS[a.decision])}</td>
               <td class="hide-sm">${date(a.createdAt)}</td>
               <td class="hide-sm">${date(a.expiresAt)}</td>
@@ -189,14 +195,15 @@ const notShared = (title) => `<div class="card"><h2>${esc(title)}</h2><p class="
 
 function readinessSection(r) {
   if (!r) return notShared('Loan readiness');
-  const pct = r.score ?? 0;
+  const thin = r.level === 'insufficient_data';  // the app shows no number either
+  const pct = thin ? 0 : r.score ?? 0;
   const ring = r.level === 'ready' ? 'var(--success)' : r.level === 'almost' ? 'var(--warning)' : r.level === 'not_ready' ? 'var(--danger)' : 'var(--neutral-300)';
   const byPillar = (id) => r.checks.filter((c) => c.pillar === id);
   return `
     <div class="card stack">
       <div class="spread"><h2>Loan readiness</h2><span class="muted small">Data coverage ${Math.round(r.coverage * 100)}%</span></div>
       <div class="score">
-        <div class="score-ring" style="--pct:${pct};--ring:${ring}"><div>${r.score ?? '—'}</div></div>
+        <div class="score-ring" style="--pct:${pct};--ring:${ring}"><div>${thin ? '—' : r.score ?? '—'}</div></div>
         <div class="stack" style="gap:6px">
           ${chip(r.level, LEVELS[r.level])}
           <p class="muted small" style="margin:0">Weighted score from repayment ability (30%), financial strength (25%), profitability (20%), record keeping (15%) and documents (10%). Checks without enough data are left out. Below 50% data coverage, or with fewer than 3 months of entries, the result is "Not enough data".</p>
@@ -270,9 +277,12 @@ function trendSection(t) {
 
 function statementTable(s) {
   const prior = s.columnHeaders.length > 1;
+  // Formal heading (business, statement name, period); older responses only have a title.
+  const heading = s.heading ? `<div class="statement-heading">${s.heading.map((line) => `<div>${esc(line)}</div>`).join('')}</div>` : '';
   return `
+    ${heading}
     <div class="table-wrap"><table>
-      <thead><tr><th>${esc(s.title)} <span class="muted">· ${esc(s.periodLabel)}</span></th>${s.columnHeaders.map((c) => `<th class="num">${esc(c)}</th>`).join('')}</tr></thead>
+      <thead><tr><th>${s.heading ? '' : `${esc(s.title)} <span class="muted">· ${esc(s.periodLabel)}</span>`}</th>${s.columnHeaders.map((c) => `<th class="num">${esc(c)}</th>`).join('')}</tr></thead>
       <tbody>${s.sections.map((section) => `
         <tr><td colspan="${prior ? 3 : 2}"><strong class="muted small">${esc(section.heading.toUpperCase())}</strong></td></tr>
         ${section.lines.map((line) => `<tr class="${esc(line.style)}"><td>${esc(line.label)}</td><td class="num">${esc(money(line.current, s.currency))}</td>${prior ? `<td class="num muted">${esc(line.prior != null ? money(line.prior, s.currency) : '')}</td>` : ''}</tr>`).join('')}`).join('')}
@@ -343,7 +353,7 @@ async function renderApplicant(shareId) {
       <div class="card stack">
         <div class="spread">
           <div><h1>${esc(b.businessName || 'Unnamed business')}</h1>
-            <p class="muted" style="margin:0">${esc([b.businessIndustry, b.location].filter(Boolean).join(' · '))}</p></div>
+            <p class="muted" style="margin:0">${esc([industry(b.businessIndustry), b.location].filter(Boolean).join(' · '))}</p></div>
           ${data.readiness ? `<div>${chip(data.readiness.level, LEVELS[data.readiness.level])}</div>` : ''}
         </div>
         <div class="row">

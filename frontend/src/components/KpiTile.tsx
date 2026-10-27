@@ -7,7 +7,7 @@ import { useAppTheme } from '@/theme/AppTheme';
 export function KpiTile({ label, value, caption, highlight }: { label: string; value: string; caption?: string; highlight?: boolean }) {
   const dark = useAppTheme();
   return (
-    <View className={`flex-1 rounded-lg ${highlight ? 'bg-primary-900' : 'bg-primary-50'}`} style={{ paddingHorizontal: 12, paddingVertical: 10, backgroundColor: dark ? (highlight ? colors.primary[900] : colors.dark.surface) : undefined }}>
+    <View className={`flex-1 rounded-lg ${highlight ? 'bg-primary-900' : 'bg-primary-50'}`} style={{ paddingHorizontal: 12, paddingVertical: 10, ...(dark ? { backgroundColor: (highlight ? colors.primary[900] : colors.dark.surface) } : {}) }}>
       <Text variant="micro" tone={highlight ? 'primary-200' : 'primary-900'} style={{ fontSize: 10.5 }}>
         {label}
       </Text>

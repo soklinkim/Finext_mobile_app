@@ -23,7 +23,9 @@ export function TransactionRow({ tx, index = 0, onPress }: { tx: TransactionView
     : tx.openBalance === null
       ? null
       : tx.openBalance === 0
-        ? { label: t('entry.badgePaid'), color: colors.success }
+        ? tx.writtenOff
+          ? { label: t('entry.badgeWrittenOff'), color: colors.neutral[600] }
+          : { label: t('entry.badgePaid'), color: colors.success }
         : tx.openBalance < tx.amount
           ? { label: t('entry.badgeOwed', { amount: formatMoney(tx.openBalance, tx.currency) }), color: colors.alert }
           : { label: t('entry.badgeUnpaid'), color: colors.alert };

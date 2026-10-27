@@ -26,7 +26,16 @@ cd backend
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-The app uses Expo's development host address when available. If using a tunnel or a custom network, set `EXPO_PUBLIC_API_URL=http://<computer-lan-ip>:8000` in `frontend/.env.local`, then restart Expo. The current backend store is in-memory and has no authentication or per-user isolation; use demo data only until persistent storage and authentication are added.
+The app uses Expo's development host address when available. If using a tunnel or a custom network, set `EXPO_PUBLIC_API_URL=http://<computer-lan-ip>:8000` in `frontend/.env.local`, then restart Expo.
+
+**Phone says "Can't reach the FINEXT server" (Windows Firewall blocks Python):** start the app with `npm run dev` (same as `npm run phone`)
+instead of `npx expo start`: one server for the browser (http://localhost:8081) and the phone (QR code) at the same
+time. It runs a small Node relay on port 8001 that passes requests to the API on
+`localhost:8000`; Windows allows Node (it already serves Expo), so no firewall change or administrator rights are
+needed. The relay is reachable by other devices on the same Wi-Fi while it runs, like the API itself would be; stop it
+(Ctrl+C) when done, and avoid running it on public Wi-Fi. For a demo away from your own network, host the API online.
+
+The current backend store is in-memory and has no authentication or per-user isolation; use demo data only until persistent storage and authentication are added.
 
 `expo-sqlite` needs a native build, so use a development build or Expo Go for SDK 58 on a device or emulator. The first launch creates `finext.db`, runs the migrations and seeds demo data.
 

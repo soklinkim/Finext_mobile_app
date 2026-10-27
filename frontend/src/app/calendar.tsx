@@ -34,7 +34,7 @@ export default function CalendarScreen() {
       accessibilityState={{ selected: tab === value }}
       onPress={() => setTab(value)}
       className={`flex-1 items-center justify-center rounded-pill ${tab === value ? 'bg-primary-200' : 'bg-primary-50'}`}
-      style={{ height: 36, backgroundColor: dark ? (tab === value ? colors.dark.subtle : colors.dark.surface) : undefined }}
+      style={{ height: 36, ...(dark ? { backgroundColor: (tab === value ? colors.dark.subtle : colors.dark.surface) } : {}) }}
     >
       <Text variant="body" weight={500} tone="primary-900">
         {label}

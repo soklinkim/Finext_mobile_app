@@ -6,7 +6,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 
 from app import db
-from app.auth import current_user
+from app.auth import current_sme
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -32,13 +32,13 @@ def _clean_file_name(name: str | None, content_type: str) -> str:
 
 
 @router.get("")
-def list_documents(user_id: str = Depends(current_user)):
+def list_documents(user_id: str = Depends(current_sme)):
     """Uploaded business documents (metadata only)."""
     return {"documents": db.list_documents(user_id)}
 
 
 @router.put("/{kind}")
-async def upload_document(kind: DocumentKind, file: UploadFile = File(...), user_id: str = Depends(current_user)):
+async def upload_document(kind: DocumentKind, file: UploadFile = File(...), user_id: str = Depends(current_sme)):
     """Store or replace the user's document of this kind. PDF, JPEG or PNG, up to 5 MB."""
     content = await file.read(MAX_BYTES + 1)
     if not content:
@@ -56,7 +56,7 @@ async def upload_document(kind: DocumentKind, file: UploadFile = File(...), user
 
 
 @router.get("/{kind}/file")
-def download_document(kind: DocumentKind, user_id: str = Depends(current_user)):
+def download_document(kind: DocumentKind, user_id: str = Depends(current_sme)):
     document = db.get_document(user_id, kind)
     if document is None:
         raise HTTPException(status_code=404, detail="Document not found.")
@@ -68,7 +68,7 @@ def download_document(kind: DocumentKind, user_id: str = Depends(current_user)):
 
 
 @router.delete("/{kind}", status_code=204)
-def delete_document(kind: DocumentKind, user_id: str = Depends(current_user)):
+def delete_document(kind: DocumentKind, user_id: str = Depends(current_sme)):
     if not db.delete_document(user_id, kind):
         raise HTTPException(status_code=404, detail="Document not found.")
     return Response(status_code=204)

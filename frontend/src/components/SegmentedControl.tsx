@@ -24,7 +24,7 @@ export function SegmentedControl<T extends string>({ options, value, onChange, v
     <View
       accessibilityRole="tablist"
       className="flex-row bg-primary-50 rounded-xl"
-      style={{ padding: 4, gap: 4, height: isTab ? 44 : 60, borderRadius: radius.card, backgroundColor: dark ? colors.dark.surface : undefined }}
+      style={{ padding: 4, gap: 4, height: isTab ? 44 : 60, borderRadius: radius.card, ...(dark ? { backgroundColor: colors.dark.surface } : {}) }}
     >
       {options.map((o) => {
         const selected = o.value === value;

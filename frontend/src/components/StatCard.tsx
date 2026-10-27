@@ -21,7 +21,7 @@ export function StatCard({ kind, label, amount, variant = 'card' }: Props) {
       accessible
       accessibilityLabel={`${label} ${amount}`}
       className={`items-center justify-center ${variant === 'card' ? 'bg-white' : ''}`}
-      style={[{ gap: 4, backgroundColor: dark && variant === 'card' ? colors.dark.surface : undefined }, variant === 'card' ? { flex: 1, minHeight: 100, borderRadius: radius.card, paddingVertical: 12 } : { flex: 1 }]}
+      style={[{ gap: 4, ...(dark && variant === 'card' ? { backgroundColor: colors.dark.surface } : {}) }, variant === 'card' ? { flex: 1, minHeight: 100, borderRadius: radius.card, paddingVertical: 12 } : { flex: 1 }]}
     >
       <Icon name={isIncome ? 'income' : 'expense'} size={28} color={isIncome ? (dark ? colors.dark.primary : colors.primary[200]) : colors.primary[900]} strokeWidth={1.5} />
       <Text variant="body-lg" tone="primary-900">

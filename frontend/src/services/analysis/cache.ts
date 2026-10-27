@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isOnline } from '../network';
-import { AccountingDataError, ApiRequestError, NoCachedDataError, OnlineRequiredError, type CachedResult } from './types';
+import { AccountingDataError, ApiRequestError, NoCachedDataError, OnlineRequiredError, ServerUnreachableError, type CachedResult } from './types';
 
 const PREFIX = 'finext.analysis.v2:';
 const LEGACY_PREFIX = 'finext.analysis.v1:';
@@ -79,7 +79,8 @@ export async function withCache<T>(key: string, fetcher: () => Promise<T>, optio
   }
   const cached = await read<T>(key);
   if (cached) return { data: cached.data, source: 'cache', fetchedAt: cached.fetchedAt };
-  if (options.requireOnline) throw new OnlineRequiredError(failure instanceof Error ? failure.message : undefined);
+  // Online but no answer is a server problem, not a connection problem: say so.
+  if (options.requireOnline) throw failure ? new ServerUnreachableError() : new OnlineRequiredError();
   throw new NoCachedDataError();
 }
 

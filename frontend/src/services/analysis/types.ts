@@ -49,6 +49,118 @@ export interface IncomeExpenseForecast {
   forecast: ForecastPoint[];
 }
 
+export type RiskLevel = 'low' | 'moderate' | 'high';
+
+/** One reason behind the distress score; `reason` is set when the business's own figure is missing (why). */
+export interface RiskDriver {
+  feature: string;
+  label: string;
+  value: number | null;
+  reason: string | null;
+  direction: 'raises risk' | 'lowers risk';
+  contribution: number;
+}
+
+export interface RiskReason {
+  code: string;
+  text: string;
+  params: Record<string, number>;
+}
+
+export interface ProposedLoan {
+  amount: number;
+  termMonths: number;
+  annualInterestRate: number;
+  rateType: 'flat' | 'declining';
+  repaymentFrequency: 'weekly' | 'monthly';
+  installmentAmount?: number;
+}
+
+export type AdviceCode = 'break_even' | 'collect_receivables' | 'reduce_stock' | 'cut_costs' | 'raise_margin' | 'limit_drawings' | 'longer_loan_term';
+
+/** One change the owner can make, re-scored with the same 3-month projection and 12-month model. */
+export interface RiskAdvice {
+  code: AdviceCode;
+  /** Amounts in minor units; shares and points as fractions (0.1 = 10%). */
+  params: Record<string, number | null>;
+  currency: Currency;
+  gain: number;
+  stress3m: { before: number; after: number } | null;
+  model12m: { before: number; after: number } | null;
+  conditions: Partial<Record<'cash_runway' | 'negative_cash_flow' | 'dscr', { before: number; after: number }>>;
+  cash3m: { before: number; after: number } | null;
+}
+
+/** GET /accounting/risk and POST /accounting/risk/loan-check (Layer 2). Amounts in the display currency's minor units. */
+export interface FutureRisk {
+  /** How to lower the risk (GET /accounting/risk only; empty when the risk is low). */
+  advice?: RiskAdvice[];
+  model:
+    | { available: false; reason: 'not_enough_history'; months: number; text: string }
+    | {
+        available: true;
+        asOf: string;
+        months: number;
+        confidence: 'low' | 'normal';
+        probability: number;
+        riskClass: RiskLevel;
+        alert: boolean;
+        topDrivers: RiskDriver[];
+        modelVersion: string;
+        horizonMonths: number;
+        note: string;
+      };
+  /** Probability of stress in the next 3 months: a projection from the business's own recent months. */
+  stress3m:
+    | { available: false; reason: 'not_enough_history'; months: number; text: string }
+    | {
+        available: true;
+        asOf: string;
+        horizonMonths: number;
+        probability: number;
+        riskClass: RiskLevel;
+        paths: number;
+        basedOnMonths: number;
+        currency: Currency;
+        /** Share of futures in which each stress condition is met (they can overlap). */
+        conditions: { cash_runway: number; negative_cash_flow: number; dscr: number };
+        cash: { month: string; median: number; low: number; high: number }[];
+        startingCash: number;
+        usualMonthlyExpenses: number;
+        runwayFloor: number;
+        instalments: number[];
+        scheduleMissing: boolean;
+        stressedNow: ('cash_runway' | 'negative_cash_flow' | 'dscr')[];
+        note: string;
+      };
+  debtCapacity:
+    | { available: false; reason: 'not_enough_history'; months: number; text: string }
+    | {
+        available: true;
+        asOf: string;
+        currency: Currency;
+        level: RiskLevel;
+        monthlyCapacity: number;
+        existingMonthlyInstalments: number;
+        dscr: number | null;
+        targetDscr: number;
+        affordableMonthlyInstalment: number;
+        instalmentsToRevenue: number | null;
+        debt: number;
+        scheduleMissing: boolean;
+        weakening: boolean;
+        reasons: RiskReason[];
+        proposed?: {
+          monthlyInstalment: number;
+          dscrWith: number | null;
+          fits: boolean;
+          maxAmount: number | null;
+          model?: { probabilityBefore: number; probabilityAfter: number; riskClassBefore: RiskLevel; riskClassAfter: RiskLevel; assumption: string };
+          stress3m?: { probabilityBefore: number; probabilityAfter: number; riskClassBefore: RiskLevel; riskClassAfter: RiskLevel };
+        };
+      };
+}
+
 export type ReadinessLevel = 'ready' | 'almost' | 'not_ready' | 'insufficient_data';
 export type ReadinessPillarId = 'repayment' | 'strength' | 'profitability' | 'records' | 'documents';
 
@@ -120,6 +232,14 @@ export class OnlineRequiredError extends Error {
   }
 }
 
+/** The device is online but the FINEXT server did not answer (not running, wrong address, blocked by a firewall). */
+export class ServerUnreachableError extends OnlineRequiredError {
+  constructor(message = 'The FINEXT server could not be reached.') {
+    super(message);
+    this.name = 'ServerUnreachableError';
+  }
+}
+
 /** An HTTP/API failure; unlike an offline state, retrying requires fixing the response cause. */
 export class ApiRequestError extends Error {
   constructor(readonly status: number, message: string) {
@@ -154,6 +274,8 @@ export interface StatementKpi {
 export interface Statement {
   kind: StatementKind;
   title: string;
+  /** Formal heading lines: business name, statement name, period (e.g. "AS AT 31 DECEMBER 2024"). Absent in older cached data. */
+  heading?: [string, string, string];
   periodLabel: string;
   currency: Currency;
   kpis: StatementKpi[];

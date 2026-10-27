@@ -31,7 +31,8 @@ export function HeaderBar({ title, back = true, backFallbackHref, light = false,
             hitSlop={10}
             onPress={() => {
               if (backFallbackHref) {
-                router.replace(backFallbackHref);
+                // Back to that page if it is open underneath (e.g. the Statements tab), otherwise go there.
+                router.dismissTo(backFallbackHref);
                 return;
               }
               if (router.canGoBack()) router.back();

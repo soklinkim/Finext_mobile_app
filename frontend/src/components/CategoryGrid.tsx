@@ -12,6 +12,10 @@ export interface GridItem {
   id: string;
   name: string;
   icon: string;
+  /** Savings goals: share of the target reached (0-1), shown as a thin bar under the name. */
+  progress?: number | null;
+  /** A short line under the name (e.g. "$120 of $500"). */
+  caption?: string;
 }
 
 interface Props {
@@ -20,10 +24,12 @@ interface Props {
   addLabel: string;
   addTitle: string;
   onAdd: (name: string) => Promise<void> | void;
+  /** Tapping a tile opens its details. */
+  onOpen?: (id: string) => void;
 }
 
 /** 3-column tile grid (Categories, Savings goals): 105 × 97 tiles, selected tile accent-expense, trailing "+" tile with a name dialog. */
-export function CategoryGrid({ items, addLabel, addTitle, onAdd }: Props) {
+export function CategoryGrid({ items, addLabel, addTitle, onAdd, onOpen }: Props) {
   const { t } = useI18n();
   const dark = useAppTheme();
   const [selected, setSelected] = useState<string | null>(items[0]?.id ?? null);
@@ -31,7 +37,7 @@ export function CategoryGrid({ items, addLabel, addTitle, onAdd }: Props) {
   const [name, setName] = useState('');
   const [error, setError] = useState<string | undefined>();
 
-  const tile = (key: string, label: string, icon: string, active: boolean, onPress: () => void, add = false) => (
+  const tile = (key: string, label: string, icon: string, active: boolean, onPress: () => void, add = false, item?: GridItem) => (
     <Pressable key={key} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: active }} onPress={onPress} className="items-center" style={{ width: 105, gap: 8 }}>
       <View className={`items-center justify-center ${active ? 'bg-accent-expense' : 'bg-accent-tile'}`} style={{ width: 105, height: 97, borderRadius: radius.xl }}>
         <Icon name={icon} size={add ? 48 : 44} color={colors.white} strokeWidth={add ? 2 : 1.5} />
@@ -39,6 +45,12 @@ export function CategoryGrid({ items, addLabel, addTitle, onAdd }: Props) {
       <Text variant="caption" tone="primary-900" numberOfLines={2} style={{ textAlign: 'center' }}>
         {label}
       </Text>
+      {item?.progress != null && (
+        <View style={{ width: 80, height: 5, borderRadius: 99, overflow: 'hidden', backgroundColor: dark ? colors.dark.field : colors.neutral[200] }}>
+          <View style={{ width: `${Math.min(1, Math.max(0, item.progress)) * 100}%`, height: '100%', borderRadius: 99, backgroundColor: item.progress >= 1 ? colors.success : colors.primary[500] }} />
+        </View>
+      )}
+      {item?.caption ? <Text variant="micro" tone="neutral-600" numberOfLines={1} style={{ textAlign: 'center' }}>{item.caption}</Text> : null}
     </Pressable>
   );
 
@@ -53,8 +65,10 @@ export function CategoryGrid({ items, addLabel, addTitle, onAdd }: Props) {
   return (
     <>
       <View className="flex-row flex-wrap justify-between" style={{ rowGap: 24 }}>
-        {items.map((c) => tile(c.id, c.name, c.icon, selected === c.id, () => setSelected(c.id)))}
+        {items.map((c) => tile(c.id, c.name, c.icon, selected === c.id, () => { setSelected(c.id); onOpen?.(c.id); }, false, c))}
         {tile('add', addLabel, 'more', false, () => setOpen(true), true)}
+        {/* Fill the last row to 3 slots, so its tiles line up with the columns above instead of spreading apart. */}
+        {Array.from({ length: (3 - ((items.length + 1) % 3)) % 3 }, (_, i) => <View key={`filler-${i}`} style={{ width: 105 }} />)}
       </View>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)} statusBarTranslucent>
         <Pressable className="flex-1 items-center justify-center px-6" style={{ backgroundColor: tint(colors.shadow, 0.35) }} onPress={() => setOpen(false)}>

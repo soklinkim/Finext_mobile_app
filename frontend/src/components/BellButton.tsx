@@ -19,7 +19,7 @@ export function BellButton() {
       hitSlop={6}
       onPress={() => router.push('/notifications')}
       className="items-center justify-center rounded-pill bg-primary-50"
-      style={{ width: 32, height: 32, backgroundColor: dark ? colors.dark.field : undefined }}
+      style={{ width: 32, height: 32, ...(dark ? { backgroundColor: colors.dark.field } : {}) }}
     >
       <Icon name="bell" size={18} color={dark ? colors.dark.primary : undefined} />
       {count > 0 && (

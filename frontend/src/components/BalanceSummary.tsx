@@ -27,7 +27,7 @@ export function BalanceSummary({ balance, expense, currency }: Props) {
           {formatMoney(balance, currency)}
         </Text>
       </View>
-      <View className="bg-white" style={{ width: 1, height: 40, backgroundColor: dark ? colors.dark.border : undefined }} />
+      <View className="bg-white" style={{ width: 1, height: 40, ...(dark ? { backgroundColor: colors.dark.border } : {}) }} />
       <View className="flex-1 items-center" style={{ gap: 2 }}>
         <View className="flex-row items-center justify-center" style={{ gap: 6 }}>
           <Icon name="expense" size={12} color={dark ? colors.dark.primary : colors.neutral[900]} />

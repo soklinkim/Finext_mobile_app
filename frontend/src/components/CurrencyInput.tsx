@@ -10,7 +10,7 @@ import { useAppTheme } from '@/theme/AppTheme';
 export function CurrencySwitch({ value, onChange }: { value: Currency; onChange: (c: Currency) => void }) {
   const dark = useAppTheme();
   return (
-    <View accessibilityRole="radiogroup" className="flex-row rounded-pill bg-white border border-primary-200" style={{ padding: 2, backgroundColor: dark ? colors.dark.surface : undefined, borderColor: dark ? colors.dark.border : undefined }}>
+    <View accessibilityRole="radiogroup" className="flex-row rounded-pill bg-white border border-primary-200" style={{ padding: 2, ...(dark ? { backgroundColor: colors.dark.surface } : {}), ...(dark ? { borderColor: colors.dark.border } : {}) }}>
       {(['KHR', 'USD'] as const).map((c) => {
         const selected = c === value;
         return (
@@ -21,7 +21,7 @@ export function CurrencySwitch({ value, onChange }: { value: Currency; onChange:
             hitSlop={8}
             onPress={() => onChange(c)}
             className={`items-center justify-center rounded-pill ${selected ? 'bg-primary-900' : ''}`}
-            style={[{ paddingHorizontal: 10, paddingVertical: 5, backgroundColor: selected && dark ? colors.primary[900] : undefined }, selected && shadow.button]}
+            style={[{ paddingHorizontal: 10, paddingVertical: 5, ...(selected && dark ? { backgroundColor: colors.primary[900] } : {}) }, selected && shadow.button]}
           >
             <Text variant="micro" weight={selected ? 600 : 500} tone={selected ? 'white' : 'primary-900'}>
               {c}

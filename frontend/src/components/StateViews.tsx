@@ -4,6 +4,7 @@ import { Text } from './Text';
 import { Button } from './Button';
 import { colors } from '@/theme';
 import { useI18n, type TKey } from '@/i18n';
+import { OnlineRequiredError, ServerUnreachableError } from '@/services/analysis/types';
 
 export function LoadingState() {
   return (
@@ -30,14 +31,21 @@ export function EmptyState({ titleKey, bodyKey, icon = 'info' }: { titleKey: TKe
   );
 }
 
-export function ErrorState({ onRetry, message, onlineRequired = false }: { onRetry?: () => void; message?: string; onlineRequired?: boolean }) {
+/**
+ * Pass `error` to explain it: the device is offline, or online but the FINEXT server did not answer (a server or
+ * network problem, not the user's connection), or the server's own message.
+ */
+export function ErrorState({ onRetry, message, onlineRequired = false, error }: { onRetry?: () => void; message?: string; onlineRequired?: boolean; error?: Error | null }) {
   const { t } = useI18n();
+  const unreachable = error instanceof ServerUnreachableError;
+  const offline = onlineRequired || (!unreachable && error instanceof OnlineRequiredError);
+  const body = unreachable ? t('state.serverUnreachable') : offline ? t('accounting.onlineRequired') : message ?? error?.message;
   return (
     <View className="items-center" style={{ paddingVertical: 40, gap: 12 }}>
       <Text variant="body-lg" tone="danger" style={{ textAlign: 'center' }}>
-        {t('state.error')}
+        {t(unreachable ? 'state.serverUnreachableTitle' : 'state.error')}
       </Text>
-      {(onlineRequired || message) ? <Text variant="body-sm" tone="neutral-600" style={{ textAlign: 'center' }}>{onlineRequired ? t('accounting.onlineRequired') : message}</Text> : null}
+      {body ? <Text variant="body-sm" tone="neutral-600" style={{ textAlign: 'center' }}>{body}</Text> : null}
       {onRetry && <Button variant="soft" label={t('state.retry')} onPress={onRetry} />}
     </View>
   );

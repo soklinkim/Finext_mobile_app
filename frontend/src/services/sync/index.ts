@@ -1,12 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants from 'expo-constants';
 import { and, eq } from 'drizzle-orm';
-import { Platform } from 'react-native';
 import { db, schema } from '@/db/client';
+import { API_BASE_URL, LONG_REQUEST_TIMEOUT_MS, REQUEST_TIMEOUT_MS, fetchWithTimeout } from '@/services/apiBase';
 import { SYNCED_TABLES, type SyncedTable } from '@/db/schema';
 import { emitChange } from '@/services/bookkeeping/events';
 import { getSession, refreshSession } from '@/services/auth';
-import { AccountingDataError, ApiRequestError, type AnalysisPeriod, type AnalysisResult, type AppNotification, type CategorySlice, type IncomeExpenseForecast, type LoanReadiness, type RatioSnapshot, type StatementPeriod, type Statements, type Summary } from '@/services/analysis/types';
+import { AccountingDataError, ApiRequestError, type AnalysisPeriod, type AnalysisResult, type AppNotification, type CategorySlice, type FutureRisk, type IncomeExpenseForecast, type LoanReadiness, type ProposedLoan, type RatioSnapshot, type StatementPeriod, type Statements, type Summary } from '@/services/analysis/types';
 
 export type SyncRow = Record<string, unknown> & {
   id: string;
@@ -99,6 +98,10 @@ export interface SyncService {
   getSummary(): Promise<Summary>;
   /** Sync pending rows then retrieve the server's experimental trend forecast. */
   getForecast(): Promise<IncomeExpenseForecast>;
+  /** Sync pending rows then retrieve the future risk: distress model score and debt capacity. */
+  getFutureRisk(): Promise<FutureRisk>;
+  /** The same as if a proposed loan were taken (nothing is saved). */
+  checkLoan(loan: ProposedLoan): Promise<FutureRisk>;
   /** Sync pending rows then retrieve the server's loan-readiness assessment. */
   getLoanReadiness(): Promise<LoanReadiness>;
   /** Retrieve ratio snapshots and health alerts calculated by the backend. */
@@ -111,13 +114,6 @@ export interface SyncService {
 const CURSOR_KEY = '@finext.sync.cursor.v1';
 /** Safety bound on one sync's catch-up (500 rows per page). */
 const MAX_PULL_PAGES = 50;
-const hostFromExpo = Constants.expoConfig?.hostUri?.split(':')[0];
-const defaultApiUrl = Platform.OS === 'web'
-  ? 'http://localhost:8000'
-  : hostFromExpo
-    ? `http://${hostFromExpo}:8000`
-    : 'http://localhost:8000';
-const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || defaultApiUrl).replace(/\/+$/, '');
 
 /** Shared structural view of the local tables; the API table names match these keys. */
 const tables: Record<SyncedTable, any> = {
@@ -134,15 +130,17 @@ const tables: Record<SyncedTable, any> = {
 export async function authorizedFetch(path: string, init?: RequestInit): Promise<Response> {
   const session = await getSession();
   if (!session) throw new ApiRequestError(401, 'Please sign in to view your financial reports.');
+  // Uploads, file downloads and sync carry more data; everything else should answer quickly.
+  const long = init?.body instanceof FormData || path.startsWith('/sync') || path.endsWith('/file');
   const send = async (accessToken: string): Promise<Response> => {
     try {
-      return await fetch(`${API_BASE_URL}${path}`, {
+      return await fetchWithTimeout(`${API_BASE_URL}${path}`, {
         ...init,
         headers: {
           Authorization: 'Bearer ' + accessToken,
           ...init?.headers,
         },
-      });
+      }, long ? LONG_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS);
     } catch (error) {
       const detail = error instanceof Error ? `: ${error.message}` : '';
       throw new Error(`Could not reach FINEXT API at ${API_BASE_URL}${detail}`);
@@ -362,6 +360,16 @@ async function getForecast(): Promise<IncomeExpenseForecast> {
   return requestJson('/accounting/forecast');
 }
 
+async function getFutureRisk(): Promise<FutureRisk> {
+  await syncForAccountingReports();
+  return requestJson('/accounting/risk');
+}
+
+async function checkLoan(loan: ProposedLoan): Promise<FutureRisk> {
+  await syncForAccountingReports();
+  return requestJson('/accounting/risk/loan-check', { method: 'POST', body: JSON.stringify(loan) });
+}
+
 async function getLoanReadiness(): Promise<LoanReadiness> {
   await syncForAccountingReports();
   return requestJson('/loan/readiness');
@@ -399,4 +407,4 @@ async function dismissAlert(id: string): Promise<void> {
   await requestJson(`/accounting/health/${encodeURIComponent(id)}/dismiss`, { method: 'POST' });
 }
 
-export const syncService: SyncService = { pushPending, pullChanges, sync, getJournal, previewImpact, getStatements, getSummary, getForecast, getLoanReadiness, getFinancialHealth, getAnalysis, getCategories, dismissAlert };
+export const syncService: SyncService = { pushPending, pullChanges, sync, getJournal, previewImpact, getStatements, getSummary, getForecast, getFutureRisk, checkLoan, getLoanReadiness, getFinancialHealth, getAnalysis, getCategories, dismissAlert };

@@ -80,9 +80,9 @@ function ToolRow({ icon, title, body, onPress, first }: { icon: IconName; title:
       accessibilityLabel={`${title}. ${body}`}
       onPress={onPress}
       className={`flex-row items-center ${first ? '' : 'border-t border-neutral-200'}`}
-      style={{ gap: 12, minHeight: 64, paddingVertical: 10, borderColor: dark ? colors.dark.border : undefined }}
+      style={{ gap: 12, minHeight: 64, paddingVertical: 10, ...(dark ? { borderColor: colors.dark.border } : {}) }}
     >
-      <View className="items-center justify-center rounded-lg bg-primary-50" style={{ width: 40, height: 40, backgroundColor: dark ? colors.dark.field : undefined }}>
+      <View className="items-center justify-center rounded-lg bg-primary-50" style={{ width: 40, height: 40, ...(dark ? { backgroundColor: colors.dark.field } : {}) }}>
         <Icon name={icon} size={20} color={colors.primary[500]} />
       </View>
       <View className="flex-1" style={{ gap: 2 }}>
@@ -127,7 +127,7 @@ export default function Bookkeeping() {
         accessibilityLabel={t('overview.month')}
         onPress={() => setPicker(true)}
         className="flex-row items-center self-start rounded-pill bg-primary-50"
-        style={{ paddingHorizontal: 14, minHeight: 36, gap: 8, marginBottom: 16, backgroundColor: dark ? colors.dark.surface : undefined }}
+        style={{ paddingHorizontal: 14, minHeight: 36, gap: 8, marginBottom: 16, ...(dark ? { backgroundColor: colors.dark.surface } : {}) }}
       >
         <Icon name="calendar" size={16} color={colors.primary[500]} />
         <Text variant="body-sm" weight={500} tone="primary-900">
@@ -152,7 +152,7 @@ export default function Bookkeeping() {
       {/* 3. This month's entries */}
       <View style={{ marginTop: 28 }}>
         <SectionHeader title={t('overview.entriesTitle', { month: monthLabel })} action={t('overview.seeAll')} onAction={() => router.push('/transactions')} />
-        <View className="bg-white border border-neutral-200 rounded-xl" style={{ paddingHorizontal: 16, paddingVertical: 4, backgroundColor: dark ? colors.dark.surface : undefined, borderColor: dark ? colors.dark.border : undefined }}>
+        <View className="bg-white border border-neutral-200 rounded-xl" style={{ paddingHorizontal: 16, paddingVertical: 4, ...(dark ? { backgroundColor: colors.dark.surface } : {}), ...(dark ? { borderColor: colors.dark.border } : {}) }}>
           {loading && !data ? <LoadingState /> : null}
           {data && data.groups.length === 0 ? <EmptyState titleKey="overview.empty" bodyKey="overview.emptyBody" /> : null}
           {data?.groups.map((g, i) => (
@@ -166,7 +166,7 @@ export default function Bookkeeping() {
       {/* 4. Everything else, each with a one-line explanation */}
       <View style={{ marginTop: 28 }}>
         <SectionHeader title={t('overview.toolsTitle')} />
-        <View className="bg-white border border-neutral-200 rounded-xl" style={{ paddingHorizontal: 16, backgroundColor: dark ? colors.dark.surface : undefined, borderColor: dark ? colors.dark.border : undefined }}>
+        <View className="bg-white border border-neutral-200 rounded-xl" style={{ paddingHorizontal: 16, ...(dark ? { backgroundColor: colors.dark.surface } : {}), ...(dark ? { borderColor: colors.dark.border } : {}) }}>
           <ToolRow first icon="tag" title={t('screen.categories')} body={t('overview.categoriesBody')} onPress={() => router.push('/categories')} />
           <ToolRow icon="savings" title={t('screen.savings')} body={t('overview.savingsBody')} onPress={() => router.push('/savings')} />
           <ToolRow icon="book" title={t('bookkeeping.journal')} body={t('overview.journalBody')} onPress={() => router.push('/journal')} />

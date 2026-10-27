@@ -43,9 +43,9 @@ export function BudgetProgress({ percent, target, currency, status, statusKey, b
         accessibilityRole="progressbar"
         accessibilityValue={{ min: 0, max: 100, now: Math.min(percent, 100) }}
         className="overflow-hidden rounded-pill bg-white"
-        style={{ height: 28, justifyContent: 'center', backgroundColor: dark ? colors.dark.surface : undefined }}
+        style={{ height: 28, justifyContent: 'center', ...(dark ? { backgroundColor: colors.dark.surface } : {}) }}
       >
-        <Animated.View className="absolute left-0 top-0 bottom-0 rounded-pill bg-progress-fill" style={[{ minWidth: 56, backgroundColor: dark ? colors.primary[900] : undefined }, fillStyle]} />
+        <Animated.View className="absolute left-0 top-0 bottom-0 rounded-pill bg-progress-fill" style={[{ minWidth: 56, ...(dark ? { backgroundColor: colors.primary[900] } : {}) }, fillStyle]} />
         <View className="flex-row items-center justify-between px-4">
           <Text variant="caption" tone="white">
             {percent}%

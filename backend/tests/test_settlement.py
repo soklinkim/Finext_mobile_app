@@ -206,3 +206,83 @@ def test_reversed_sales_do_not_count_as_credit_sales_or_spikes(monkeypatch):
     sale = entry("s1", "product_sale", "in", pay="later")
     fake.upsert_rows("user-1", "transactions", [sale, reversal_of("x1", sale)])
     assert accounting_router._effective_transactions("user-1") == [reversal_of("x1", sale)]
+
+
+# ---------------------------------------------------------------- write off unpaid amount (spec: Actions)
+
+def write_off(id, settles, amount, note="Customer closed the shop"):
+    return entry(id, "write_off", "out", amount, pay="later", meta={"settlesId": settles}, note=note, reviewFlag=True)
+
+
+def test_write_off_posts_bad_debt_against_receivables():
+    assert lines(write_off("w1", "s1", 2500)) == [("credit", "1100", 2500), ("debit", "6990", 2500)]
+    for bad, reason in ((write_off("w2", "s1", 100, note=" "), "note is required"),
+                        (write_off("w3", "s1", 100) | {"payMethod": "cash", "bankId": "cash"}, "moves no money"),
+                        (write_off("w4", "s1", 100) | {"meta": None}, "which unpaid sale")):
+        try:
+            journal_for(bad, BANKS, {})
+            raise AssertionError("expected a PostingError")
+        except Exception as exc:
+            assert reason in str(exc)
+
+
+def test_write_off_only_clears_what_a_customer_still_owes():
+    sale = entry("s1", "product_sale", "in", pay="later")
+    paid = payment("p1", "s1", 6000)
+    rows = {r["id"]: r for r in (sale, paid)}
+    assert "more than the amount still owed" in relation_errors(write_off("w1", "s1", 5000), {**rows, "w1": write_off("w1", "s1", 5000)})
+    rest = write_off("w2", "s1", 4000)
+    assert relation_errors(rest, {**rows, "w2": rest}) is None
+    assert open_items([sale, paid, rest]) == []
+    # Once written off, no further payment fits, and the sale cannot be reversed until the write-off is.
+    late = payment("p2", "s1", 1)
+    assert "still owed" in relation_errors(late, {**rows, "w2": rest, "p2": late})
+    rev = reversal_of("r1", sale)
+    assert "payments recorded" in relation_errors(rev, {**rows, "w2": rest, "r1": rev})
+    # Supplier bills and cash sales cannot be written off; nor can a write-off settle anything itself.
+    bill = entry("b1", "rent", "out", pay="later")
+    cash_sale = entry("c1", "product_sale", "in")
+    for target in (bill, cash_sale):
+        row = write_off("w3", target["id"], 100)
+        assert "only an unpaid customer sale" in relation_errors(row, {target["id"]: target, "w3": row})
+    on_write_off = payment("p3", "w2", 100, "supplier_payment", "out")
+    assert "same direction" in relation_errors(on_write_off, {**rows, "w2": rest, "p3": on_write_off})
+
+
+def test_reversing_a_write_off_reopens_the_amount():
+    sale = entry("s1", "product_sale", "in", pay="later")
+    cleared = write_off("w1", "s1", 10000)
+    undo = reversal_of("r1", cleared)
+    assert lines(undo) == [("credit", "6990", 10000), ("debit", "1100", 10000)]
+    assert [item["open"] for item in open_items([sale, cleared, undo])] == [10000]
+
+
+def test_statements_after_a_write_off(monkeypatch):
+    from app.routers import accounting as accounting_router
+    fake = FakeDB()
+    monkeypatch.setattr(sync_router, "db", fake)
+    monkeypatch.setattr(accounting_router, "db", fake)
+    app.dependency_overrides[current_user] = lambda: "user-1"
+    client = TestClient(app)
+    try:
+        import time
+        now = int(time.time() * 1000)
+        cash = {"id": "cash", "createdAt": 1, "updatedAt": 1, "deletedAt": None, "syncStatus": "pending",
+                "name": "Cash", "kind": "cash", "logoKey": None}
+        sale = entry("s1", "service_income", "in", pay="later", amount=10000, at=now - 5000)
+        res = client.post("/sync/push", json={"batches": [
+            {"table": "banks", "rows": [cash]},
+            {"table": "transactions", "rows": [sale, payment("p1", "s1", 4000) | {"occurredAt": now - 4000},
+                                               write_off("w1", "s1", 6000) | {"occurredAt": now - 3000},
+                                               write_off("w2", "s1", 1) | {"occurredAt": now - 2000}]},
+        ]}).json()
+        assert [r["id"] for r in res["rejected"]] == ["w2"]
+        report = client.get("/accounting/statements").json()
+        balance = {line["key"]: line["current"] for s in report["balance"]["sections"] for line in s["lines"]}
+        income = {line["key"]: line["current"] for s in report["income"]["sections"] for line in s["lines"]}
+        assert balance["receivables"] == 0 and balance["cash"] == 4000
+        assert income["otherOperating"] == -6000 and income["net"] == 4000
+        assert report["balance"]["check"]["difference"] == 0
+        assert report["cashflow"]["check"]["difference"] == 0
+    finally:
+        app.dependency_overrides.clear()

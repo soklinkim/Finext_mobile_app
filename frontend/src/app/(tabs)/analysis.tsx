@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { BarChartCard } from '@/components/BarChartCard';
 import { AnalysisLoading } from '@/components/AnalysisLoading';
 import { FinancialHealthChart } from '@/components/FinancialHealthChart';
+import { FutureRiskSection } from '@/components/FutureRiskSection';
 import { IncomeExpenseForecastCard } from '@/components/IncomeExpenseForecastCard';
 import { LoanReadinessSection } from '@/components/LoanReadinessSection';
 import { OfflineBanner } from '@/components/OfflineBanner';
@@ -15,7 +16,7 @@ import { TargetCard } from '@/components/TargetRing';
 import { Text } from '@/components/Text';
 import { useAnalysisQuery } from '@/hooks/useAnalysisQuery';
 import { useI18n } from '@/i18n';
-import { getAnalysis, getRatios, getTargets, OnlineRequiredError, type AnalysisPeriod } from '@/services/analysis';
+import { getAnalysis, getRatios, getTargets, type AnalysisPeriod } from '@/services/analysis';
 import { formatMoney } from '@/services/bookkeeping';
 import { colors, radius } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
@@ -63,7 +64,7 @@ export default function Analysis() {
           />
           {analysis.loading && !analysis.data ? <AnalysisLoading mode="performance" /> : null}
           {analysis.noCache ? <EmptyState titleKey="offline.noCache" bodyKey="offline.noCacheBody" icon="wifiOff" /> : null}
-          {analysis.error ? <ErrorState onRetry={analysis.reload} message={analysis.error.message} onlineRequired={analysis.error instanceof OnlineRequiredError} /> : null}
+          {analysis.error ? <ErrorState onRetry={analysis.reload} error={analysis.error} /> : null}
           {analysis.data && analysis.data.labels.length === 0 && <EmptyState titleKey="data.noActivityTitle" bodyKey="data.noActivityBody" />}
           {analysis.data && analysis.data.labels.length > 0 && (
             <>
@@ -104,8 +105,9 @@ export default function Analysis() {
         <View style={{ marginTop: 24, gap: 12 }}>
           {ratios.loading && !ratios.data ? <AnalysisLoading mode="health" /> : null}
           {ratios.noCache ? <EmptyState titleKey="offline.noCache" bodyKey="offline.noCacheBody" icon="wifiOff" /> : null}
-          {ratios.error ? <ErrorState onRetry={ratios.reload} message={ratios.error.message} onlineRequired={ratios.error instanceof OnlineRequiredError} /> : null}
+          {ratios.error ? <ErrorState onRetry={ratios.reload} error={ratios.error} /> : null}
           {ratios.data && ratios.data.length > 0 && <FinancialHealthChart ratios={ratios.data} />}
+          {!ratios.loading && <View style={{ marginTop: 12 }}><FutureRiskSection /></View>}
         </View>
       )}
 

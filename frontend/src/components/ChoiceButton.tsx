@@ -24,7 +24,7 @@ export function ChoiceButton({ label, selected, onPress, flag, flagFallback, onI
       accessibilityState={{ selected }}
       onPress={onPress}
       className={`flex-row items-center justify-center rounded-pill ${selected ? 'bg-primary-900' : 'bg-primary-50'}`}
-      style={[{ height: 84, paddingHorizontal: 14, backgroundColor: dark ? (selected ? colors.primary[900] : colors.dark.surface) : undefined }, shadow.button]}
+      style={[{ height: 84, paddingHorizontal: 14, ...(dark ? { backgroundColor: (selected ? colors.primary[900] : colors.dark.surface) } : {}) }, shadow.button]}
     >
       {(flag || flagFallback) && (
         <View style={{ position: 'absolute', left: 14, width: 60, height: 60, borderRadius: 30, overflow: 'hidden' }}>

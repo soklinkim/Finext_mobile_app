@@ -5,7 +5,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/StateViews';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { useAnalysisQuery } from '@/hooks/useAnalysisQuery';
 import { useI18n } from '@/i18n';
-import { getJournal, OnlineRequiredError } from '@/services/analysis';
+import { getJournal } from '@/services/analysis';
 import { formatMoneyWhole } from '@/services/bookkeeping';
 import { colors } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
@@ -33,7 +33,7 @@ export default function JournalScreen() {
       {query.source === 'cache' && <OfflineBanner fetchedAt={query.fetchedAt} />}
       {query.loading && !query.data ? <LoadingState /> : null}
       {query.noCache ? <EmptyState titleKey="offline.noCache" bodyKey="offline.noCacheBody" icon="wifiOff" /> : null}
-      {query.error ? <ErrorState onRetry={query.reload} message={query.error.message} onlineRequired={query.error instanceof OnlineRequiredError} /> : null}
+      {query.error ? <ErrorState onRetry={query.reload} error={query.error} /> : null}
       {query.data?.length === 0 ? <EmptyState titleKey="journal.empty" bodyKey="journal.body" /> : null}
       <View style={{ gap: 12 }}>
         {query.data?.map((entry) => (

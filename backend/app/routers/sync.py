@@ -1,13 +1,14 @@
 import calendar
 from collections import defaultdict
 from datetime import datetime, timezone
+from app.business_time import BUSINESS_TZ
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import ValidationError
 
 from app import db
 from app.bookkeeping import PostingError, journal_for, loan_account_map, relation_errors
-from app.auth import current_user
+from app.auth import current_sme
 from app.schemas.sync import (
     Bank, Budget, BusinessAsset, Category, OnboardingFinancialEntry,
     PullResponse, PushBatch, PushRequest, PushResponse, RejectedRow, Settings, SyncConflict, Transaction,
@@ -43,8 +44,8 @@ INCOME_STATEMENT_KEYS = {
 
 def _at_least_one_month(start_ms: int, end_ms: int) -> bool:
     try:
-        start = datetime.fromtimestamp(start_ms / 1000, tz=timezone.utc)
-        end = datetime.fromtimestamp(end_ms / 1000, tz=timezone.utc)
+        start = datetime.fromtimestamp(start_ms / 1000, tz=BUSINESS_TZ)
+        end = datetime.fromtimestamp(end_ms / 1000, tz=BUSINESS_TZ)
         year = start.year + (1 if start.month == 12 else 0)
         month = start.month % 12 + 1
         day = min(start.day, calendar.monthrange(year, month)[1])
@@ -104,7 +105,7 @@ def _completed_onboarding_error(settings: Settings, user_id: str) -> str | None:
 
 
 @router.post("/push", response_model=PushResponse)
-def push(req: PushRequest, user_id: str = Depends(current_user)):
+def push(req: PushRequest, user_id: str = Depends(current_sme)):
     accepted: dict[str, list[str]] = {t: [] for t in MODELS}
     rejected: list[RejectedRow] = []
     conflicts: list[SyncConflict] = []
@@ -207,7 +208,7 @@ def push(req: PushRequest, user_id: str = Depends(current_user)):
 
 
 @router.get("/changes", response_model=PullResponse)
-def changes(since: str | None = Query(default=None), user_id: str = Depends(current_user)):
+def changes(since: str | None = Query(default=None), user_id: str = Depends(current_sme)):
     try:
         after = int(since) if since else 0
     except ValueError:

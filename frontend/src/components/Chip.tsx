@@ -22,7 +22,7 @@ export function Chip({ label, selected = false, onPress, disabled }: Props) {
       disabled={disabled}
       hitSlop={6}
       className={`flex-row items-center rounded-pill ${selected ? 'bg-primary-900' : 'bg-white border border-primary-200'} ${disabled ? 'opacity-50' : ''}`}
-      style={[{ paddingHorizontal: 11, paddingVertical: 6, gap: 4, minHeight: 28, backgroundColor: dark ? (selected ? colors.primary[900] : colors.dark.field) : undefined, borderColor: dark ? colors.dark.border : undefined }, selected && shadow.button]}
+      style={[{ paddingHorizontal: 11, paddingVertical: 6, gap: 4, minHeight: 28, ...(dark ? { backgroundColor: (selected ? colors.primary[900] : colors.dark.field) } : {}), ...(dark ? { borderColor: colors.dark.border } : {}) }, selected && shadow.button]}
     >
       {selected && <Icon name="check" size={10} color={colors.white} strokeWidth={3} />}
       <Text variant="caption" tone={selected ? 'white' : 'primary-900'} weight={selected ? 600 : 500} style={{ fontSize: 11.5, lineHeight: 16 }}>

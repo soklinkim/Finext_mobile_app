@@ -61,7 +61,7 @@ export function ScreenShell({
       behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
       keyboardVerticalOffset={0}
     >
-    <View className={`flex-1 ${heroTone === 'tile' ? 'bg-accent-tile' : 'bg-primary-200'}`} style={{ width: '100%', alignSelf: 'stretch', backgroundColor: dark ? colors.dark.hero : undefined }}>
+    <View className={`flex-1 ${heroTone === 'tile' ? 'bg-accent-tile' : 'bg-primary-200'}`} style={{ width: '100%', alignSelf: 'stretch', ...(dark ? { backgroundColor: colors.dark.hero } : {}) }}>
       <StatusBar style={dark ? 'light' : 'dark'} />
       <View style={{ height: insets.top }} />
       {!noHeader && <HeaderBar title={title} back={back} backFallbackHref={backFallbackHref} light={lightHeader} bell={bell} />}

@@ -48,7 +48,7 @@ export function PickerModal<T extends string | number>({ visible, title, options
                     onClose();
                   }}
                   className={`flex-row items-center justify-between px-6 ${selected ? 'bg-primary-50' : ''}`}
-                  style={{ minHeight: 48, backgroundColor: dark && selected ? colors.dark.field : undefined }}
+                  style={{ minHeight: 48, ...(dark && selected ? { backgroundColor: colors.dark.field } : {}) }}
                 >
                   <Text variant="body-lg" tone={selected ? 'primary-900' : 'neutral-900'} weight={selected ? 600 : 400}>
                     {o.label}

@@ -6,6 +6,7 @@
 import { and, desc, eq, gte, isNull, lte, like, or } from 'drizzle-orm';
 import { db, initDatabase, newRowMeta, schema } from '@/db/client';
 import { seedInitialData } from '@/db/seed';
+import { formatInputDate } from '@/lib/format';
 import type { Bank, BusinessAsset, Category, Settings, Transaction } from '@/db/schema';
 import { emitChange } from './events';
 import { getEntryType, type Direction, type GroupId } from './entryTypes';
@@ -93,7 +94,10 @@ export async function completeOnboarding(input: OnboardingInput): Promise<void> 
       .values({ ...newRowMeta(now), ...entry, asOf: entry.asOf ?? input.asOf ?? null, periodStart: entry.periodStart ?? null, periodEnd: entry.periodEnd ?? null })
       .run();
   }
-  await updateSettings({ ...input.profile, startOption: input.startOption, onboardingStatus: 'completed' });
+  // A business starting fresh in Finext begins today; ratios start "after the first complete month" from here.
+  const current = await getSettings();
+  const startOperationDate = input.profile.startOperationDate ?? current.startOperationDate ?? (input.startOption === 'new' ? formatInputDate(now) : null);
+  await updateSettings({ ...input.profile, startOperationDate, startOption: input.startOption, onboardingStatus: 'completed' });
 }
 
 // ---------------------------------------------------------------- reference data
@@ -115,10 +119,133 @@ export async function listCategories(kind?: Category['kind']): Promise<Category[
 }
 
 export async function addCategory(name: string, kind: Category['kind'] = 'expense', icon = 'more'): Promise<Category> {
-  const row = { ...newRowMeta(), name: name.trim(), icon, kind, builtIn: false };
+  const row = { ...newRowMeta(), name: name.trim(), icon, kind, builtIn: false, targetAmount: null, targetCurrency: null };
   db.insert(schema.categories).values(row).run();
   emitChange();
   return row;
+}
+
+/** Rename one of the user's own categories or goals (built-in ones keep their names). */
+export async function renameCategory(id: string, name: string): Promise<void> {
+  db.update(schema.categories)
+    .set({ name: name.trim(), updatedAt: Date.now(), syncStatus: 'pending' })
+    .where(and(eq(schema.categories.id, id), eq(schema.categories.builtIn, false)))
+    .run();
+  emitChange();
+}
+
+/** Delete one of the user's own categories or goals. Tagged entries are kept; lists still show the old name. */
+export async function deleteCategory(id: string): Promise<void> {
+  const now = Date.now();
+  db.update(schema.categories)
+    .set({ deletedAt: now, updatedAt: now, syncStatus: 'pending' })
+    .where(and(eq(schema.categories.id, id), eq(schema.categories.builtIn, false)))
+    .run();
+  emitChange();
+}
+
+export interface CategorySpending {
+  currency: Currency;
+  thisMonth: number;
+  lastMonth: number;
+  /** Every entry tagged with the category, newest first. */
+  entries: TransactionView[];
+}
+
+/** Spending tagged with a category this month and last month (display currency), and its entries. */
+export async function getCategorySpending(categoryId: string): Promise<CategorySpending> {
+  const s = await getSettings();
+  const now = new Date();
+  const thisStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  const lastStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+  const rows = allLive();
+  const rel = relations(rows);
+  let thisMonth = 0;
+  let lastMonth = 0;
+  for (const t of rows) {
+    if (t.categoryId !== categoryId || t.direction !== 'out' || !countsAsIncomeOrSpend(t, rel)) continue;
+    const v = convertMinor(t.amount, t.currency, s.displayCurrency, t.exchangeRate);
+    if (t.occurredAt >= thisStart) thisMonth += v;
+    else if (t.occurredAt >= lastStart) lastMonth += v;
+  }
+  return { currency: s.displayCurrency, thisMonth, lastMonth, entries: await searchTransactions({ categoryId }) };
+}
+
+// ---------------------------------------------------------------- savings goals
+
+/** Marks the money account that holds savings (created on the first "Add to savings"). */
+const SAVINGS_ACCOUNT = 'savings';
+
+export interface SavingsGoal {
+  id: string;
+  name: string;
+  icon: string;
+  builtIn: boolean;
+  /** Minor units in `currency`; null until the owner sets one. */
+  targetAmount: number | null;
+  currency: Currency;
+  /** Total moved into savings for this goal, in `currency`. */
+  saved: number;
+}
+
+/**
+ * Goals with what has been saved for each. Putting money aside is a transfer into the Savings account tagged with
+ * the goal: money moves between the business's own accounts, so profit and the statements are not affected.
+ */
+export async function listSavingsGoals(): Promise<SavingsGoal[]> {
+  const s = await getSettings();
+  const goals = await listCategories('savings');
+  const rows = allLive();
+  const rel = relations(rows);
+  return goals.map((goal) => {
+    const currency = (goal.targetCurrency ?? s.displayCurrency) as Currency;
+    const saved = rows
+      .filter((t) => t.categoryId === goal.id && t.typeId === 'transfer' && !rel.reversed.has(t.id))
+      .reduce((sum, t) => sum + convertMinor(t.amount, t.currency, currency, t.exchangeRate), 0);
+    return { id: goal.id, name: goal.name, icon: goal.icon, builtIn: goal.builtIn, targetAmount: goal.targetAmount ?? null, currency, saved };
+  });
+}
+
+export async function setGoalTarget(id: string, targetMinor: number, currency: Currency): Promise<void> {
+  db.update(schema.categories)
+    .set({ targetAmount: Math.round(targetMinor), targetCurrency: currency, updatedAt: Date.now(), syncStatus: 'pending' })
+    .where(eq(schema.categories.id, id))
+    .run();
+  emitChange();
+}
+
+function savingsAccount(): Bank {
+  const existing = db.select().from(schema.banks)
+    .where(and(isNull(schema.banks.deletedAt), eq(schema.banks.logoKey, SAVINGS_ACCOUNT)))
+    .get();
+  if (existing) return existing;
+  const bank = { ...newRowMeta(), name: 'Savings', kind: 'bank' as const, logoKey: SAVINGS_ACCOUNT };
+  db.insert(schema.banks).values(bank).run();
+  return bank;
+}
+
+export interface SavingsDepositInput {
+  goalId: string;
+  amount: number; // positive minor units
+  currency: Currency;
+  /** The cash / bank / wallet account the money comes from. */
+  fromBankId: string;
+  title: string;
+}
+
+/** Put money aside for a goal: a transfer from the chosen account into the Savings account, tagged with the goal. */
+export async function addToSavings(input: SavingsDepositInput): Promise<AddResult> {
+  const account = savingsAccount();
+  return addTransaction({
+    typeId: 'transfer',
+    amount: input.amount,
+    currency: input.currency,
+    payMethod: 'bank',
+    bankId: input.fromBankId,
+    toBankId: account.id,
+    categoryId: input.goalId,
+    title: input.title,
+  });
 }
 
 export async function listBusinessAssets(): Promise<BusinessAsset[]> {
@@ -144,15 +271,19 @@ export interface TransactionView {
   note: string | null;
   bankName: string | null;
   syncStatus: Transaction['syncStatus'];
-  /** 'reversed' = cancelled by a reversal; 'reversal' / 'payment' = follow-up rows linked to another entry */
-  status: 'reversed' | 'reversal' | 'payment' | null;
-  /** pay-later entries only: amount still owed (0 once fully paid) */
+  /** 'reversed' = cancelled by a reversal; 'reversal' / 'payment' / 'writeOff' = follow-up rows linked to another entry */
+  status: 'reversed' | 'reversal' | 'payment' | 'writeOff' | null;
+  /** pay-later entries only: amount still owed (0 once fully paid or written off) */
   openBalance: number | null;
+  /** pay-later entries only: amount written off because the customer will not pay */
+  writtenOff: number | null;
 }
 
 /** "Mark as paid" and "Reverse" (spec: Actions) are recorded as their own entries linked to the original. */
 export const PAYMENT_TYPES = ['customer_payment', 'supplier_payment'] as const;
 export const REVERSAL_TYPE = 'reversal';
+/** "Write off unpaid amount" (spec: Actions): a customer will not pay. A bad-debt cost; no money moves. */
+export const WRITE_OFF_TYPE = 'write_off';
 
 function metaOf(t: Pick<Transaction, 'meta'>): Record<string, unknown> {
   try {
@@ -163,18 +294,22 @@ function metaOf(t: Pick<Transaction, 'meta'>): Record<string, unknown> {
 }
 
 const isPayment = (t: Pick<Transaction, 'typeId'>) => (PAYMENT_TYPES as readonly string[]).includes(t.typeId);
+/** Payments and write-offs: both reduce what is still owed on a pay-later entry. */
+const isSettlement = (t: Pick<Transaction, 'typeId'>) => isPayment(t) || t.typeId === WRITE_OFF_TYPE;
 
 /** Links between live entries: which are reversed, and how much has been paid against each pay-later entry. */
 function relations(rows: Transaction[]) {
   const reversed = new Set<string>();
   for (const r of rows) if (r.typeId === REVERSAL_TYPE) reversed.add(String(metaOf(r).reversesId ?? ''));
   const paid = new Map<string, number>();
+  const writtenOff = new Map<string, number>();
   for (const r of rows) {
-    if (!isPayment(r) || reversed.has(r.id)) continue;
+    if (!isSettlement(r) || reversed.has(r.id)) continue;
     const settles = String(metaOf(r).settlesId ?? '');
     paid.set(settles, (paid.get(settles) ?? 0) + r.amount);
+    if (r.typeId === WRITE_OFF_TYPE) writtenOff.set(settles, (writtenOff.get(settles) ?? 0) + r.amount);
   }
-  return { reversed, paid };
+  return { reversed, paid, writtenOff };
 }
 type Relations = ReturnType<typeof relations>;
 
@@ -190,6 +325,7 @@ function toView(
 ): TransactionView {
   const cat = t.categoryId ? cats.get(t.categoryId) : undefined;
   const reversed = rel?.reversed.has(t.id) ?? false;
+  const owedOn = t.payMethod === 'later' && !reversed && t.typeId !== REVERSAL_TYPE && t.typeId !== WRITE_OFF_TYPE;
   return {
     id: t.id,
     title: t.title,
@@ -206,8 +342,9 @@ function toView(
     note: t.note,
     bankName: t.bankId ? (banks.get(t.bankId)?.name ?? null) : null,
     syncStatus: t.syncStatus,
-    status: reversed ? 'reversed' : t.typeId === REVERSAL_TYPE ? 'reversal' : isPayment(t) ? 'payment' : null,
-    openBalance: t.payMethod === 'later' && !reversed && t.typeId !== REVERSAL_TYPE ? Math.max(0, t.amount - (rel?.paid.get(t.id) ?? 0)) : null,
+    status: reversed ? 'reversed' : t.typeId === REVERSAL_TYPE ? 'reversal' : isPayment(t) ? 'payment' : t.typeId === WRITE_OFF_TYPE ? 'writeOff' : null,
+    openBalance: owedOn ? Math.max(0, t.amount - (rel?.paid.get(t.id) ?? 0)) : null,
+    writtenOff: owedOn ? (rel?.writtenOff.get(t.id) ?? 0) : null,
   };
 }
 
@@ -407,7 +544,7 @@ export async function getMonthOverview(year: number, month: number): Promise<{ c
 
 export interface EntryDetail {
   entry: TransactionView;
-  /** payments recorded against this pay-later entry, oldest first */
+  /** payments and write-offs recorded against this pay-later entry, oldest first */
   payments: TransactionView[];
   /** the entry that cancelled this one, if any */
   reversal: TransactionView | null;
@@ -425,7 +562,7 @@ export async function getEntryDetail(id: string): Promise<EntryDetail | null> {
   if (!row) return null;
   const view = (r: Transaction) => toView(r, cats, banks, rel);
   const meta = metaOf(row);
-  const payments = rows.filter((r) => isPayment(r) && metaOf(r).settlesId === id).sort((a, b) => a.occurredAt - b.occurredAt).map(view);
+  const payments = rows.filter((r) => isSettlement(r) && metaOf(r).settlesId === id).sort((a, b) => a.occurredAt - b.occurredAt).map(view);
   const reversal = rows.find((r) => r.typeId === REVERSAL_TYPE && metaOf(r).reversesId === id);
   const linkedId = String(meta.settlesId ?? meta.reversesId ?? '');
   const linked = linkedId ? rows.find((r) => r.id === linkedId) : undefined;
@@ -481,6 +618,52 @@ export async function recordPayment(input: PaymentInput): Promise<AddResult> {
     note: null,
     occurredAt: input.occurredAt ?? Date.now(),
     reviewFlag: false,
+    meta: JSON.stringify({ settlesId: original.id }),
+  };
+  db.insert(schema.transactions).values(row).run();
+  emitChange();
+  return { ok: true, id: row.id };
+}
+
+export interface WriteOffInput {
+  entryId: string;
+  amount: number; // minor units, in the original entry's currency
+  note: string;
+  title: string;
+}
+
+/** Write off unpaid amount (spec: Actions) — a customer will not pay. Posts a bad-debt cost; note required. */
+export async function recordWriteOff(input: WriteOffInput): Promise<AddResult> {
+  const rows = allLive();
+  const rel = relations(rows);
+  const original = rows.find((r) => r.id === input.entryId);
+  if (!original || original.payMethod !== 'later' || original.direction !== 'in' || rel.reversed.has(original.id) || isSettlement(original) || original.typeId === REVERSAL_TYPE) {
+    return { ok: false, errors: { amount: 'error.cannotWriteOff' } };
+  }
+  const stillOwed = original.amount - (rel.paid.get(original.id) ?? 0);
+  const errors: ValidationErrors = {};
+  if (!(input.amount > 0)) errors.amount = 'error.amountPositive';
+  else if (input.amount > stillOwed) errors.amount = 'error.payMoreThanOwed';
+  if (!input.note.trim()) errors.note = 'error.required';
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+
+  const row = {
+    ...newRowMeta(),
+    title: input.title,
+    typeId: WRITE_OFF_TYPE,
+    direction: 'out' as Direction,
+    groupId: null,
+    amount: Math.round(input.amount),
+    currency: original.currency,
+    exchangeRate: original.exchangeRate,
+    payMethod: 'later' as const, // no money moves: it clears part of what the customer owed
+    bankId: null,
+    toBankId: null,
+    categoryId: null,
+    counterparty: original.counterparty,
+    note: input.note.trim(),
+    occurredAt: Date.now(),
+    reviewFlag: true,
     meta: JSON.stringify({ settlesId: original.id }),
   };
   db.insert(schema.transactions).values(row).run();
@@ -553,10 +736,15 @@ export interface AddTransactionInput {
     interest?: number;
     installmentAmount?: number;
     repaymentFrequency?: 'weekly' | 'monthly';
+    annualInterestRate?: number;
+    rateType?: 'flat' | 'declining';
+    firstDueDate?: number;
+    /** pay-later entries: days until payment is due */
+    termsDays?: number;
   };
 }
 
-export type ValidationErrors = Partial<Record<'amount' | 'bank' | 'toBank' | 'counterparty' | 'note' | 'payMethod' | 'assetName' | 'usefulLife' | 'lender' | 'interest' | 'date', string>>;
+export type ValidationErrors = Partial<Record<'amount' | 'bank' | 'toBank' | 'counterparty' | 'note' | 'payMethod' | 'assetName' | 'usefulLife' | 'lender' | 'interest' | 'date' | 'term' | 'rate' | 'rateType' | 'firstDue', string>>;
 
 export type AddResult = { ok: true; id: string } | { ok: false; errors: ValidationErrors };
 
@@ -574,6 +762,19 @@ export function validateTransaction(input: AddTransactionInput): ValidationError
   if (type.extraFields.includes('usefulLife') && !(input.meta?.usefulLifeYears && input.meta.usefulLifeYears > 0)) e.usefulLife = 'error.required';
   if (type.extraFields.includes('lender') && !input.meta?.lender?.trim()) e.lender = 'error.required';
   if (input.typeId === 'loan_repayment' && (input.meta?.interest ?? 0) > input.amount) e.interest = 'error.interestTooHigh';
+  if (type.extraFields.includes('term')) {
+    const term = input.meta?.termMonths ?? 0;
+    if (!(Number.isInteger(term) && term >= 1 && term <= 360)) e.term = 'error.termMonths';
+  }
+  if (type.extraFields.includes('repaymentSchedule')) {
+    // AI pipeline spec: rate, rate type and first due date are required so repayments can be scheduled.
+    const rate = input.meta?.annualInterestRate;
+    if (rate === undefined || !(rate >= 0 && rate <= 100)) e.rate = 'error.interestRate';
+    if (!input.meta?.rateType) e.rateType = 'error.required';
+    const firstDue = input.meta?.firstDueDate;
+    if (!firstDue) e.firstDue = 'error.required';
+    else if (firstDue < (input.occurredAt ?? Date.now()) - DAY) e.firstDue = 'error.firstDueBeforeLoan';
+  }
   if (type.direction === 'move') {
     if (!input.bankId) e.bank = 'error.required';
     if (!input.toBankId) e.toBank = 'error.required';

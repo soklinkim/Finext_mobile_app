@@ -33,6 +33,9 @@ class Category(SyncRow):
     icon: str
     kind: Literal["expense", "income", "savings"] = "expense"
     built_in: bool = False
+    # Savings goals only: the amount to save, in minor units, and its currency.
+    target_amount: Optional[int] = Field(default=None, ge=0)
+    target_currency: Optional[Literal["KHR", "USD"]] = None
 
 
 class Transaction(SyncRow):

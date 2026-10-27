@@ -65,7 +65,7 @@ export default function Search() {
             {(['in', 'out'] as const).map((d) => (
               <Pressable key={d} accessibilityRole="radio" accessibilityState={{ selected: report === d }} onPress={() => setReport(d)} className="flex-row items-center" style={{ gap: 8, minHeight: 44 }}>
                 <View className="items-center justify-center" style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: colors.primary[200] }}>
-                  {report === d && <View className="bg-primary-200" style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: dark ? colors.dark.primary : undefined }} />}
+                  {report === d && <View className="bg-primary-200" style={{ width: 10, height: 10, borderRadius: 5, ...(dark ? { backgroundColor: colors.dark.primary } : {}) }} />}
                 </View>
                 <Text variant="body-lg" weight={400} tone="primary-900">
                   {d === 'in' ? t('summary.income') : t('summary.expense')}
