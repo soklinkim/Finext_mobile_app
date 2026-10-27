@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, View } from 'react-native';
+import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ScreenShell } from '@/components/ScreenShell';
 import { StatementTile } from '@/components/StatementTile';
@@ -36,7 +36,8 @@ export default function Statements() {
             }}
           />
         ))}
-        <StatementTile add label={t('stmt.addTemplate')} onPress={() => Alert.alert(t('stmt.addTemplate'), t('common.comingSoon'))} />
+        {/* One PDF for a lender: statements, ratios and the AI risk assessment (replaces the planned 'Add New Template'). */}
+        <StatementTile label={t('pack.tile')} icon="file" selected={selected === 'pack'} onPress={() => { setSelected('pack'); router.push('/loan-pack'); }} />
       </View>
     </ScreenShell>
   );

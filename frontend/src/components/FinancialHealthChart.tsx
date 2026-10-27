@@ -3,6 +3,7 @@ import { Text } from './Text';
 import { colors, radius } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
 import type { RatioSnapshot } from '@/services/analysis';
+import { formatBenchmark, formatRatio } from '@/services/ratioFormat';
 
 type Status = RatioSnapshot['status'];
 
@@ -19,23 +20,6 @@ const GROUPS = [
   { title: 'Efficiency', ids: ['inventory_days', 'receivable_days'] },
   { title: 'Debt & repayment', ids: ['debt_to_equity', 'interest_coverage', 'debt_to_asset', 'dscr'] },
 ];
-
-function formatRatio(ratio: RatioSnapshot): string {
-  if (ratio.value === null) return '—';
-  if (ratio.id.includes('margin') || ratio.id.includes('expense_ratio') || ratio.id === 'revenue_growth') {
-    return `${(ratio.value * 100).toFixed(1)}%`;
-  }
-  if (ratio.id.endsWith('_days')) return `${ratio.value.toFixed(0)} days`;
-  return `${ratio.value.toFixed(2)}x`;
-}
-
-function formatBenchmark(ratio: RatioSnapshot): string {
-  if (ratio.id.includes('margin') || ratio.id.includes('expense_ratio') || ratio.id === 'revenue_growth') {
-    return `${(ratio.benchmark * 100).toFixed(1)}%`;
-  }
-  if (ratio.id.endsWith('_days')) return `${ratio.benchmark.toFixed(0)} days`;
-  return `${ratio.benchmark.toFixed(2)}x`;
-}
 
 function RatioCard({ ratio }: { ratio: RatioSnapshot }) {
   const dark = useAppTheme();

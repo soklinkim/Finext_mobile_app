@@ -4,11 +4,28 @@ import * as Sharing from 'expo-sharing';
 import type { Statement } from '@/services/analysis';
 import { formatMoneyWhole } from '@/services/bookkeeping';
 
-const esc = (value: string) =>
+export const esc = (value: string) =>
   value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-/** A printable page for one statement: formal heading, the table, and the balance / cash flow check. */
-export function statementHtml(statement: Statement, business: string): string {
+/** Print styles for statements (shared with the loan application pack). */
+export const STATEMENT_CSS = `
+    @page { margin: 18mm 16mm; }
+    body { font-family: -apple-system, 'Segoe UI', Roboto, 'Noto Sans Khmer', Arial, sans-serif; color: #111; font-size: 11pt; }
+    .heading { font-weight: 700; line-height: 1.5; margin-bottom: 18px; }
+    .heading div:first-child { font-size: 13pt; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-weight: 600; font-size: 9pt; color: #555; padding: 4px 6px; border-bottom: 1px solid #999; }
+    td { padding: 5px 6px; border-bottom: 1px solid #e3e3e3; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; width: 22%; }
+    .prior { color: #555; }
+    tr.section td { font-weight: 700; padding-top: 14px; border-bottom: none; }
+    tr.subtotal td { font-weight: 600; }
+    tr.total td { font-weight: 700; border-top: 1.5px solid #111; border-bottom: 3px double #111; }
+    .check { font-size: 9pt; color: #555; margin-top: 12px; }
+    .currency { font-size: 9pt; color: #555; margin: -12px 0 12px; }`;
+
+/** One statement: formal heading, the table, and the balance / cash flow check (no page wrapper). */
+export function statementSection(statement: Statement, business: string): string {
   const heading = statement.heading ?? [business.toUpperCase(), statement.title.toUpperCase(), statement.periodLabel.toUpperCase()];
   const twoCols = Boolean(statement.columnHeaders[1]);
   const money = (n: number, showPlus?: boolean) => esc(formatMoneyWhole(n, statement.currency, { showPlus }));
@@ -28,30 +45,22 @@ export function statementHtml(statement: Statement, business: string): string {
   const check = statement.check
     ? `<p class="check">${esc(statement.check.label)}: ${statement.check.difference === 0 ? 'difference 0' : money(statement.check.difference)}</p>`
     : '';
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(heading[1])}</title><style>
-    @page { margin: 18mm 16mm; }
-    body { font-family: -apple-system, 'Segoe UI', Roboto, 'Noto Sans Khmer', Arial, sans-serif; color: #111; font-size: 11pt; }
-    .heading { font-weight: 700; line-height: 1.5; margin-bottom: 18px; }
-    .heading div:first-child { font-size: 13pt; }
-    table { width: 100%; border-collapse: collapse; }
-    th { text-align: left; font-weight: 600; font-size: 9pt; color: #555; padding: 4px 6px; border-bottom: 1px solid #999; }
-    td { padding: 5px 6px; border-bottom: 1px solid #e3e3e3; }
-    .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; width: 22%; }
-    .prior { color: #555; }
-    tr.section td { font-weight: 700; padding-top: 14px; border-bottom: none; }
-    tr.subtotal td { font-weight: 600; }
-    tr.total td { font-weight: 700; border-top: 1.5px solid #111; border-bottom: 3px double #111; }
-    .check { font-size: 9pt; color: #555; margin-top: 12px; }
-    .currency { font-size: 9pt; color: #555; margin: -12px 0 12px; }
-  </style></head><body>
-    <div class="heading">${heading.map((line) => `<div>${esc(line)}</div>`).join('')}</div>
+  return `<div class="heading">${heading.map((line) => `<div>${esc(line)}</div>`).join('')}</div>
     <p class="currency">Amounts in ${esc(statement.currency)}</p>
     <table><thead><tr><th></th>${headers}</tr></thead><tbody>${rows}</tbody></table>
-    ${check}
+    ${check}`;
+}
+
+/** A printable page for one statement. */
+export function statementHtml(statement: Statement, business: string): string {
+  const heading = statement.heading ?? [business, statement.title];
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(heading[1])}</title><style>${STATEMENT_CSS}
+  </style></head><body>
+    ${statementSection(statement, business)}
   </body></html>`;
 }
 
-/** Browser: print the statement page from a hidden frame (expo-print on web would print the whole app). */
+/** Browser: print the page from a hidden frame (expo-print on web would print the whole app). */
 function printOnWeb(html: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const frame = document.createElement('iframe');
@@ -74,16 +83,19 @@ function printOnWeb(html: string): Promise<void> {
 }
 
 /**
- * Download PDF: on a phone, make a PDF and open the share sheet (save to Files, send in a chat…);
+ * Download a page as PDF: on a phone, make a PDF and open the share sheet (save to Files, send in a chat…);
  * in a browser, open the print dialog, where "Save as PDF" is one of the printers.
  */
-export async function exportStatementPdf(statement: Statement, business: string): Promise<void> {
-  const html = statementHtml(statement, business);
+export async function exportPdf(html: string, title: string): Promise<void> {
   if (Platform.OS === 'web') return printOnWeb(html);
   const { uri } = await Print.printToFileAsync({ html });
   if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: statement.title });
+    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: title });
   } else {
     await Print.printAsync({ uri });
   }
+}
+
+export function exportStatementPdf(statement: Statement, business: string): Promise<void> {
+  return exportPdf(statementHtml(statement, business), statement.title);
 }
