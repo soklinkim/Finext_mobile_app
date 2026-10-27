@@ -67,6 +67,8 @@ export function CategoryGrid({ items, addLabel, addTitle, onAdd, onOpen }: Props
       <View className="flex-row flex-wrap justify-between" style={{ rowGap: 24 }}>
         {items.map((c) => tile(c.id, c.name, c.icon, selected === c.id, () => { setSelected(c.id); onOpen?.(c.id); }, false, c))}
         {tile('add', addLabel, 'more', false, () => setOpen(true), true)}
+        {/* Fill the last row to 3 slots, so its tiles line up with the columns above instead of spreading apart. */}
+        {Array.from({ length: (3 - ((items.length + 1) % 3)) % 3 }, (_, i) => <View key={`filler-${i}`} style={{ width: 105 }} />)}
       </View>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)} statusBarTranslucent>
         <Pressable className="flex-1 items-center justify-center px-6" style={{ backgroundColor: tint(colors.shadow, 0.35) }} onPress={() => setOpen(false)}>
