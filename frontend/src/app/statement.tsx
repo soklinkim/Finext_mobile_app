@@ -63,9 +63,15 @@ export default function StatementScreen() {
         {statement && q.data && (
           <>
             {statement.heading ? (
-              <View accessibilityRole="header" style={{ gap: 4 }}>
+              // Formal statement heading, compact: company name, statement title, then the period in lighter type.
+              <View accessibilityRole="header" style={{ gap: 2 }}>
                 {statement.heading.map((line, i) => (
-                  <Text key={i} variant={i === 0 ? 'body-lg' : 'body'} weight={700} tone="primary-900">
+                  <Text
+                    key={i}
+                    variant={i === 0 ? 'body' : i === 1 ? 'body-sm' : 'caption'}
+                    weight={i < 2 ? 700 : 500}
+                    tone={i < 2 ? 'primary-900' : 'neutral-600'}
+                  >
                     {line}
                   </Text>
                 ))}
