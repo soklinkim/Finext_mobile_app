@@ -6,10 +6,12 @@ import { Platform } from 'react-native';
  * serves the bundle (same host, port 8000). EXPO_PUBLIC_API_URL overrides both.
  */
 const hostFromExpo = Constants.expoConfig?.hostUri?.split(':')[0];
+// The relay started by `npm run phone` (see scripts/) listens on another port when the firewall blocks 8000.
+const apiPort = process.env.EXPO_PUBLIC_API_PORT || '8000';
 const defaultApiUrl = Platform.OS === 'web'
   ? 'http://localhost:8000'
   : hostFromExpo
-    ? `http://${hostFromExpo}:8000`
+    ? `http://${hostFromExpo}:${apiPort}`
     : 'http://localhost:8000';
 
 export const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || defaultApiUrl).replace(/\/+$/, '');
