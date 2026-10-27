@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { and, eq } from 'drizzle-orm';
 import { db, schema } from '@/db/client';
-import { API_BASE_URL } from '@/services/apiBase';
+import { API_BASE_URL, LONG_REQUEST_TIMEOUT_MS, REQUEST_TIMEOUT_MS, fetchWithTimeout } from '@/services/apiBase';
 import { SYNCED_TABLES, type SyncedTable } from '@/db/schema';
 import { emitChange } from '@/services/bookkeeping/events';
 import { getSession, refreshSession } from '@/services/auth';
@@ -130,15 +130,17 @@ const tables: Record<SyncedTable, any> = {
 export async function authorizedFetch(path: string, init?: RequestInit): Promise<Response> {
   const session = await getSession();
   if (!session) throw new ApiRequestError(401, 'Please sign in to view your financial reports.');
+  // Uploads, file downloads and sync carry more data; everything else should answer quickly.
+  const long = init?.body instanceof FormData || path.startsWith('/sync') || path.endsWith('/file');
   const send = async (accessToken: string): Promise<Response> => {
     try {
-      return await fetch(`${API_BASE_URL}${path}`, {
+      return await fetchWithTimeout(`${API_BASE_URL}${path}`, {
         ...init,
         headers: {
           Authorization: 'Bearer ' + accessToken,
           ...init?.headers,
         },
-      });
+      }, long ? LONG_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS);
     } catch (error) {
       const detail = error instanceof Error ? `: ${error.message}` : '';
       throw new Error(`Could not reach FINEXT API at ${API_BASE_URL}${detail}`);

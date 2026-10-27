@@ -2,7 +2,7 @@ import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState, Platform } from 'react-native';
 import { createClient, type Session } from '@supabase/supabase-js';
-import { API_BASE_URL } from './apiBase';
+import { API_BASE_URL, fetchWithTimeout } from './apiBase';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const publishableKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -47,7 +47,7 @@ async function bindLocalLedger(userId: string) {
 /** Partner-bank staff use the lender portal. Unknown (e.g. offline) counts as a business owner. */
 async function isLenderAccount(accessToken: string): Promise<boolean> {
   try {
-    const response = await fetch(`${API_BASE_URL}/me`, { headers: { Authorization: 'Bearer ' + accessToken } });
+    const response = await fetchWithTimeout(`${API_BASE_URL}/me`, { headers: { Authorization: 'Bearer ' + accessToken } });
     if (!response.ok) return false;
     return ((await response.json()) as { role?: string }).role === 'lender';
   } catch {

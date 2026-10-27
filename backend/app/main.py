@@ -16,6 +16,9 @@ from app.routers import accounting, documents, lender, loan, sync
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     pool.open()
+    # Load the risk model now (about 2.5 s) rather than on the first Analysis request.
+    from app.risk_model import default_model
+    default_model()
     print("API docs: http://localhost:8000/docs")
     yield
     pool.close()

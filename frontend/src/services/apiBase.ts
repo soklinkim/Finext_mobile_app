@@ -13,3 +13,28 @@ const defaultApiUrl = Platform.OS === 'web'
     : 'http://localhost:8000';
 
 export const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || defaultApiUrl).replace(/\/+$/, '');
+
+/** Most API calls answer in well under a second; uploads, file downloads and sync can take longer on mobile data. */
+export const REQUEST_TIMEOUT_MS = 15_000;
+export const LONG_REQUEST_TIMEOUT_MS = 60_000;
+
+/**
+ * fetch with a time limit. A firewall or an unreachable host often drops the connection without refusing it, and the
+ * phone would then wait a minute or more before failing; this gives up after `timeoutMs` so the screen can say so.
+ */
+export async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = REQUEST_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const outer = init.signal;
+  const forward = () => controller.abort();
+  outer?.addEventListener('abort', forward);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (controller.signal.aborted && !outer?.aborted) throw new Error(`No answer within ${timeoutMs / 1000} seconds`);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    outer?.removeEventListener('abort', forward);
+  }
+}
