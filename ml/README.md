@@ -4,8 +4,8 @@ Implements the training side of the AI pipeline spec, Stage C: four candidate mo
 Random Forest, LightGBM), grouped cross-validation, holdouts, PR-AUC selection with calibration and segment checks,
 SHAP explanations for every candidate, and a model card.
 
-**Only real data is used.** Nothing is simulated or generated. Two public datasets of real company accounts with
-real bankruptcy outcomes:
+**Only real data is used.** Nothing is simulated or generated. Three public datasets of real company accounts with
+real bankruptcy outcomes; the Polish one gives the deployed model, the other two are evidence:
 
 - **Polish companies bankruptcy** (`--data polish`; UCI 365, CC BY 4.0; Tomczak, Zięba et al. 2016): about 5,900
   companies, ratios from their last reported year, bankrupt within one year or not. Only the 23 ratios FINEXT can
@@ -13,8 +13,11 @@ real bankruptcy outcomes:
 - **US Company Bankruptcy Prediction** (`--data us`, the default; sowide/bankruptcy_dataset, CC BY 4.0; Lombardo et
   al. 2022): about 78,700 company-years of US listed companies, 1999–2018, bankrupt within one year or not. Has years,
   so it also gets a time holdout.
+- **Taiwanese bankruptcy** (`--data taiwan`; UCI 572, CC BY 4.0; Liang et al. 2016): 6,819 listed companies,
+  1999–2009, 94 ratios. A **benchmark only**: the publisher rescaled the ratios to 0–1, so they are not in units
+  FINEXT computes and cannot be compared with the other two datasets.
 
-Both are larger companies in other economies than Cambodian MSMEs: describe output as *likely deterioration*, never
+All are larger companies in other economies than Cambodian MSMEs: describe output as *likely deterioration*, never
 as a prediction of loan default.
 
 ## Setup
@@ -31,12 +34,14 @@ Data (not in git):
 
 - `american_bankruptcy_dataset.csv` from https://github.com/sowide/bankruptcy_dataset to `ml/data/raw/us_bankruptcy/`.
 - The zip from https://archive.ics.uci.edu/dataset/365, unpacked to `ml/data/raw/polish_bankruptcy/` (`5year.arff` is used).
+- The zip from https://archive.ics.uci.edu/dataset/572, unpacked to `ml/data/raw/taiwan_bankruptcy/` (`data.csv`).
 
 ## Run
 
 ```sh
 .venv/Scripts/python -m finext_ml.train_and_compare --data polish          # ~10 min
 .venv/Scripts/python -m finext_ml.train_and_compare --data us              # ~40 min
+.venv/Scripts/python -m finext_ml.train_and_compare --data taiwan          # benchmark, ~5 min
 .venv/Scripts/python -m finext_ml.train_and_compare --data polish --quick  # smoke test
 .venv/Scripts/python -m finext_ml.transfer_test                            # train in one country, score the other (~20 min)
 .venv/Scripts/python -m finext_ml.export_model artifacts/<dataset>/<run id> # model for the backend
@@ -102,6 +107,33 @@ put one company in both training and test. Attribute meanings are checked in `te
 (e.g. assets/liabilities = 1/(liabilities/assets) and sales/receivables = 365/receivable days hold in 99.98% of rows).
 60 exact duplicate rows are dropped. The file has no years, so there is no time holdout. In Polish accounting
 "gross profit" (*zysk brutto*) is profit **before tax**, so X19 is the pre-tax margin, not a gross margin.
+
+## The Taiwanese dataset (benchmark)
+
+6,819 companies, 220 bankrupt (3.2%), no duplicates or missing values; debt ratio + net worth/assets = 1 in every
+row. The constant "Net Income Flag" is dropped. The publisher rescaled the ratios to 0–1: in 16 columns otherwise on
+that scale, 578 values up to 1e10 are impossible and become missing; 8 columns mostly above 1 were never rescaled and
+are kept as they are (trees use only the order; Logistic Regression ranks first). No company ids or years: 60/20/20
+split like the Polish data. Altman's formula cannot be applied to rescaled ratios, so the baselines are single-ratio
+rules.
+
+## Three-dataset benchmark: why XGBoost
+
+Same pipeline, tuning budget (30 configurations, 5-fold grouped CV) and selection rule, fixed before the results:
+
+| Dataset | XGBoost | Logistic Regression | Random Forest | LightGBM | Kept |
+|---|---:|---:|---:|---:|---|
+| **Poland** (deployed) | **0.635** | 0.587 | 0.527 | 0.605 | XGBoost: clearly best |
+| US | 0.077 | 0.045 | 0.081 | 0.061 | XGBoost: Random Forest +0.004, below the 0.02 margin |
+| Taiwan | 0.391 | 0.402 | 0.398 | 0.433 | XGBoost: LightGBM +0.041 and steadier across folds, but worse on its weakest size group (0.199 vs 0.269) |
+
+CV PR-AUC. Gradient boosting (XGBoost or LightGBM) is at or near the top on every dataset, and XGBoost is clearly
+best on the one closest to FINEXT's use. Where a challenger scored higher, the gain was within noise (fold spread
+±0.02–0.09) or came with a weaker result for one group of companies, which the rule does not allow. On Taiwan's
+1,364 unseen companies XGBoost scores PR-AUC 0.414, ROC-AUC 0.923, and catches 82% of bankruptcies, against 0.310 for
+the best single-ratio rule. XGBoost was not tuned further to win the benchmark: that would be fitting the test to
+the answer. What else decides for it: native missing values, monotonic (finance-direction) constraints, and exact
+SHAP explanations, which the app shows as reasons.
 
 ## Transfer test
 

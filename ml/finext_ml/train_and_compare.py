@@ -2,6 +2,7 @@
 
     python -m finext_ml.train_and_compare --data us          # US listed companies, bankruptcy within a year (real data)
     python -m finext_ml.train_and_compare --data polish      # Polish companies, bankruptcy within a year (real data)
+    python -m finext_ml.train_and_compare --data taiwan      # Taiwanese companies: benchmark only (rescaled ratios)
     python -m finext_ml.train_and_compare --quick ...        # small tuning budget, for a smoke test
 
 Only real data is used for training. Each dataset brings its own splits (no business and no later period leaks into
@@ -271,6 +272,9 @@ def run(data: Dataset, n_iter: int, n_folds: int, out_dir: Path) -> dict:
 
 
 def load(name: str) -> Dataset:
+    if name == "taiwan":
+        from finext_ml.data import taiwan_bankruptcy_dataset
+        return taiwan_bankruptcy_dataset.dataset()
     if name == "polish":
         from finext_ml.data import polish_bankruptcy_dataset
         return polish_bankruptcy_dataset.dataset()
@@ -280,7 +284,7 @@ def load(name: str) -> Dataset:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--data", choices=["us", "polish"], default="us")
+    parser.add_argument("--data", choices=["us", "polish", "taiwan"], default="us")
     parser.add_argument("--quick", action="store_true", help="2 configurations per model and 3 folds")
     parser.add_argument("--iterations", type=int, default=30, help="configurations tried per model (same budget for all)")
     parser.add_argument("--out", type=Path, default=ARTIFACTS)
