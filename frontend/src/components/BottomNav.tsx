@@ -17,9 +17,9 @@ const ITEMS: { key: NavKey; icon: IconName; href: string; label: TKey }[] = [
   { key: 'profile', icon: 'user', href: '/profile', label: 'nav.profile' },
 ];
 
-export const NAV_HEIGHT = 108;
+export const NAV_HEIGHT = 80;
 
-/** §6.15 — primary-50 container, top corners 60, active item is a 58 × 58 primary-900 rounded square. */
+/** §6.15 — primary-50 container (80 high, compacted from the spec's 108), rounded top corners, active item is a 44 × 38 primary-900 rounded square. */
 export function BottomNav({ active }: { active: NavKey }) {
   const router = useRouter();
   const { t } = useI18n();
@@ -40,9 +40,9 @@ export function BottomNav({ active }: { active: NavKey }) {
             accessibilityState={{ selected: isActive }}
             onPress={() => !isActive && router.navigate(item.href as never)}
             className="items-center justify-center"
-            style={{ flex: 1, minWidth: 0, maxWidth: 90, height: 76, gap: 4 }}
+            style={{ flex: 1, minWidth: 0, maxWidth: 90, height: 64, gap: 3 }}
           >
-            <View className={`items-center justify-center rounded-md ${isActive ? 'bg-primary-900' : ''}`} style={{ width: 46, height: 44 }}>
+            <View className={`items-center justify-center rounded-md ${isActive ? 'bg-primary-900' : ''}`} style={{ width: 44, height: 38 }}>
               <Icon name={item.icon} size={24} strokeWidth={1.7} color={isActive ? colors.white : dark ? colors.dark.primary : colors.primary[900]} />
             </View>
             <Text variant="micro" weight={isActive ? 700 : 500} tone={isActive ? 'primary-900' : 'neutral-900'} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={{ width: '100%', textAlign: 'center', fontSize: 10, lineHeight: 14 }}>
