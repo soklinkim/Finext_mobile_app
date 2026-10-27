@@ -119,10 +119,133 @@ export async function listCategories(kind?: Category['kind']): Promise<Category[
 }
 
 export async function addCategory(name: string, kind: Category['kind'] = 'expense', icon = 'more'): Promise<Category> {
-  const row = { ...newRowMeta(), name: name.trim(), icon, kind, builtIn: false };
+  const row = { ...newRowMeta(), name: name.trim(), icon, kind, builtIn: false, targetAmount: null, targetCurrency: null };
   db.insert(schema.categories).values(row).run();
   emitChange();
   return row;
+}
+
+/** Rename one of the user's own categories or goals (built-in ones keep their names). */
+export async function renameCategory(id: string, name: string): Promise<void> {
+  db.update(schema.categories)
+    .set({ name: name.trim(), updatedAt: Date.now(), syncStatus: 'pending' })
+    .where(and(eq(schema.categories.id, id), eq(schema.categories.builtIn, false)))
+    .run();
+  emitChange();
+}
+
+/** Delete one of the user's own categories or goals. Tagged entries are kept; lists still show the old name. */
+export async function deleteCategory(id: string): Promise<void> {
+  const now = Date.now();
+  db.update(schema.categories)
+    .set({ deletedAt: now, updatedAt: now, syncStatus: 'pending' })
+    .where(and(eq(schema.categories.id, id), eq(schema.categories.builtIn, false)))
+    .run();
+  emitChange();
+}
+
+export interface CategorySpending {
+  currency: Currency;
+  thisMonth: number;
+  lastMonth: number;
+  /** Every entry tagged with the category, newest first. */
+  entries: TransactionView[];
+}
+
+/** Spending tagged with a category this month and last month (display currency), and its entries. */
+export async function getCategorySpending(categoryId: string): Promise<CategorySpending> {
+  const s = await getSettings();
+  const now = new Date();
+  const thisStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  const lastStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+  const rows = allLive();
+  const rel = relations(rows);
+  let thisMonth = 0;
+  let lastMonth = 0;
+  for (const t of rows) {
+    if (t.categoryId !== categoryId || t.direction !== 'out' || !countsAsIncomeOrSpend(t, rel)) continue;
+    const v = convertMinor(t.amount, t.currency, s.displayCurrency, t.exchangeRate);
+    if (t.occurredAt >= thisStart) thisMonth += v;
+    else if (t.occurredAt >= lastStart) lastMonth += v;
+  }
+  return { currency: s.displayCurrency, thisMonth, lastMonth, entries: await searchTransactions({ categoryId }) };
+}
+
+// ---------------------------------------------------------------- savings goals
+
+/** Marks the money account that holds savings (created on the first "Add to savings"). */
+const SAVINGS_ACCOUNT = 'savings';
+
+export interface SavingsGoal {
+  id: string;
+  name: string;
+  icon: string;
+  builtIn: boolean;
+  /** Minor units in `currency`; null until the owner sets one. */
+  targetAmount: number | null;
+  currency: Currency;
+  /** Total moved into savings for this goal, in `currency`. */
+  saved: number;
+}
+
+/**
+ * Goals with what has been saved for each. Putting money aside is a transfer into the Savings account tagged with
+ * the goal: money moves between the business's own accounts, so profit and the statements are not affected.
+ */
+export async function listSavingsGoals(): Promise<SavingsGoal[]> {
+  const s = await getSettings();
+  const goals = await listCategories('savings');
+  const rows = allLive();
+  const rel = relations(rows);
+  return goals.map((goal) => {
+    const currency = (goal.targetCurrency ?? s.displayCurrency) as Currency;
+    const saved = rows
+      .filter((t) => t.categoryId === goal.id && t.typeId === 'transfer' && !rel.reversed.has(t.id))
+      .reduce((sum, t) => sum + convertMinor(t.amount, t.currency, currency, t.exchangeRate), 0);
+    return { id: goal.id, name: goal.name, icon: goal.icon, builtIn: goal.builtIn, targetAmount: goal.targetAmount ?? null, currency, saved };
+  });
+}
+
+export async function setGoalTarget(id: string, targetMinor: number, currency: Currency): Promise<void> {
+  db.update(schema.categories)
+    .set({ targetAmount: Math.round(targetMinor), targetCurrency: currency, updatedAt: Date.now(), syncStatus: 'pending' })
+    .where(eq(schema.categories.id, id))
+    .run();
+  emitChange();
+}
+
+function savingsAccount(): Bank {
+  const existing = db.select().from(schema.banks)
+    .where(and(isNull(schema.banks.deletedAt), eq(schema.banks.logoKey, SAVINGS_ACCOUNT)))
+    .get();
+  if (existing) return existing;
+  const bank = { ...newRowMeta(), name: 'Savings', kind: 'bank' as const, logoKey: SAVINGS_ACCOUNT };
+  db.insert(schema.banks).values(bank).run();
+  return bank;
+}
+
+export interface SavingsDepositInput {
+  goalId: string;
+  amount: number; // positive minor units
+  currency: Currency;
+  /** The cash / bank / wallet account the money comes from. */
+  fromBankId: string;
+  title: string;
+}
+
+/** Put money aside for a goal: a transfer from the chosen account into the Savings account, tagged with the goal. */
+export async function addToSavings(input: SavingsDepositInput): Promise<AddResult> {
+  const account = savingsAccount();
+  return addTransaction({
+    typeId: 'transfer',
+    amount: input.amount,
+    currency: input.currency,
+    payMethod: 'bank',
+    bankId: input.fromBankId,
+    toBankId: account.id,
+    categoryId: input.goalId,
+    title: input.title,
+  });
 }
 
 export async function listBusinessAssets(): Promise<BusinessAsset[]> {

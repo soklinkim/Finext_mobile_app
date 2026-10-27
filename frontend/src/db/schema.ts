@@ -31,6 +31,9 @@ export const categories = sqliteTable('categories', {
   icon: text('icon').notNull(),
   kind: text('kind', { enum: ['expense', 'income', 'savings'] }).notNull().default('expense'),
   builtIn: integer('built_in', { mode: 'boolean' }).notNull().default(false),
+  // Savings goals only: the amount to save (minor units) and its currency.
+  targetAmount: integer('target_amount'),
+  targetCurrency: text('target_currency', { enum: ['KHR', 'USD'] }),
 });
 
 /**

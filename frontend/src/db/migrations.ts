@@ -115,6 +115,10 @@ const MIGRATIONS: string[] = [
       AND NOT EXISTS (SELECT 1 FROM business_assets WHERE bank_id = banks.id AND deleted_at IS NULL)
       AND NOT EXISTS (SELECT 1 FROM transactions WHERE (bank_id = banks.id OR to_bank_id = banks.id) AND deleted_at IS NULL);
   `,
+  `
+  ALTER TABLE categories ADD COLUMN target_amount INTEGER;
+  ALTER TABLE categories ADD COLUMN target_currency TEXT;
+  `,
 ];
 
 export function runMigrations(sqlite: SQLiteDatabase): void {
