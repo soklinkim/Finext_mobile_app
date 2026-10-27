@@ -48,11 +48,22 @@ def test_capacity_is_profit_before_depreciation_less_tax_and_drawings():
     assert capacity["affordableMonthlyInstalment"] == pytest.approx(500_000 / risk.TARGET_DSCR)
 
 
+DECEMBER_REPAYMENT = entry("rep-dec", "loan_repayment", "out", 100_000, meta={"loanName": "ABA", "interest": 0}, at=on(2025, 12, 10))
+
+
 def test_scheduled_instalments_set_the_dscr():
-    # 1,200,000 over 12 months at 0%: 100,000 a month, still running after December.
-    capacity = assess(shop(loan={"amount": 1_200_000, "at": on(2025, 11, 10)}))["debtCapacity"]
+    # 1,200,000 over 12 months at 0%: 100,000 a month from December, repaid on time, still running after December.
+    capacity = assess(shop(loan={"amount": 1_200_000, "at": on(2025, 11, 10)}) + [DECEMBER_REPAYMENT])["debtCapacity"]
     assert capacity["existingMonthlyInstalments"] == pytest.approx(100_000)
     assert capacity["dscr"] == pytest.approx(5.0) and capacity["level"] == "low"
+
+
+def test_missed_instalments_are_high_risk():
+    # The same loan with December's instalment not paid.
+    capacity = assess(shop(loan={"amount": 1_200_000, "at": on(2025, 11, 10)}))["debtCapacity"]
+    assert capacity["level"] == "high"
+    missed = next(r for r in capacity["reasons"] if r["code"] == "instalments_missed")
+    assert missed["params"] == {"due": 100_000, "paid": 0}
 
 
 def test_a_loan_the_business_cannot_cover_is_high_risk():

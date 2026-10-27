@@ -379,12 +379,14 @@ def _loan_features(transactions: list[dict], currency: str, rate: int, end: date
     due_14, missing = _debt_service(known, currency, rate, end, end + timedelta(days=14))
     next_end = _month_bounds(_month_index(end) + 1)[0]
     due_next_month, _ = _debt_service(known, currency, rate, end, next_end)
+    due_12m, _ = _debt_service(known, currency, rate, end, _month_bounds(_month_index(end) + 12)[0])
     six_months_ago = _ms(_month_bounds(_month_index(end) - 6)[0])
     new = [tx for tx, _, _ in loans if tx["occurredAt"] >= six_months_ago]
     return {
         "active_loans": active,
         "instalments_due_14d": None if missing else due_14,
         "debt_service_next_month": None if missing else due_next_month,
+        "instalments_due_12m": None if missing else due_12m,
         "new_loans_6m": len(new),
         "new_borrowing_6m": sum(_convert(tx["amount"], tx["currency"], currency, tx.get("exchangeRate", rate)) for tx in new),
     }

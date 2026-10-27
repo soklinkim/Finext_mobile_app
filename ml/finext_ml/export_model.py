@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[2] / "backend"))
 from app.risk_model import RiskModel  # noqa: E402,F401  (the backend's scorer)
 
-RISK_BANDS = {"low": 0.30, "high": 0.60}  # spec C5 proposal: low < 0.30 <= moderate <= 0.60 < high
+from finext_ml.evaluation.evaluation_metrics import RISK_BANDS  # noqa: E402
 
 
 def export(run_dir: str | Path) -> Path:

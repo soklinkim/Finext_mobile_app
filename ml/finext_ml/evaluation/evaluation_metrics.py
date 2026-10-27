@@ -54,8 +54,14 @@ def at_threshold(y, p, threshold: float) -> dict:
             "accuracy": float((tp + tn) / len(predicted))}
 
 
-def risk_bands(y, p, low: float = 0.30, high: float = 0.60) -> dict:
-    """Spec C5 example bands (proposed, not final): observed failure rate in each band."""
+# Risk levels shown to users: low < 10% <= moderate <= 30% < high. The spec's proposal (30% / 60%) labelled a 16-28%
+# chance "low" although only 7% of training companies failed. Chosen on validation companies: about 1% of "low",
+# 16% of "moderate" (twice the average) and 74% of "high" failed; the company holdout confirmed it (2%, 14%, 67%).
+RISK_BANDS = {"low": 0.10, "high": 0.30}
+
+
+def risk_bands(y, p, low: float = RISK_BANDS["low"], high: float = RISK_BANDS["high"]) -> dict:
+    """Observed failure rate in each risk level."""
     y, p = np.asarray(y), np.asarray(p)
     bands = {"low": p < low, "moderate": (p >= low) & (p <= high), "high": p > high}
     return {name: {"count": int(mask.sum()), "observed_rate": float(y[mask].mean()) if mask.any() else None}

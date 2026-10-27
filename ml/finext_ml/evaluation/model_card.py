@@ -1,6 +1,8 @@
 """Model card for a training run (spec C5b: all four models' results, the selection, and the limitations)."""
 from __future__ import annotations
 
+from finext_ml.evaluation.evaluation_metrics import RISK_BANDS
+
 NAMES = {"xgboost": "XGBoost", "logistic_regression": "Logistic Regression", "random_forest": "Random Forest", "lightgbm": "LightGBM"}
 
 
@@ -89,7 +91,7 @@ def write(r: dict) -> str:
                      f"{c['fp']} false alarms, {c['tn']} correctly left alone.")
     for name, h in r["holdout"].items():
         bands = h["risk_bands"]
-        lines.append(f"\n{name.replace('_', ' ').capitalize()} risk bands (spec proposal: low < 0.30 ≤ moderate ≤ 0.60 < high): "
+        lines.append(f"\n{name.replace('_', ' ').capitalize()} risk levels (low < {RISK_BANDS['low']:.0%} ≤ moderate ≤ {RISK_BANDS['high']:.0%} < high): "
                      + "; ".join(f"{band} {b['count']:,} rows, {_f(b['observed_rate'], 2) if b['observed_rate'] is not None else '—'} observed"
                                  for band, b in bands.items()) + ".")
     lines += ["", "95% intervals (bootstrap over businesses, 500 draws) and the spread over "
@@ -133,7 +135,8 @@ def write(r: dict) -> str:
     for name, top in r["shap_global"].items():
         lines.append(f"- **{NAMES[name]}**: " + "; ".join(item["label"] for item in top[:5]))
     lines += ["", "## Limitations", *[f"- {line}" for line in card["limitations"]],
-              "- Thresholds and risk bands (0.30 / 0.60) are the spec's proposals, not final.",
+              f"- Risk levels ({RISK_BANDS['low']:.0%} / {RISK_BANDS['high']:.0%}) were chosen on validation companies for a 7% failure "
+              "rate; recheck them when FINEXT has its own outcomes.",
               "",
               f"Run {r['run_id']}, {r['minutes']} min. Seed {r['seed']}. " + ", ".join(f"{k} {v}" for k, v in r["versions"].items()) + "."]
     return "\n".join(lines) + "\n"

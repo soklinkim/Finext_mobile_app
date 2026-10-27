@@ -23,11 +23,13 @@ FEATURES = [
 FLOWS = ("revenue", "cogs", "operating_expenses", "depreciation", "ebit", "interest", "tax", "net_profit")
 
 MISSING_TEXT = {
-    "no_assets": "no assets recorded yet", "no_liabilities": "no bills or loans owed",
+    "no_assets": "no assets recorded yet", "negative_assets": "recorded assets are below zero (check cash and entries)",
+    "no_liabilities": "no bills or loans owed",
     "no_short_term_liabilities": "no short-term bills or loans", "no_sales": "no sales in the last 12 months",
     "no_costs": "no cost of goods in the last 12 months", "no_expenses": "no expenses in the last 12 months",
     "no_interest": "no interest paid", "no_equity": "owner's equity is zero",
-    "not_yet_available": "needs 24 months of records (this year against last year)",
+    "no_interest_loss": "operating at a loss (no interest paid)", "no_liabilities_loss": "making a loss (no debts owed)",
+    "not_yet_available": "under 2 years of records (assumed no change)",
 }
 
 
@@ -56,13 +58,20 @@ def risk_features(snapshots: list[dict]) -> dict:
     values: dict[str, float | None] = {}
     reasons: dict[str, str] = {}
 
-    def ratio(name: str, numerator: float, denominator: float, reason: str, scale_by: float = 1) -> None:
-        if denominator == 0:
-            values[name], reasons[name] = None, reason
+    def ratio(name: str, numerator: float, denominator: float, reason: str, scale_by: float = 1, signed: bool = False) -> None:
+        """Denominators must be positive (assets, sales, bills), as in the training data; below zero the ratio's
+        sign flips and a loss would read as a profit. Only equity may be negative (`signed`)."""
+        if denominator == 0 or (denominator < 0 and not signed):
+            values[name] = None
+            reasons[name] = "negative_assets" if denominator < 0 and reason == "no_assets" else reason
         else:
             values[name] = numerator / denominator * scale_by
 
-    ta, tl, cl, ca = b["total_assets"], b["total_liabilities"], b["current_liabilities"], b["current_assets"]
+    # The part of long-term loans due within 12 months is a short-term debt in the training data's accounts.
+    long_term = b["total_liabilities"] - b["current_liabilities"]
+    current_portion = min(long_term, b.get("instalments_due_12m") or 0)
+    ta, tl, ca = b["total_assets"], b["total_liabilities"], b["current_assets"]
+    cl = b["current_liabilities"] + current_portion
     sales, cogs, equity = year["revenue"], year["cogs"], b["equity"]
     ratio("net_profit_to_assets", year["net_profit"], ta, "no_assets")                         # X1
     ratio("liabilities_to_assets", tl, ta, "no_assets")                                        # X2
@@ -88,7 +97,7 @@ def risk_features(snapshots: list[dict]) -> dict:
     ratio("quick_ratio", ca - b["inventory"], cl, "no_short_term_liabilities")                 # X46
     ratio("short_term_liabilities_to_assets", cl, ta, "no_assets")                             # X51
     ratio("costs_to_sales", cogs + year["operating_expenses"] + year["interest"], sales, "no_sales")  # X58
-    ratio("long_term_liabilities_to_equity", tl - cl, equity, "no_equity")                     # X59
+    ratio("long_term_liabilities_to_equity", tl - cl, equity, "no_equity", signed=True)        # X59
 
     # X21: sales over the last 12 months against the 12 before, both complete.
     earlier = [s for s in snapshots[-2 * YEAR_MONTHS:-YEAR_MONTHS] if _usable(s)]

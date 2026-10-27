@@ -34,7 +34,8 @@ Bookkeeping writes go to local SQLite first with `syncStatus = 'pending'`. The c
 - `model`: the chance of serious financial distress within 12 months, from the XGBoost model trained on real company
   accounts in `ml/` (files in `app/risk_model_files/`, scored by `app/risk_model.py` with `xgboost` only). Inputs are
   23 annual ratios from the last 12 complete months (`app/risk_features.py`); needs 6 months, low confidence under 12.
-  Returns the probability, a level (low < 30% ≤ moderate ≤ 60% < high) and the top 5 reasons in plain words.
+  Returns the probability, a level (low < 10% ≤ moderate ≤ 30% < high; chosen for a 7% failure rate in training)
+  and the top 5 reasons in plain words.
 - `debtCapacity`: future over-indebtedness. Money available for repayments each month (operating profit before
   depreciation, less tax and the owner's usual drawings; the lower of the 3- and 12-month averages) against scheduled
   instalments for the next 3 months (DSCR, target 1.25), the cash flow trend, instalments due in 14 days against

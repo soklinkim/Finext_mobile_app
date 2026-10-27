@@ -125,6 +125,21 @@ Every run reports these in the model card:
 | Bootstrap intervals, seed spread | trusting one lucky number | 95% intervals resampling whole companies; the winner refitted with 5 seeds |
 | Simple-rule baselines | a model that adds nothing | Altman's Z-score (the textbook bankruptcy formula) and "loss-making this year" |
 | Transfer test | a model that only works where it was trained | train in Poland, score the US, and the other way round |
+| Behaviour test on FINEXT books | nonsense answers in the app | 18 hand-written MSME profiles run through the real backend pipeline (`backend/tests/test_risk_behaviour.py`) |
+
+**Finance-direction constraints.** Profitability, liquidity and debt ratios, plus receivable days and short-term
+bills in days of cost of goods, can only move risk in the direction finance expects. Adding the two "days" constraints
+raised CV PR-AUC (0.630 → 0.635) and narrowed the gap (0.096 → 0.093). Inventory days and sales-to-assets were tried
+too and left out: each cost accuracy on unseen companies (sales-to-assets: 0.635 → 0.616).
+
+**Risk levels:** low < 10% ≤ moderate ≤ 30% < high, chosen on validation companies for the 7% failure rate (about 1%,
+16% and 74% of each level failed; the company holdout confirmed 2%, 14%, 67%).
+
+**Behaviour test findings** (all fixed, and now tests): recorded assets below zero flipped the sign of every ratio over
+assets; the part of long-term loans due within a year was not a short-term debt; a loss-making business with no debt
+read "no interest paid"; missed instalments were not detected. **Known limitation:** the model weighs late customers
+lightly, and busy shops (high sales relative to assets) lose a little; the debt capacity check names late customers
+and suppliers instead.
 
 ## Next steps toward the spec
 

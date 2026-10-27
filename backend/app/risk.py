@@ -21,11 +21,12 @@ from app import loan_schedule
 from app.bookkeeping import REVERSAL, reversed_ids
 from app.business_time import BUSINESS_TZ
 from app.risk_features import MISSING_TEXT, risk_features
-from app.snapshots import _debt_service, monthly_snapshots
+from app.snapshots import _convert, _debt_service, _ms, monthly_snapshots
 
 TARGET_DSCR = 1.25      # money for repayments should cover instalments 1.25 times: a safety margin [Decision: confirm with finance]
 MIN_DSCR = 1.0          # below this the instalments are not covered
 CAPACITY_MONTHS = 3     # minimum complete months to judge repayment capacity
+MISSED_SHARE = 0.9      # repayments below 90% of the instalments due over 3 months count as missed
 NOTE = ("Indicative, not a credit decision. The distress score comes from a model trained on real company accounts "
         "(Poland); Cambodian MSMEs differ, so read it as a level (low / moderate / high), not an exact chance.")
 
@@ -103,27 +104,31 @@ def with_loan(snapshots: list[dict], loan: dict) -> list[dict]:
     return out
 
 
-def model_inputs(inputs: dict, ranges: dict[str, dict]) -> tuple[dict, dict[str, str]]:
-    """What the model is given, and the note shown for each gap.
+def model_inputs(inputs: dict, ranges: dict[str, dict]) -> tuple[dict, dict[str, str], dict[str, str]]:
+    """What the model is given, the note shown for each gap, and each gap's reason code (for translation).
 
     In the training data a missing ratio usually meant trouble (no sales last year: 96% went bankrupt; no interest
     figure: 32%). In FINEXT many gaps are harmless, and the reason is known: no bills owed, no interest paid, under
     two years of records. Those get the value a healthy company has in training (the healthy end of its range, or
     "no change" for sales growth) instead of "missing". Gaps with no harmless reading stay missing."""
-    f, reasons = dict(inputs["features"]), inputs["reasons"]
+    f, reasons = dict(inputs["features"]), dict(inputs["reasons"])
     notes = {name: MISSING_TEXT.get(code, code) for name, code in reasons.items()}
-    profitable = (f.get("ebit_to_assets") if f.get("ebit_to_assets") is not None else f.get("operating_margin") or 0) >= 0
-    for name, code in reasons.items():
+    margin = f.get("operating_margin")
+    profitable = (margin if margin is not None else f.get("ebit_to_assets") or 0) >= 0
+    for name, code in list(reasons.items()):
         if name not in ranges:
             continue
         if code == "no_short_term_liabilities":                  # current, quick and cash ratio: nothing to cover
             f[name] = ranges[name]["high"]
         elif code in ("no_interest", "no_liabilities"):          # coverage with nothing to cover: as strong as profit
             f[name] = ranges[name]["high"] if profitable else ranges[name]["low"]
+            if not profitable:  # what raises the risk is the loss, not the missing interest or debt
+                reasons[name] = f"{code}_loss"
+                notes[name] = MISSING_TEXT[f"{code}_loss"]
         elif name == "sales_growth" and code == "not_yet_available":
             f[name] = 1.0
-            notes[name] = "under 2 years of records (assumed no change)"
-    return f, notes
+            notes[name] = MISSING_TEXT["not_yet_available"]
+    return f, notes, reasons
 
 
 def score(snapshots: list[dict], model=None) -> dict:
@@ -135,10 +140,10 @@ def score(snapshots: list[dict], model=None) -> dict:
     if model is None:
         from app.risk_model import default_model
         model = default_model()
-    features, notes = model_inputs(inputs, model.meta.get("range", {}))
+    features, notes, reasons = model_inputs(inputs, model.meta.get("range", {}))
     result = model.score([features], notes=notes)[0]
     for driver in result["top_drivers"]:  # the reason code, so the app can say it in the user's language
-        driver["reason"] = inputs["reasons"].get(driver["feature"])
+        driver["reason"] = reasons.get(driver["feature"])
         driver["value"] = inputs["features"][driver["feature"]]  # the business's own figure, not a substitute
     return {"available": True, "asOf": inputs["asOf"], "months": inputs["months"], "confidence": inputs["confidence"],
             "probability": result["probability"], "riskClass": result["risk_class"], "alert": result["alert"],
@@ -166,6 +171,10 @@ def debt_capacity(snapshots: list[dict], transactions: list[dict], currency: str
     start = datetime.fromtimestamp((snapshots[-1]["monthEnd"] + 1) / 1000, tz=BUSINESS_TZ)
     due, schedule_missing = _debt_service(transactions, currency, rate, start, start + timedelta(days=91))
     existing = due / 3
+    past = start - timedelta(days=91)
+    due_past, _ = _debt_service(transactions, currency, rate, past, start)
+    paid_past = sum(_convert(tx["amount"], tx["currency"], currency, tx.get("exchangeRate", rate)) for tx in transactions
+                    if tx["typeId"] == "loan_repayment" and _ms(past) <= tx["occurredAt"] < _ms(start))
     revenue = statistics.fmean(s["features"]["revenue"] for s in usable)
 
     def dscr(instalments):
@@ -186,6 +195,10 @@ def debt_capacity(snapshots: list[dict], transactions: list[dict], currency: str
     elif current is not None and current < TARGET_DSCR:
         raise_to("moderate")
         reasons.append(_reason("dscr_thin", "Repayments take nearly all the money available for them.", dscr=current))
+    if due_past > 0 and paid_past < MISSED_SHARE * due_past:
+        raise_to("high")
+        reasons.append(_reason("instalments_missed", "Loan repayments recorded in the last 3 months are less than the "
+                               "instalments that were due.", due=due_past, paid=paid_past))
     if capacity <= 0 and (existing > 0 or proposed):
         raise_to("high")
         reasons.append(_reason("no_capacity", "After costs, tax and the owner's drawings, nothing is left for repayments."))
@@ -194,6 +207,10 @@ def debt_capacity(snapshots: list[dict], transactions: list[dict], currency: str
         raise_to("high")
         reasons.append(_reason("cash_short_for_instalments", "Instalments due in the next 14 days are more than the cash on hand.",
                                due=due_14, cash=latest["cash"]))
+    if latest["cash"] < 0:
+        raise_to("moderate")
+        reasons.append(_reason("cash_below_zero", "Recorded cash is below zero: some income may be missing, or an overdraft "
+                               "or loan is not recorded.", cash=latest["cash"]))
     weakening = []
     if (latest.get("ocf_avg_3m") or 0) < 0:
         weakening.append(_reason("negative_cash_flow", "Operating cash flow has been negative over the last 3 months."))
@@ -202,6 +219,17 @@ def debt_capacity(snapshots: list[dict], transactions: list[dict], currency: str
                                  months=latest["negative_ocf_streak"]))
     if latest.get("falling_cash_streak", 0) >= 3:
         weakening.append(_reason("falling_cash", "Cash has fallen several months in a row.", months=latest["falling_cash_streak"]))
+    # Money tied up in late customers, or owed late to suppliers, beyond a month of trading. The distress model weighs
+    # these lightly (its training data are annual), so the card says so in plain words.
+    late_in = latest["ar_overdue_31_60"] + latest["ar_overdue_61_plus"]
+    late_out = latest["ap_overdue_31_60"] + latest["ap_overdue_61_plus"]
+    costs = statistics.fmean(s["features"]["cogs"] + s["features"]["operating_expenses"] for s in usable)
+    if revenue > 0 and late_in > revenue:
+        weakening.append(_reason("customers_overdue", "Customers owe more than a month of sales that is over 30 days late.",
+                                 amount=late_in, days=latest["ar_oldest_overdue_days"]))
+    if costs > 0 and late_out > costs:
+        weakening.append(_reason("suppliers_overdue", "Supplier bills more than 30 days overdue add up to more than a month of costs.",
+                                 amount=late_out, days=latest["ap_oldest_overdue_days"]))
     if year > 0 and recent < 0.8 * year:
         weakening.append(_reason("capacity_falling", "Money available for repayments is lower recently than over the year.",
                                  recent=recent, year=year))

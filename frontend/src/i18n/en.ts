@@ -727,6 +727,13 @@ export const en = {
   'debt.check.max': 'Largest amount on these terms: about {amount}.',
   'debt.check.riskChange': 'Risk of serious difficulty: {before}% now, {after}% with this loan.',
   'debt.check.assumption': 'Assumes the loan is spent on the business, not kept as cash.',
+  'risk.gap.negative_assets': 'recorded assets are below zero (check cash and entries)',
+  'risk.gap.no_interest_loss': 'operating at a loss (no interest paid)',
+  'risk.gap.no_liabilities_loss': 'making a loss (no debts owed)',
+  'debt.reason.cash_below_zero': 'Recorded cash is below zero: some income may be missing, or an overdraft or loan is not recorded.',
+  'debt.reason.instalments_missed': 'Loan repayments recorded in the last 3 months are less than the instalments that were due.',
+  'debt.reason.customers_overdue': 'Customers owe more than a month of sales that is over 30 days late (oldest {days} days).',
+  'debt.reason.suppliers_overdue': 'Supplier bills over 30 days late add up to more than a month of costs (oldest {days} days).',
 } as const;
 
 export type TKey = keyof typeof en;

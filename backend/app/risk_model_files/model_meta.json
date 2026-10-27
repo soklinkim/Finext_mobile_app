@@ -1,5 +1,5 @@
 {
-  "model_version": "polish_bankruptcy-xgboost-20261026-231910",
+  "model_version": "polish_bankruptcy-xgboost-20261027-162955",
   "dataset": "polish_bankruptcy",
   "target": "bankrupt_next_year",
   "features": [
@@ -54,13 +54,13 @@
   },
   "missing_text": {},
   "calibration": {
-    "slope": 1.0202820812173239,
-    "intercept": -2.1517974198387035
+    "slope": 0.9398520999880516,
+    "intercept": -2.1535388885293187
   },
-  "alert_threshold": 0.04390461538481806,
+  "alert_threshold": 0.04760870513965622,
   "risk_bands": {
-    "low": 0.3,
-    "high": 0.6
+    "low": 0.1,
+    "high": 0.3
   },
   "range": {
     "net_profit_to_assets": {
@@ -158,11 +158,11 @@
   },
   "results": {
     "company_holdout": {
-      "pr_auc": 0.6589012976961494,
-      "roc_auc": 0.9318507890961263,
-      "calibration_error": 0.009319787138108212,
+      "pr_auc": 0.6665342151280204,
+      "roc_auc": 0.9301134325681492,
+      "calibration_error": 0.010369953343687215,
       "recall": 0.9146341463414634,
-      "precision": 0.21994134897360704
+      "precision": 0.23148148148148148
     }
   },
   "card": "**Real data, different businesses.** Annual accounts of Polish manufacturing companies (2000–2013) and whether they went bankrupt within a year. FINEXT computes the same ratios from an MSME's books, but Cambodian MSMEs are smaller and differently financed: describe output as *likely deterioration*, never as a prediction of loan default."
