@@ -94,3 +94,37 @@ def test_every_reason_the_backend_gives_has_app_text():
     assert reason_codes, "no reason codes found"
     assert {f"risk.gap.{c}" for c in gap_codes} <= keys, {c for c in gap_codes if f"risk.gap.{c}" not in keys}
     assert {f"debt.reason.{c}" for c in reason_codes} <= keys, {c for c in reason_codes if f"debt.reason.{c}" not in keys}
+
+
+# Probability of stress in the next 3 months (projection from the business's own months).
+
+def stress(name: str) -> dict:
+    return result(name)["stress3m"]
+
+
+def test_healthy_businesses_have_no_short_term_stress():
+    for name in ("Healthy grocery", "Healthy grocery with a loan it can repay", "Service business (no stock)", "Growing fast (+4% a month)"):
+        assert stress(name)["riskClass"] == "low", name
+
+
+@pytest.mark.parametrize("name, condition", [
+    ("Customers not paying (60% on credit, half collected)", "cash_runway"),  # what the 12-month model weighs lightly
+    ("Heavily indebted (instalments > profit)", "dscr"),
+    ("Loss-making every month", "negative_cash_flow"),
+])
+def test_cash_problems_show_as_short_term_stress(name, condition):
+    assert stress(name)["riskClass"] == "high" and stress(name)["conditions"][condition] > 0.5
+
+
+def test_a_recent_collapse_is_flagged_in_the_short_term():
+    assert stress("Sales collapsed in the last 3 months")["riskClass"] in {"moderate", "high"}
+
+
+def test_stress_now_is_reported_separately_from_the_forecast():
+    assert stress("Healthy grocery")["stressedNow"] == []
+    assert "negative_cash_flow" in stress("Loss-making every month")["stressedNow"]
+
+
+def test_the_same_books_always_give_the_same_projection():
+    again = assess(BY_NAME["Sales collapsed in the last 3 months"])["stress3m"]
+    assert again["probability"] == stress("Sales collapsed in the last 3 months")["probability"]

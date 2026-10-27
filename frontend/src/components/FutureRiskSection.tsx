@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 import { Button } from './Button';
 import { Chip, ChipRow } from './Chip';
 import { OfflineBanner } from './OfflineBanner';
+import { SegmentedControl } from './SegmentedControl';
 import { Text } from './Text';
 import { TextField } from './TextField';
 import { useAnalysisQuery } from '@/hooks/useAnalysisQuery';
@@ -17,6 +18,12 @@ const DAYS = new Set(['inventory_days', 'payable_days', 'receivable_days', 'liqu
 const TIMES = new Set(['current_ratio', 'quick_ratio', 'cash_ratio', 'interest_coverage', 'asset_turnover', 'long_term_liabilities_to_equity', 'cash_earnings_to_liabilities']);
 
 type Model = Extract<FutureRisk['model'], { available: true }>;
+type Stress = Extract<FutureRisk['stress3m'], { available: true }>;
+
+function monthName(month: string, locale: string): string {
+  const [year, number] = month.split('-').map(Number);
+  return new Date(Date.UTC(year, number - 1, 1)).toLocaleDateString(locale === 'km' ? 'km-KH' : 'en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
 type Capacity = Extract<FutureRisk['debtCapacity'], { available: true }>;
 
 function useCard() {
@@ -25,6 +32,7 @@ function useCard() {
     dark,
     card: { padding: 16, borderRadius: radius.card, backgroundColor: dark ? colors.dark.surface : colors.white, borderWidth: 1, borderColor: dark ? colors.dark.border : colors.neutral[200], gap: 12 } as const,
     soft: dark ? colors.dark.field : colors.primary[50],
+    track: dark ? colors.dark.field : colors.neutral[200],
   };
 }
 
@@ -52,32 +60,82 @@ function useDriverValue() {
   };
 }
 
-function DistressCard({ model }: { model: Model }) {
+/** The percentage in a ring coloured by level, with the level and a line or two beside it. */
+function Gauge({ probability, level, label, children }: { probability: number; level: RiskLevel; label: string; children?: ReactNode }) {
   const { t } = useI18n();
-  const { card, soft, dark } = useCard();
-  const valueOf = useDriverValue();
-  const color = LEVEL_COLOR[model.riskClass];
-  const level = t(`risk.level.${model.riskClass}` as TKey);
+  const { soft, dark } = useCard();
+  const color = LEVEL_COLOR[level];
+  const levelText = t(`risk.level.${level}` as TKey);
   return (
-    <View style={card}>
-      <View style={{ gap: 2 }}>
-        <Text variant="body-lg" weight={700} tone="primary-900">{t('risk.title')}</Text>
-        <Text variant="micro" tone="neutral-600">{t('risk.horizon')}</Text>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, padding: 12, borderRadius: radius.card, backgroundColor: soft }}>
+      <View
+        accessible
+        accessibilityLabel={`${label}: ${percent(probability)}%, ${levelText}`}
+        style={{ width: 84, height: 84, borderRadius: 42, borderWidth: 7, borderColor: color, alignItems: 'center', justifyContent: 'center', backgroundColor: dark ? colors.dark.surface : colors.white }}
+      >
+        <Text variant="amount-xl" tone="primary-900">{percent(probability)}%</Text>
       </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, padding: 12, borderRadius: radius.card, backgroundColor: soft }}>
-        <View
-          accessible
-          accessibilityLabel={t('risk.gaugeLabel', { percent: percent(model.probability), level })}
-          style={{ width: 84, height: 84, borderRadius: 42, borderWidth: 7, borderColor: color, alignItems: 'center', justifyContent: 'center', backgroundColor: dark ? colors.dark.surface : colors.white }}
-        >
-          <Text variant="amount-xl" tone="primary-900">{percent(model.probability)}%</Text>
-        </View>
-        <View style={{ flex: 1, gap: 6 }}>
-          <Pill label={level} color={color} />
-          <Text variant="body-sm" tone="neutral-600">{t('risk.chance', { percent: percent(model.probability) })}</Text>
-          {model.confidence === 'low' && <Text variant="micro" tone="neutral-600">{t('risk.lowConfidence', { count: model.months })}</Text>}
-        </View>
+      <View style={{ flex: 1, gap: 6 }}>
+        <Pill label={levelText} color={color} />
+        <Text variant="body-sm" tone="neutral-600">{t('risk.chance', { percent: percent(probability) })}</Text>
+        {children}
       </View>
+    </View>
+  );
+}
+
+function ShortTermView({ stress }: { stress: Stress }) {
+  const { t, locale } = useI18n();
+  const { track } = useCard();
+  const money = (amount: number) => formatMoneyWhole(Math.round(amount), stress.currency);
+  const conditions = (['cash_runway', 'negative_cash_flow', 'dscr'] as const).filter((c) => c !== 'dscr' || stress.instalments.some((x) => x > 0));
+  return (
+    <>
+      <Gauge probability={stress.probability} level={stress.riskClass} label={t('stress.title')}>
+        <Text variant="micro" tone="neutral-600">{t('stress.basis', { months: stress.basedOnMonths })}</Text>
+      </Gauge>
+      {stress.stressedNow.length > 0 && (
+        <View style={{ borderLeftWidth: 3, borderLeftColor: colors.danger, paddingLeft: 10, paddingVertical: 3, gap: 2 }}>
+          <Text variant="body-sm" weight={600} tone="primary-900">{t('stress.nowTitle')}</Text>
+          {stress.stressedNow.map((c) => <Text key={c} variant="micro" tone="neutral-600">{t(`stress.now.${c}` as TKey)}</Text>)}
+        </View>
+      )}
+      <Text variant="body" weight={700} tone="primary-900">{t('stress.conditionsTitle')}</Text>
+      {conditions.map((c) => (
+        <View key={c} style={{ gap: 4 }} accessible accessibilityLabel={`${t(`stress.condition.${c}` as TKey)}: ${percent(stress.conditions[c])}%`}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
+            <Text variant="caption" tone="primary-900" style={{ flex: 1 }}>{t(`stress.condition.${c}` as TKey)}</Text>
+            <Text variant="caption" weight={700} tone="primary-900">{percent(stress.conditions[c])}%</Text>
+          </View>
+          <View style={{ height: 6, borderRadius: 99, backgroundColor: track, overflow: 'hidden' }}>
+            <View style={{ width: `${stress.conditions[c] * 100}%`, height: '100%', borderRadius: 99, backgroundColor: stress.conditions[c] > 0.3 ? colors.danger : stress.conditions[c] >= 0.1 ? colors.warning : colors.success }} />
+          </View>
+        </View>
+      ))}
+      <Text variant="body" weight={700} tone="primary-900">{t('stress.cashTitle')}</Text>
+      {stress.cash.map((m) => (
+        <View key={m.month} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
+          <Text variant="caption" tone="primary-900">{monthName(m.month, locale)}</Text>
+          <Text variant="caption" tone="neutral-600">
+            <Text variant="caption" weight={700} style={{ color: m.median < stress.runwayFloor ? colors.danger : undefined }} tone="primary-900">{money(m.median)}</Text>
+            {'  '}({money(m.low)} – {money(m.high)})
+          </Text>
+        </View>
+      ))}
+      <Text variant="micro" tone="neutral-600">{t('stress.floor', { amount: money(stress.runwayFloor) })}</Text>
+      <Text variant="micro" tone="neutral-600">{t('stress.note')}</Text>
+    </>
+  );
+}
+
+function LongTermView({ model }: { model: Model }) {
+  const { t } = useI18n();
+  const valueOf = useDriverValue();
+  return (
+    <>
+      <Gauge probability={model.probability} level={model.riskClass} label={t('risk.title')}>
+        {model.confidence === 'low' && <Text variant="micro" tone="neutral-600">{t('risk.lowConfidence', { count: model.months })}</Text>}
+      </Gauge>
       <Text variant="body" weight={700} tone="primary-900">{t('risk.whyTitle')}</Text>
       {model.topDrivers.slice(0, 3).map((driver) => {
         const raises = driver.direction === 'raises risk';
@@ -92,6 +150,33 @@ function DistressCard({ model }: { model: Model }) {
         );
       })}
       <Text variant="micro" tone="neutral-600">{t('risk.note')}</Text>
+    </>
+  );
+}
+
+/** Spec C3: probability of financial stress, over the next 3 months (projection) or 12 months (trained model). */
+function RiskCard({ risk }: { risk: FutureRisk }) {
+  const { t } = useI18n();
+  const { card } = useCard();
+  const [horizon, setHorizon] = useState<'3' | '12'>('3');
+  return (
+    <View style={card}>
+      <View style={{ gap: 2 }}>
+        <Text variant="body-lg" weight={700} tone="primary-900">{t(horizon === '3' ? 'stress.title' : 'risk.title')}</Text>
+        <Text variant="micro" tone="neutral-600">{t(horizon === '3' ? 'stress.horizon' : 'risk.horizon')}</Text>
+      </View>
+      <SegmentedControl
+        options={[{ value: '3', label: t('stress.tab3') }, { value: '12', label: t('stress.tab12') }]}
+        value={horizon}
+        onChange={setHorizon}
+      />
+      {horizon === '3'
+        ? risk.stress3m.available
+          ? <ShortTermView stress={risk.stress3m} />
+          : <Text variant="body-sm" tone="neutral-600">{t('risk.needsHistory', { count: risk.stress3m.months })}</Text>
+        : risk.model.available
+          ? <LongTermView model={risk.model} />
+          : <Text variant="body-sm" tone="neutral-600">{t('risk.needsHistory', { count: risk.model.months })}</Text>}
     </View>
   );
 }
@@ -181,6 +266,11 @@ function LoanCheck({ currency }: { currency: Capacity['currency'] }) {
           {capacity.reasons.filter((r) => r.code.startsWith('loan_')).map((r) => (
             <Text key={r.code} variant="micro" tone="neutral-600">{reasonText(t, r)}</Text>
           ))}
+          {proposed.stress3m && (
+            <Text variant="body-sm" tone="neutral-600">
+              {t('debt.check.stressChange', { before: percent(proposed.stress3m.probabilityBefore), after: percent(proposed.stress3m.probabilityAfter) })}
+            </Text>
+          )}
           {proposed.model && (
             <>
               <Text variant="body-sm" tone="neutral-600">
@@ -251,9 +341,7 @@ export function FutureRiskSection() {
     <View style={{ gap: 12 }}>
       <Text variant="body" weight={700} tone="primary-900">{t('analysis.futureRisk')}</Text>
       {query.source === 'cache' && <OfflineBanner fetchedAt={query.fetchedAt} />}
-      {risk.model.available
-        ? <DistressCard model={risk.model} />
-        : <NotYet title={t('risk.title')} body={t('risk.needsHistory', { count: risk.model.months })} />}
+      <RiskCard risk={risk} />
       {risk.debtCapacity.available
         ? <DebtCapacityCard capacity={risk.debtCapacity} />
         : <NotYet title={t('debt.title')} body={t('debt.needsHistory', { count: risk.debtCapacity.months })} />}

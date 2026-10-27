@@ -93,6 +93,29 @@ export interface FutureRisk {
         horizonMonths: number;
         note: string;
       };
+  /** Probability of stress in the next 3 months: a projection from the business's own recent months. */
+  stress3m:
+    | { available: false; reason: 'not_enough_history'; months: number; text: string }
+    | {
+        available: true;
+        asOf: string;
+        horizonMonths: number;
+        probability: number;
+        riskClass: RiskLevel;
+        paths: number;
+        basedOnMonths: number;
+        currency: Currency;
+        /** Share of futures in which each stress condition is met (they can overlap). */
+        conditions: { cash_runway: number; negative_cash_flow: number; dscr: number };
+        cash: { month: string; median: number; low: number; high: number }[];
+        startingCash: number;
+        usualMonthlyExpenses: number;
+        runwayFloor: number;
+        instalments: number[];
+        scheduleMissing: boolean;
+        stressedNow: ('cash_runway' | 'negative_cash_flow' | 'dscr')[];
+        note: string;
+      };
   debtCapacity:
     | { available: false; reason: 'not_enough_history'; months: number; text: string }
     | {
@@ -116,6 +139,7 @@ export interface FutureRisk {
           fits: boolean;
           maxAmount: number | null;
           model?: { probabilityBefore: number; probabilityAfter: number; riskClassBefore: RiskLevel; riskClassAfter: RiskLevel; assumption: string };
+          stress3m?: { probabilityBefore: number; probabilityAfter: number; riskClassBefore: RiskLevel; riskClassAfter: RiskLevel };
         };
       };
 }

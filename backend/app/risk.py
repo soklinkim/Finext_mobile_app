@@ -1,10 +1,12 @@
 """Future risk for the financial health dashboard: the Layer 2 model score and the debt capacity check.
 
-Two answers, both from the business's own books:
+Three answers, all from the business's own books:
 
 1. Risk of serious financial distress within 12 months (`model`): the XGBoost model trained on real company
    accounts (ml/), scored on the ratios in `risk_features`, with its top reasons.
-2. Future over-indebtedness (`debtCapacity`): can the business carry its debts, and a new loan if one is being
+2. Probability of financial stress in the next 3 months (`stress3m`, spec C3): a projection from the business's own
+   recent months and scheduled instalments (`app/stress_forecast.py`).
+3. Future over-indebtedness (`debtCapacity`): can the business carry its debts, and a new loan if one is being
    considered? Standard lending arithmetic, no training data: money available for repayments each month against
    scheduled instalments (DSCR), the cash flow trend, near-term instalments against cash, recent borrowing. With a
    proposed loan, the same figures and the model score are recalculated as if the loan were taken.
@@ -22,6 +24,7 @@ from app.bookkeeping import REVERSAL, reversed_ids
 from app.business_time import BUSINESS_TZ
 from app.risk_features import MISSING_TEXT, risk_features
 from app.snapshots import _convert, _debt_service, _ms, monthly_snapshots
+from app.stress_forecast import forecast
 
 TARGET_DSCR = 1.25      # money for repayments should cover instalments 1.25 times: a safety margin [Decision: confirm with finance]
 MIN_DSCR = 1.0          # below this the instalments are not covered
@@ -278,7 +281,13 @@ def assess(transactions: list[dict], banks: list[dict], settings: dict | None = 
     live = [tx for tx in transactions if tx.get("deletedAt") is None]
     cancelled = reversed_ids(live)
     effective = [tx for tx in live if tx["id"] not in cancelled and tx.get("typeId") != REVERSAL]
-    out: dict[str, Any] = {"model": score(snapshots, model), "debtCapacity": debt_capacity(snapshots, effective, currency, rate, proposed)}
+    out: dict[str, Any] = {"model": score(snapshots, model), "stress3m": forecast(snapshots, effective, currency, rate),
+                           "debtCapacity": debt_capacity(snapshots, effective, currency, rate, proposed)}
+    if proposed and out["stress3m"]["available"]:
+        after = forecast(snapshots, effective, currency, rate, extra_instalment=monthly_instalment(proposed))
+        out["debtCapacity"].setdefault("proposed", {})["stress3m"] = {
+            "probabilityBefore": out["stress3m"]["probability"], "probabilityAfter": after["probability"],
+            "riskClassBefore": out["stress3m"]["riskClass"], "riskClassAfter": after["riskClass"]}
     if proposed and out["model"]["available"]:
         after = score(with_loan(snapshots, proposed), model)
         out["debtCapacity"].setdefault("proposed", {})["model"] = {

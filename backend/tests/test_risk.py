@@ -144,10 +144,29 @@ def test_risk_endpoints(monkeypatch):
     try:
         client = TestClient(app)
         body = client.get("/accounting/risk").json()
-        assert set(body) == {"model", "debtCapacity"}
+        assert set(body) == {"model", "stress3m", "debtCapacity"}
         loan = {"amount": 500_000, "termMonths": 12, "annualInterestRate": 15, "rateType": "declining", "repaymentFrequency": "monthly"}
         checked = client.post("/accounting/risk/loan-check", json=loan).json()
         assert "proposed" in checked["debtCapacity"]
         assert client.post("/accounting/risk/loan-check", json={**loan, "rateType": "fixed"}).status_code == 422
     finally:
         app.dependency_overrides.clear()
+
+
+def test_month_to_month_swings_give_a_graded_3_month_answer():
+    # Sales alternate between strong and weak months; little cash in hand: some futures run short, most do not.
+    rows = [entry("c", "owner_capital", "in", 300_000, at=on(2024, 12, 20))]
+    for i in range(12):
+        rows += [entry(f"s{i}", "service_income", "in", 1_300_000 if i % 3 else 400_000, at=on(2025, i + 1, 5)),
+                 entry(f"r{i}", "rent", "out", 600_000, at=on(2025, i + 1, 6)),
+                 entry(f"d{i}", "owner_drawings", "out", 300_000, at=on(2025, i + 1, 7))]
+    s = assess(rows)["stress3m"]
+    assert s["available"] and 0.01 < s["probability"] < 0.99, s["probability"]  # neither certain nor impossible
+    assert len(s["cash"]) == 3 and all(m["low"] <= m["median"] <= m["high"] for m in s["cash"])
+
+
+def test_a_proposed_loan_raises_short_term_stress():
+    proposed = risk.validate_proposed_loan({"amount": 9_600_000, "termMonths": 12, "annualInterestRate": 18,
+                                            "rateType": "flat", "repaymentFrequency": "monthly"})
+    change = assess(shop(), proposed)["debtCapacity"]["proposed"]["stress3m"]
+    assert change["probabilityAfter"] > change["probabilityBefore"]

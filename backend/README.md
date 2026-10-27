@@ -29,7 +29,13 @@ Bookkeeping writes go to local SQLite first with `syncStatus = 'pending'`. The c
 
 ## Future risk (Layer 2)
 
-`GET /accounting/risk` returns two answers for the financial health dashboard, both from the business's own books:
+`GET /accounting/risk` returns three answers for the financial health dashboard, all from the business's own books:
+
+- `stress3m`: the probability of financial stress in the next 3 months (pipeline spec C3: cash under two weeks of
+  usual expenses in any month, operating cash flow negative in all three, or debt service cover ≤ 1.0). A projection,
+  not a trained model (`app/stress_forecast.py`): today's cash and the instalments already scheduled, with each coming
+  month repeating one of the business's own last 6 months, over 2,000 futures. Also says which conditions already hold
+  now, and the expected cash at each month end. Same levels as the 12-month answer.
 
 - `model`: the chance of serious financial distress within 12 months, from the XGBoost model trained on real company
   accounts in `ml/` (files in `app/risk_model_files/`, scored by `app/risk_model.py` with `xgboost` only). Inputs are
