@@ -207,7 +207,15 @@ function AppFrame() {
   return (
     <View style={{ flex: 1, backgroundColor: dark ? colors.dark.background : '#e5e7eb', alignItems: 'center' }}>
       <View style={{ flex: 1, width: '100%', maxWidth: Platform.OS === 'web' ? 430 : undefined, backgroundColor: dark ? colors.dark.background : colors.white }}>
-        <Stack screenOptions={{ headerShown: false, animation: 'fade' }} />
+        {/* Detail pages slide in from the right (native motion, swipe back on iOS); the tab group and the sign-in
+            pages fade, since they are not "deeper" pages. */}
+        <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', animationDuration: 250, gestureEnabled: true }}>
+          <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
+          <Stack.Screen name="index" options={{ animation: 'none' }} />
+          <Stack.Screen name="launch" options={{ animation: 'fade' }} />
+          <Stack.Screen name="login" options={{ animation: 'fade' }} />
+          <Stack.Screen name="signup" options={{ animation: 'fade' }} />
+        </Stack>
       </View>
     </View>
   );

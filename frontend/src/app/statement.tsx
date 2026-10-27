@@ -12,7 +12,7 @@ import { Text } from '@/components/Text';
 import { useAnalysisQuery } from '@/hooks/useAnalysisQuery';
 import { useI18n } from '@/i18n';
 import { colors, tint } from '@/theme';
-import { getStatements, OnlineRequiredError, type Statement, type StatementKind, type StatementPeriod } from '@/services/analysis';
+import { getStatements, type Statement, type StatementKind, type StatementPeriod } from '@/services/analysis';
 import { formatMoneyWhole } from '@/services/bookkeeping';
 import { exportStatementPdf } from '@/services/statementPdf';
 import { useAppTheme } from '@/theme/AppTheme';
@@ -59,7 +59,7 @@ export default function StatementScreen() {
         {q.loading && !q.data ? <LoadingState /> : null}
         {q.noCache ? <EmptyState titleKey="offline.noCache" bodyKey="offline.noCacheBody" icon="wifiOff" /> : null}
         {q.data === null && <EmptyState titleKey="data.noStatementsTitle" bodyKey="data.noStatementsBody" />}
-        {q.error ? <ErrorState onRetry={q.reload} message={q.error.message} onlineRequired={q.error instanceof OnlineRequiredError} /> : null}
+        {q.error ? <ErrorState onRetry={q.reload} error={q.error} /> : null}
         {statement && q.data && (
           <>
             {statement.heading ? (
@@ -79,7 +79,7 @@ export default function StatementScreen() {
                   <Text variant="title" tone="primary-900" style={{ flex: 1 }}>
                     {periodTitle ?? statement.title}
                   </Text>
-                  <View className="flex-row items-center bg-primary-50 rounded-pill" style={{ paddingHorizontal: 12, minHeight: 32, gap: 6, backgroundColor: dark ? colors.dark.surface : undefined }} accessibilityLabel={q.data.period}>
+                  <View className="flex-row items-center bg-primary-50 rounded-pill" style={{ paddingHorizontal: 12, minHeight: 32, gap: 6, ...(dark ? { backgroundColor: colors.dark.surface } : {}) }} accessibilityLabel={q.data.period}>
                     <Text variant="caption" weight={500} tone="primary-900">
                       {q.data.period}
                     </Text>

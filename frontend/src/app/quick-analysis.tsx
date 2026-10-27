@@ -35,7 +35,7 @@ export default function QuickAnalysis() {
   const hero = (
     <View className="flex-row items-center px-9" style={{ gap: 16, paddingVertical: 16 }}>
       {savings && <GoalRing percent={savings.percent} icon="car" label={t('quick.savings')} />}
-      {savings && <View className="bg-white" style={{ width: 1, alignSelf: 'stretch', backgroundColor: dark ? colors.dark.border : undefined }} />}
+      {savings && <View className="bg-white" style={{ width: 1, alignSelf: 'stretch', ...(dark ? { backgroundColor: colors.dark.border } : {}) }} />}
       <View className="flex-1" style={{ gap: 12 }}>
         <View className="flex-row items-center" style={{ gap: 12 }}>
           <Icon name="salary" size={36} strokeWidth={1.5} />
@@ -48,7 +48,7 @@ export default function QuickAnalysis() {
             </Text>
           </View>
         </View>
-        <View className="bg-white" style={{ height: 1, backgroundColor: dark ? colors.dark.border : undefined }} />
+        <View className="bg-white" style={{ height: 1, ...(dark ? { backgroundColor: colors.dark.border } : {}) }} />
         <View className="flex-row items-center" style={{ gap: 12 }}>
           <Icon name="food" size={36} strokeWidth={1.5} />
           <View className="flex-1">

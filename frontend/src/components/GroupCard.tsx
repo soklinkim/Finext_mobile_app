@@ -8,7 +8,7 @@ import { useAppTheme } from '@/theme/AppTheme';
 export function GroupCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   const dark = useAppTheme();
   return (
-    <View className="bg-primary-50 rounded-md" style={{ paddingHorizontal: 12, paddingTop: 9, paddingBottom: 11, gap: 6, backgroundColor: dark ? colors.dark.surface : undefined }}>
+    <View className="bg-primary-50 rounded-md" style={{ paddingHorizontal: 12, paddingTop: 9, paddingBottom: 11, gap: 6, ...(dark ? { backgroundColor: colors.dark.surface } : {}) }}>
       <View>
         <Text variant="body-sm" weight={600} tone="primary-900">
           {title}

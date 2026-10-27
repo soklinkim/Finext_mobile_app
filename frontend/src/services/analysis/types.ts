@@ -232,6 +232,14 @@ export class OnlineRequiredError extends Error {
   }
 }
 
+/** The device is online but the FINEXT server did not answer (not running, wrong address, blocked by a firewall). */
+export class ServerUnreachableError extends OnlineRequiredError {
+  constructor(message = 'The FINEXT server could not be reached.') {
+    super(message);
+    this.name = 'ServerUnreachableError';
+  }
+}
+
 /** An HTTP/API failure; unlike an offline state, retrying requires fixing the response cause. */
 export class ApiRequestError extends Error {
   constructor(readonly status: number, message: string) {

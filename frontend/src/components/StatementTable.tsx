@@ -29,7 +29,7 @@ function Row({ line, currency, twoCols }: { line: StatementLine; currency: State
         : 'border-b border-neutral-200';
   const emphasis = style !== 'line';
   return (
-    <View className={`flex-row items-center ${container}`} style={{ minHeight: 36, marginHorizontal: emphasis ? -8 : 0, paddingHorizontal: emphasis ? 8 : 0, paddingVertical: 6, backgroundColor: dark && style === 'subtotal' ? colors.dark.surface : undefined }}>
+    <View className={`flex-row items-center ${container}`} style={{ minHeight: 36, marginHorizontal: emphasis ? -8 : 0, paddingHorizontal: emphasis ? 8 : 0, paddingVertical: 6, ...(dark && style === 'subtotal' ? { backgroundColor: colors.dark.surface } : {}) }}>
       <View className="flex-1" style={{ paddingLeft: emphasis ? 12 : 0, paddingRight: 8 }}>
         <Text variant="caption" weight={emphasis ? (style === 'total' ? 700 : 600) : 400} tone={style === 'total' ? 'white' : 'primary-900'} style={{ fontSize: 12 }}>
           {line.label}

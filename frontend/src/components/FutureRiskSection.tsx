@@ -117,7 +117,7 @@ function ShortTermView({ stress }: { stress: Stress }) {
         <View key={m.month} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
           <Text variant="caption" tone="primary-900">{monthName(m.month, locale)}</Text>
           <Text variant="caption" tone="neutral-600">
-            <Text variant="caption" weight={700} style={{ color: m.median < stress.runwayFloor ? colors.danger : undefined }} tone="primary-900">{money(m.median)}</Text>
+            <Text variant="caption" weight={700} style={{ ...(m.median < stress.runwayFloor ? { color: colors.danger } : {}) }} tone="primary-900">{money(m.median)}</Text>
             {'  '}({money(m.low)} – {money(m.high)})
           </Text>
         </View>
@@ -353,7 +353,7 @@ function Change({ label, before, after, money }: { label: string; before: number
   const show = (n: number) => (money ? money(n) : `${percent(n)}%`);
   return (
     <Text variant="micro" tone="neutral-600">
-      {label}: {show(before)} → <Text variant="micro" weight={700} style={{ color: better ? colors.success : undefined }} tone="primary-900">{show(after)}</Text>
+      {label}: {show(before)} → <Text variant="micro" weight={700} style={{ ...(better ? { color: colors.success } : {}) }} tone="primary-900">{show(after)}</Text>
     </Text>
   );
 }

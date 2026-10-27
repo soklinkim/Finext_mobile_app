@@ -41,7 +41,8 @@ export function Button({ label, onPress, variant = 'primary', icon, trailingIcon
       disabled={disabled || loading}
       onPress={onPress}
       className={`items-center justify-center ${isText ? '' : `rounded-pill ${BG[variant]}`} ${disabled && !isText ? 'opacity-50' : ''} ${className ?? ''}`}
-      style={[{ minHeight: small ? 38 : 48, paddingHorizontal: small ? 16 : 24, backgroundColor }, variant === 'primary' && !small && shadow.button]}
+      // Only set backgroundColor when there is one: on native an inline `undefined` erases the bg-… class colour.
+      style={[{ minHeight: small ? 38 : 48, paddingHorizontal: small ? 16 : 24, ...(backgroundColor ? { backgroundColor } : {}) }, variant === 'primary' && !small && shadow.button]}
     >
       <View className="flex-row items-center justify-center" style={{ gap: small ? 6 : 8 }}>
         {icon && <Icon name={icon} size={small ? 15 : 18} color={toneColor(tone, dark)} />}

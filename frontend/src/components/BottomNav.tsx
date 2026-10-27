@@ -28,7 +28,7 @@ export function BottomNav({ active }: { active: NavKey }) {
   return (
     <View
       className="absolute bottom-0 left-0 right-0 flex-row items-center justify-around bg-primary-50"
-      style={{ height: NAV_HEIGHT + Math.max(insets.bottom - 16, 0), paddingBottom: Math.max(insets.bottom - 16, 0), borderTopLeftRadius: radius.nav, borderTopRightRadius: radius.nav, backgroundColor: dark ? colors.dark.surface : undefined }}
+      style={{ height: NAV_HEIGHT + Math.max(insets.bottom - 16, 0), paddingBottom: Math.max(insets.bottom - 16, 0), borderTopLeftRadius: radius.nav, borderTopRightRadius: radius.nav, ...(dark ? { backgroundColor: colors.dark.surface } : {}) }}
     >
       {ITEMS.map((item) => {
         const isActive = item.key === active;

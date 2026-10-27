@@ -766,6 +766,8 @@ export const en = {
   'advice.stress3m': 'Stress in 3 months',
   'advice.model12m': 'Risk in 12 months',
   'advice.cash3m': 'Cash expected in 3 months',
+  'state.serverUnreachableTitle': 'Can’t reach the FINEXT server',
+  'state.serverUnreachable': 'You’re online, but the server didn’t answer. Check that it’s running and that this device can reach it (same Wi-Fi, firewall allows it), then try again. You can still record bookkeeping entries.',
 } as const;
 
 export type TKey = keyof typeof en;

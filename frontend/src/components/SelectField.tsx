@@ -34,7 +34,7 @@ export function SelectField<T extends string | number>({ label, placeholder, opt
         accessibilityLabel={`${title}: ${selected?.label ?? ''}`}
         onPress={() => setOpen(true)}
         className="flex-row items-center self-start rounded-pill bg-white"
-        style={[{ height: 32, paddingHorizontal: 12, gap: 8, backgroundColor: dark ? colors.dark.field : undefined }, shadow.button]}
+        style={[{ height: 32, paddingHorizontal: 12, gap: 8, ...(dark ? { backgroundColor: colors.dark.field } : {}) }, shadow.button]}
       >
         <Text variant="body-sm" weight={600} tone="primary-900">
           {selected?.label ?? placeholder}
@@ -47,7 +47,7 @@ export function SelectField<T extends string | number>({ label, placeholder, opt
         accessibilityLabel={`${title}: ${selected?.label ?? ''}`}
         onPress={() => setOpen(true)}
         className={`flex-row items-center justify-between bg-primary-50 ${size === 'form' ? 'rounded-lg' : 'rounded-field'} ${error ? 'border-2 border-danger' : ''}`}
-        style={{ minHeight: size === 'form' ? 40 : 36, paddingHorizontal: size === 'form' ? 20 : 12, paddingVertical: 8, backgroundColor: dark ? colors.dark.field : fieldBackgroundColor }}
+        style={{ minHeight: size === 'form' ? 40 : 36, paddingHorizontal: size === 'form' ? 20 : 12, paddingVertical: 8, backgroundColor: dark ? colors.dark.field : fieldBackgroundColor ?? colors.primary[50] }}
       >
         <Text variant={size === 'form' ? 'body' : 'caption'} tone={selected ? 'primary-900' : 'neutral-500'} weight={selected ? 500 : 300} style={{ flexShrink: 1 }}>
           {selected?.label ?? placeholder}

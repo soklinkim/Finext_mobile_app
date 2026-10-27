@@ -57,16 +57,16 @@ export function BarChartCard({ title, labels, income, expense, currency, onSearc
     .join('; ');
 
   return (
-    <View className="bg-primary-50" style={{ borderRadius: radius['2xl'], padding: 24, backgroundColor: dark ? colors.dark.surface : undefined }}>
+    <View className="bg-primary-50" style={{ borderRadius: radius['2xl'], padding: 24, ...(dark ? { backgroundColor: colors.dark.surface } : {}) }}>
       <View className="flex-row items-center justify-between" style={{ marginBottom: 8 }}>
         <Text variant="body" tone="primary-900">
           {title}
         </Text>
         <View className="flex-row" style={{ gap: 8 }}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t('common.search')} onPress={onSearch} className="items-center justify-center rounded-sm bg-primary-200" style={{ width: 32, height: 32, backgroundColor: dark ? colors.dark.field : undefined }}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t('common.search')} onPress={onSearch} className="items-center justify-center rounded-sm bg-primary-200" style={{ width: 32, height: 32, ...(dark ? { backgroundColor: colors.dark.field } : {}) }}>
             <Icon name="search" size={18} />
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel={t('common.calendar')} onPress={onCalendar} className="items-center justify-center rounded-sm bg-primary-200" style={{ width: 32, height: 32, backgroundColor: dark ? colors.dark.field : undefined }}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t('common.calendar')} onPress={onCalendar} className="items-center justify-center rounded-sm bg-primary-200" style={{ width: 32, height: 32, ...(dark ? { backgroundColor: colors.dark.field } : {}) }}>
             <Icon name="calendar" size={18} />
           </Pressable>
         </View>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { NoCachedDataError, type CachedResult } from '@/services/analysis';
 import { useNetworkStatus } from './useNetworkStatus';
 
@@ -48,6 +49,15 @@ export function useAnalysisQuery<T>(fn: () => Promise<CachedResult<T>>): Analysi
       active = false;
     };
   }, [run, isOnline]);
+
+  // Tab screens stay mounted: when one is shown again, refresh in the background (the old data stays visible).
+  const focusedBefore = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (focusedBefore.current) run();
+      focusedBefore.current = true;
+    }, [run]),
+  );
 
   return {
     data: state.result?.data,

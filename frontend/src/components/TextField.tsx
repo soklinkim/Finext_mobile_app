@@ -32,7 +32,7 @@ export function TextField({ label, error, variant = 'entry', right, left, fieldB
       ) : null}
       <View
         className={`flex-row items-center bg-primary-50 ${isForm ? 'rounded-lg' : 'rounded-field'}`}
-        style={{ borderWidth: 2, borderColor: border, minHeight: isForm ? 40 : 36, paddingHorizontal: isForm ? 20 : 12, gap: 8, backgroundColor: dark ? colors.dark.field : fieldBackgroundColor }}
+        style={{ borderWidth: 2, borderColor: border, minHeight: isForm ? 40 : 36, paddingHorizontal: isForm ? 20 : 12, gap: 8, backgroundColor: dark ? colors.dark.field : fieldBackgroundColor ?? colors.primary[50] }}
       >
         {left}
         <TextInput

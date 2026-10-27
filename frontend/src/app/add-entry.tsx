@@ -179,7 +179,8 @@ export default function AddEntry() {
     setSaving(true);
     const result = await addTransaction(input);
     setSaving(false);
-    if (result.ok) router.replace('/bookkeeping');
+    // Close this page and land on the Bookkeeping tab already open underneath (replace would stack a second set of tabs).
+    if (result.ok) router.dismissTo('/bookkeeping');
   };
 
   // ------------------------------------------------------------------ pieces
@@ -204,7 +205,7 @@ export default function AddEntry() {
 
   const step1 =
     direction === 'move' ? null : type ? (
-      <View className="flex-row items-center justify-between bg-primary-50 rounded-lg" style={{ paddingHorizontal: 14, paddingVertical: 8, backgroundColor: dark ? colors.dark.surface : undefined }}>
+      <View className="flex-row items-center justify-between bg-primary-50 rounded-lg" style={{ paddingHorizontal: 14, paddingVertical: 8, ...(dark ? { backgroundColor: colors.dark.surface } : {}) }}>
         <View className="flex-1">
           <Text variant="micro" weight={300} tone="neutral-600">
             {t('entry.step1Short')}
@@ -329,7 +330,7 @@ export default function AddEntry() {
   const bal = (id: string | null) => balances?.find((b) => b.bankId === id)?.byCurrency[currency] ?? 0;
   const movePreview =
     direction === 'move' && bankId && toBankId && amount > 0 ? (
-      <View className="bg-primary-50 rounded-lg" style={{ padding: 12, gap: 6, backgroundColor: dark ? colors.dark.surface : undefined }}>
+      <View className="bg-primary-50 rounded-lg" style={{ padding: 12, gap: 6, ...(dark ? { backgroundColor: colors.dark.surface } : {}) }}>
         <Text variant="caption" weight={600} tone="primary-900">
           {t('entry.afterMove')}
         </Text>

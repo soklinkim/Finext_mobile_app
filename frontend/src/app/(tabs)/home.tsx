@@ -62,9 +62,9 @@ export default function Home() {
 
   return (
     <ScreenShell noHeader hero={hero} nav="home">
-      <Pressable accessibilityRole="button" accessibilityLabel={t('screen.quickAnalysis')} onPress={() => router.push('/quick-analysis')} className="bg-primary-50 flex-row items-center" style={{ borderRadius: radius.card, padding: 20, gap: 16, backgroundColor: dark ? colors.dark.surface : undefined }}>
+      <Pressable accessibilityRole="button" accessibilityLabel={t('screen.quickAnalysis')} onPress={() => router.push('/quick-analysis')} className="bg-primary-50 flex-row items-center" style={{ borderRadius: radius.card, padding: 20, gap: 16, ...(dark ? { backgroundColor: colors.dark.surface } : {}) }}>
         {profit && <GoalRing percent={profit.percent} icon="dollar" label={t('home.profitGoals')} />}
-        {profit && <View className="bg-primary-500" style={{ width: 1, alignSelf: 'stretch', backgroundColor: dark ? colors.dark.border : undefined }} />}
+        {profit && <View className="bg-primary-500" style={{ width: 1, alignSelf: 'stretch', ...(dark ? { backgroundColor: colors.dark.border } : {}) }} />}
         <View className="flex-1" style={{ gap: 12 }}>
           <View className="flex-row items-center" style={{ gap: 12 }}>
             <Icon name="income" size={36} strokeWidth={1.5} />
@@ -77,7 +77,7 @@ export default function Home() {
               </Text>
             </View>
           </View>
-          <View className="bg-primary-500" style={{ height: 1, backgroundColor: dark ? colors.dark.border : undefined }} />
+          <View className="bg-primary-500" style={{ height: 1, ...(dark ? { backgroundColor: colors.dark.border } : {}) }} />
           <View className="flex-row items-center" style={{ gap: 12 }}>
             <Icon name="expense" size={36} strokeWidth={1.5} />
             <View className="flex-1">

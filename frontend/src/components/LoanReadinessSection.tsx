@@ -11,7 +11,7 @@ import { Text } from './Text';
 import { useAnalysisQuery } from '@/hooks/useAnalysisQuery';
 import { useI18n, type TKey } from '@/i18n';
 import { confirmAction } from '@/lib/confirm';
-import { OnlineRequiredError, type LoanReadiness, type ReadinessLevel } from '@/services/analysis';
+import { type LoanReadiness, type ReadinessLevel } from '@/services/analysis';
 import {
   SHARE_DAYS,
   SHARE_SCOPES,
@@ -363,7 +363,7 @@ export function LoanReadinessSection() {
     <View style={{ gap: 16 }}>
       {readiness.source === 'cache' && <OfflineBanner fetchedAt={readiness.fetchedAt} />}
       {readiness.loading && !readiness.data ? <AnalysisLoading mode="health" /> : null}
-      {readiness.error ? <ErrorState onRetry={readiness.reload} message={readiness.error.message} onlineRequired={readiness.error instanceof OnlineRequiredError} /> : null}
+      {readiness.error ? <ErrorState onRetry={readiness.reload} error={readiness.error} /> : null}
       {readiness.data && (
         <>
           <ScoreCard readiness={readiness.data} />
