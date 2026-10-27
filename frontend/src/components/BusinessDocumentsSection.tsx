@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, View } from 'react-native';
+import { ActionSheetIOS, ActivityIndicator, Alert, Platform, Pressable, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { Icon, type IconName } from './Icon';
 import { Text } from './Text';
@@ -12,9 +12,11 @@ import {
   deleteDocument,
   listDocuments,
   openDocument,
+  pickPhoto,
   uploadDocument,
   type BusinessDocument,
   type BusinessDocumentKind,
+  type UploadAsset,
 } from '@/services/documents';
 import { colors, radius } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
@@ -80,11 +82,24 @@ export function BusinessDocumentsSection() {
 
   const setError = (kind: BusinessDocumentKind, message?: string) => setErrors((current) => ({ ...current, [kind]: message }));
 
-  const pick = async (kind: BusinessDocumentKind) => {
+  const pickFrom = async (kind: BusinessDocumentKind, source: 'file' | 'camera' | 'library') => {
     setError(kind);
-    const result = await DocumentPicker.getDocumentAsync({ type: DOCUMENT_TYPES, copyToCacheDirectory: true, multiple: false });
-    if (result.canceled || !result.assets[0]) return;
-    const asset = result.assets[0];
+    let asset: UploadAsset | null = null;
+    if (source === 'file') {
+      const result = await DocumentPicker.getDocumentAsync({ type: DOCUMENT_TYPES, copyToCacheDirectory: true, multiple: false });
+      if (result.canceled || !result.assets[0]) return;
+      asset = result.assets[0];
+    } else {
+      setBusy(kind); // converting a photo can take a moment
+      try {
+        asset = await pickPhoto(source);
+      } catch (error) {
+        setBusy(null);
+        return setError(kind, error instanceof Error && error.message === 'permission' ? t(source === 'camera' ? 'docs.cameraDenied' : 'docs.photosDenied') : t('state.error'));
+      }
+      setBusy(null);
+      if (!asset) return;
+    }
     if (asset.size && asset.size > MAX_DOCUMENT_BYTES) return setError(kind, t('docs.tooLarge'));
     setBusy(kind);
     try {
@@ -94,6 +109,25 @@ export function BusinessDocumentsSection() {
       setError(kind, error instanceof Error ? error.message : t('state.error'));
     } finally {
       setBusy(null);
+    }
+  };
+
+  /** Phone: ask where the document comes from (camera, Photos or a file). Browser: the file picker accepts images too. */
+  const pick = (kind: BusinessDocumentKind) => {
+    if (Platform.OS === 'web') return void pickFrom(kind, 'file');
+    const choices = [
+      { label: t('docs.fromCamera'), source: 'camera' as const },
+      { label: t('docs.fromPhotos'), source: 'library' as const },
+      { label: t('docs.fromFiles'), source: 'file' as const },
+    ];
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { title: t('docs.uploadFrom'), options: [...choices.map((c) => c.label), t('common.cancel')], cancelButtonIndex: choices.length },
+        (index) => { if (index < choices.length) void pickFrom(kind, choices[index].source); },
+      );
+    } else {
+      // Android alerts hold three buttons: the three choices; tap outside to cancel.
+      Alert.alert(t('docs.uploadFrom'), undefined, choices.map((c) => ({ text: c.label, onPress: () => void pickFrom(kind, c.source) })), { cancelable: true });
     }
   };
 

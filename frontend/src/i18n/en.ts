@@ -806,6 +806,12 @@ export const en = {
   'pack.status.red': 'Concern',
   'pack.status.not_available': 'Not available',
   'pack.pdfMethod': 'How these figures are made: the 3-month probability projects the business’s own recent months and the loan instalments already scheduled; the 12-month figure comes from an XGBoost model trained on real company accounts, with the reasons shown. Both are indicative, not a credit decision.',
+  'docs.uploadFrom': 'Upload from',
+  'docs.fromCamera': 'Take a photo',
+  'docs.fromPhotos': 'Choose from Photos',
+  'docs.fromFiles': 'Choose a file (PDF or image)',
+  'docs.cameraDenied': 'FINEXT needs camera access to take a photo. Allow it in your phone settings, or choose a file instead.',
+  'docs.photosDenied': 'FINEXT needs access to your photos. Allow it in your phone settings, or choose a file instead.',
 } as const;
 
 export type TKey = keyof typeof en;

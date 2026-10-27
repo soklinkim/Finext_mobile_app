@@ -27,7 +27,15 @@
       "expo-font",
       "expo-splash-screen",
       "expo-status-bar",
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "FINEXT uses your photos to upload business documents, such as your Patent Tax certificate.",
+          "cameraPermission": "FINEXT uses the camera to photograph business documents, such as your Patent Tax certificate.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "scheme": "finext"
   }
