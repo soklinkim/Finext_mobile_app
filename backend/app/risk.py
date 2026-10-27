@@ -283,6 +283,9 @@ def assess(transactions: list[dict], banks: list[dict], settings: dict | None = 
     effective = [tx for tx in live if tx["id"] not in cancelled and tx.get("typeId") != REVERSAL]
     out: dict[str, Any] = {"model": score(snapshots, model), "stress3m": forecast(snapshots, effective, currency, rate),
                            "debtCapacity": debt_capacity(snapshots, effective, currency, rate, proposed)}
+    if not proposed:  # how to lower the risk (not for a what-if loan)
+        from app.advice import advise
+        out["advice"] = advise(snapshots, effective, currency, rate, lambda books: score(books, model), out)
     if proposed and out["stress3m"]["available"]:
         after = forecast(snapshots, effective, currency, rate, extra_instalment=monthly_instalment(proposed))
         out["debtCapacity"].setdefault("proposed", {})["stress3m"] = {

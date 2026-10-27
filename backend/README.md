@@ -47,6 +47,13 @@ Bookkeeping writes go to local SQLite first with `syncStatus = 'pending'`. The c
   instalments for the next 3 months (DSCR, target 1.25), the cash flow trend, instalments due in 14 days against
   cash, and recent borrowing. Gives a level, reasons and the affordable monthly instalment.
 
+`advice` (in `GET /accounting/risk`): how to lower the risk (`app/advice.py`). Changes an owner can make, applied to
+the books and re-scored with the same 3-month projection and 12-month model: break even (the monthly gap to stop
+losing money), collect from customers and get paid on time, sell down extra stock, cut operating costs 10%, raise the
+gross margin 2 points, keep owner drawings within half the profit, ask for a longer loan term. Only changes that apply
+and help are offered, never one that raises either risk; none when both risks are low. Before and after use the same
+random draws, so the difference is the change, not chance.
+
 `POST /accounting/risk/loan-check` with a proposed loan (`amount`, `termMonths`, `annualInterestRate`, `rateType`,
 `repaymentFrequency`, optional `installmentAmount`) adds `debtCapacity.proposed`: its monthly instalment, DSCR with it,
 whether it fits, the largest amount on the same terms that does, and the model's probability before and after (the

@@ -144,7 +144,7 @@ def test_risk_endpoints(monkeypatch):
     try:
         client = TestClient(app)
         body = client.get("/accounting/risk").json()
-        assert set(body) == {"model", "stress3m", "debtCapacity"}
+        assert set(body) == {"model", "stress3m", "debtCapacity", "advice"}
         loan = {"amount": 500_000, "termMonths": 12, "annualInterestRate": 15, "rateType": "declining", "repaymentFrequency": "monthly"}
         checked = client.post("/accounting/risk/loan-check", json=loan).json()
         assert "proposed" in checked["debtCapacity"]

@@ -55,8 +55,10 @@ def stressed_now(features: dict) -> list[str]:
 
 
 def forecast(snapshots: list[dict], transactions: list[dict], currency: str, rate: int,
-             extra_instalment: float = 0.0, paths: int = PATHS) -> dict:
-    """The 3-month stress probability. `extra_instalment` adds a proposed loan's monthly instalment."""
+             extra_instalment: float = 0.0, paths: int = PATHS, instalment_scale: float = 1.0,
+             drawings_cap: float | None = None) -> dict:
+    """The 3-month stress probability. `extra_instalment` adds a proposed loan's monthly instalment; for advice,
+    `instalment_scale` scales the scheduled instalments (a longer term) and `drawings_cap` limits owner drawings."""
     usable = [s for s in snapshots[-12:] if _usable(s)]
     if len(usable) < MIN_MONTHS or not _usable(snapshots[-1]):
         return {"available": False, "reason": "not_enough_history", "months": len(usable),
@@ -66,6 +68,8 @@ def forecast(snapshots: list[dict], transactions: list[dict], currency: str, rat
     ocf = np.array([s["features"]["ocf"] for s in recent], dtype=float)
     ebitda = np.array([s["features"]["ebitda"] for s in recent], dtype=float)
     drawings = np.array([s["features"]["owner_drawings"] for s in recent], dtype=float)
+    if drawings_cap is not None:
+        drawings = np.minimum(drawings, max(0.0, drawings_cap))
     usual = latest.get("usual_monthly_expenses")
     if usual is None:
         usual = statistics.fmean(s["features"]["cogs"] + s["features"]["operating_expenses"] - s["features"]["depreciation"] for s in recent)
@@ -76,12 +80,14 @@ def forecast(snapshots: list[dict], transactions: list[dict], currency: str, rat
     for k in range(HORIZON):
         start, end = _month_bounds(first + k)
         due, missing = _debt_service(transactions, currency, rate, start, end)
-        instalments.append(due + extra_instalment)
+        instalments.append(due * instalment_scale + extra_instalment)
         schedule_missing |= missing
     instalments = np.array(instalments, dtype=float)
 
-    # Each future month repeats one of the recent months, chosen at random (seeded by the books).
-    seed = int(hashlib.sha256(repr((snapshots[-1]["period"], ocf.tolist(), latest["cash"], instalments.tolist())).encode()).hexdigest()[:8], 16)
+    # Each future month repeats one of the recent months, chosen at random. The draws depend only on the month and the
+    # number of months, so the same books always give the same answer, and a what-if (advice, a proposed loan) is
+    # compared on the same draws: the difference is the change itself, not chance.
+    seed = int(hashlib.sha256(repr((snapshots[-1]["period"], len(recent))).encode()).hexdigest()[:8], 16)
     picks = np.random.default_rng(seed).integers(len(recent), size=(paths, HORIZON))
     path_ocf, path_ebitda = ocf[picks], ebitda[picks]
     cash = latest["cash"] + np.cumsum(path_ocf - drawings[picks] - instalments, axis=1)

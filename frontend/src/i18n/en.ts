@@ -749,6 +749,23 @@ export const en = {
   'stress.floor': 'Two weeks of usual expenses: {amount}. The range covers 8 in 10 possible futures.',
   'stress.note': 'A projection from your own recent months, not a guarantee. Equipment purchases, new loans and one-off events are not included.',
   'debt.check.stressChange': 'Stress in the next 3 months: {before}% now, {after}% with this loan.',
+  'advice.title': 'How to lower your risk',
+  'advice.subtitle': 'Each change is checked with the same AI and 3-month projection as your scores.',
+  'advice.lowRisk': 'Your risk is low. Keep recording every sale and cost so it stays accurate.',
+  'advice.break_even': 'Stop losing money: close a gap of about {gap} a month.',
+  'advice.forExample': 'For example,',
+  'advice.orCutCosts': 'cut operating costs by {percent}%',
+  'advice.orRaiseMargin': 'raise your gross margin by {points} points',
+  'advice.or': ' or ',
+  'advice.collect_receivables': 'Collect from customers and ask them to pay on time: from {now} to {target} days of sales owed ({cash} back into cash).',
+  'advice.reduce_stock': 'Sell down extra stock: from {now} to {target} days of sales ({cash} back into cash).',
+  'advice.cut_costs': 'Cut operating costs by {percent}% (about {monthly} a month).',
+  'advice.raise_margin': 'Raise your gross margin by {points} points, through prices or cheaper buying (about {monthly} a month).',
+  'advice.limit_drawings': 'Take out at most {cap} a month for yourself (now {now}).',
+  'advice.longer_loan_term': 'Ask your lender for a longer term: instalments from {now} to about {after} a month.',
+  'advice.stress3m': 'Stress in 3 months',
+  'advice.model12m': 'Risk in 12 months',
+  'advice.cash3m': 'Cash expected in 3 months',
 } as const;
 
 export type TKey = keyof typeof en;

@@ -128,3 +128,49 @@ def test_stress_now_is_reported_separately_from_the_forecast():
 def test_the_same_books_always_give_the_same_projection():
     again = assess(BY_NAME["Sales collapsed in the last 3 months"])["stress3m"]
     assert again["probability"] == stress("Sales collapsed in the last 3 months")["probability"]
+
+
+# How to lower the risk: changes re-scored with the same projection and model.
+
+def advice(name: str) -> list[dict]:
+    return result(name)["advice"]
+
+
+def test_no_advice_when_the_risk_is_low():
+    for name in ("Healthy grocery", "Growing fast (+4% a month)", "Service business (no stock)"):
+        assert advice(name) == [], name
+
+
+@pytest.mark.parametrize("name, first, horizon", [
+    ("Loss-making every month", "break_even", "stress3m"),
+    ("Customers not paying (60% on credit, half collected)", "collect_receivables", "stress3m"),
+    ("Heavily indebted (instalments > profit)", "longer_loan_term", "stress3m"),
+    ("Liabilities exceed assets (losses funded by unpaid suppliers)", "break_even", "model12m"),
+])
+def test_the_most_useful_change_comes_first_and_lowers_the_risk(name, first, horizon):
+    top = advice(name)[0]
+    assert top["code"] == first
+    assert top[horizon]["after"] < top[horizon]["before"] - 0.1
+
+
+@pytest.mark.parametrize("profile", PROFILES, ids=lambda p: p.name)
+def test_advice_never_makes_a_risk_worse(profile):
+    for item in result(profile.name)["advice"]:
+        for horizon in ("stress3m", "model12m"):
+            if item[horizon]:
+                assert item[horizon]["after"] <= item[horizon]["before"] + 0.002, (item["code"], horizon)
+
+
+def test_advice_starts_from_the_scores_shown_on_the_card():
+    out = result("Loss-making every month")
+    for item in out["advice"]:
+        assert item["stress3m"]["before"] == out["stress3m"]["probability"]
+        assert item["model12m"] is None or item["model12m"]["before"] == out["model"]["probability"]
+
+
+@pytest.mark.skipif(not APP_STRINGS.exists(), reason="frontend not checked out")
+def test_every_advice_the_backend_gives_has_app_text():
+    keys = set(re.findall(r"^\s*'([^']+)':", APP_STRINGS.read_text(encoding="utf-8"), flags=re.M))
+    from app import advice
+    codes = set(re.findall(r'candidates\.append\(\("([a-z_]+)"', Path(advice.__file__).read_text(encoding="utf-8")))
+    assert len(codes) == 7 and {f"advice.{c}" for c in codes} <= keys

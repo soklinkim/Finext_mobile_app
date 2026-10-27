@@ -8,7 +8,7 @@ import { Text } from './Text';
 import { TextField } from './TextField';
 import { useAnalysisQuery } from '@/hooks/useAnalysisQuery';
 import { useI18n, type TKey } from '@/i18n';
-import { checkLoan, getFutureRisk, type FutureRisk, type ProposedLoan, type RiskDriver, type RiskLevel } from '@/services/analysis';
+import { checkLoan, getFutureRisk, type FutureRisk, type ProposedLoan, type RiskAdvice, type RiskDriver, type RiskLevel } from '@/services/analysis';
 import { formatMoneyWhole, parseAmountInput } from '@/services/bookkeeping';
 import { colors, radius } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
@@ -321,6 +321,74 @@ function DebtCapacityCard({ capacity }: { capacity: Capacity }) {
   );
 }
 
+/** The change in words, with its numbers filled in (amounts as money, shares as percentages). */
+function adviceText(t: ReturnType<typeof useI18n>['t'], item: RiskAdvice): string {
+  const p = item.params;
+  const money = (amount: number | null | undefined) => formatMoneyWhole(Math.round(amount ?? 0), item.currency);
+  const pct = (share: number | null | undefined) => String(Math.round((share ?? 0) * 100));
+  switch (item.code) {
+    case 'break_even': {
+      const options = [
+        p.costCut !== null && p.costCut !== undefined && p.costCut <= 0.5 ? t('advice.orCutCosts', { percent: pct(p.costCut) }) : null,
+        p.marginPoints !== null && p.marginPoints !== undefined && p.marginPoints <= 0.15 ? t('advice.orRaiseMargin', { points: pct(p.marginPoints) }) : null,
+      ].filter(Boolean);
+      return t('advice.break_even', { gap: money(p.monthlyGap) }) + (options.length ? ` ${t('advice.forExample')} ${options.join(t('advice.or'))}.` : '');
+    }
+    case 'collect_receivables':
+    case 'reduce_stock':
+      return t(`advice.${item.code}` as TKey, { now: Math.round(p.daysNow ?? 0), target: Math.round(p.daysTarget ?? 0), cash: money(p.cash) });
+    case 'cut_costs':
+      return t('advice.cut_costs', { percent: pct(p.share), monthly: money(p.monthly) });
+    case 'raise_margin':
+      return t('advice.raise_margin', { points: pct(p.points), monthly: money(p.monthly) });
+    case 'limit_drawings':
+      return t('advice.limit_drawings', { cap: money(p.monthlyCap), now: money(p.monthlyNow) });
+    case 'longer_loan_term':
+      return t('advice.longer_loan_term', { now: money(p.monthlyNow), after: money(p.monthlyAfter) });
+  }
+}
+
+function Change({ label, before, after, money }: { label: string; before: number; after: number; money?: (n: number) => string }) {
+  const better = money ? after > before : after < before;
+  const show = (n: number) => (money ? money(n) : `${percent(n)}%`);
+  return (
+    <Text variant="micro" tone="neutral-600">
+      {label}: {show(before)} → <Text variant="micro" weight={700} style={{ color: better ? colors.success : undefined }} tone="primary-900">{show(after)}</Text>
+    </Text>
+  );
+}
+
+function AdviceCard({ advice, lowRisk }: { advice: RiskAdvice[]; lowRisk: boolean }) {
+  const { t } = useI18n();
+  const { card } = useCard();
+  if (!advice.length && !lowRisk) return null;
+  return (
+    <View style={card}>
+      <View style={{ gap: 2 }}>
+        <Text variant="body-lg" weight={700} tone="primary-900">{t('advice.title')}</Text>
+        <Text variant="micro" tone="neutral-600">{t('advice.subtitle')}</Text>
+      </View>
+      {advice.length === 0 && <Text variant="body-sm" tone="neutral-600">{t('advice.lowRisk')}</Text>}
+      {advice.map((item, index) => {
+        const money = (n: number) => formatMoneyWhole(Math.round(n), item.currency);
+        return (
+          <View key={item.code} style={{ flexDirection: 'row', gap: 10 }} accessible>
+            <View style={{ width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: `${colors.primary[500]}22` }}>
+              <Text variant="micro" weight={700} style={{ color: colors.primary[500] }}>{index + 1}</Text>
+            </View>
+            <View style={{ flex: 1, gap: 3 }}>
+              <Text variant="body-sm" weight={500} tone="primary-900">{adviceText(t, item)}</Text>
+              {item.stress3m && item.stress3m.after < item.stress3m.before && <Change label={t('advice.stress3m')} before={item.stress3m.before} after={item.stress3m.after} />}
+              {item.model12m && item.model12m.after < item.model12m.before - 0.001 && <Change label={t('advice.model12m')} before={item.model12m.before} after={item.model12m.after} />}
+              {item.cash3m && item.cash3m.after > item.cash3m.before && <Change label={t('advice.cash3m')} before={item.cash3m.before} after={item.cash3m.after} money={money} />}
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 function NotYet({ title, body }: { title: string; body: string }) {
   const { card } = useCard();
   return (
@@ -342,6 +410,12 @@ export function FutureRiskSection() {
       <Text variant="body" weight={700} tone="primary-900">{t('analysis.futureRisk')}</Text>
       {query.source === 'cache' && <OfflineBanner fetchedAt={query.fetchedAt} />}
       <RiskCard risk={risk} />
+      {risk.advice && (risk.stress3m.available || risk.model.available) && (
+        <AdviceCard
+          advice={risk.advice}
+          lowRisk={[risk.stress3m, risk.model].every((answer) => !answer.available || answer.riskClass === 'low')}
+        />
+      )}
       {risk.debtCapacity.available
         ? <DebtCapacityCard capacity={risk.debtCapacity} />
         : <NotYet title={t('debt.title')} body={t('debt.needsHistory', { count: risk.debtCapacity.months })} />}

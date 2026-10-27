@@ -76,8 +76,25 @@ export interface ProposedLoan {
   installmentAmount?: number;
 }
 
+export type AdviceCode = 'break_even' | 'collect_receivables' | 'reduce_stock' | 'cut_costs' | 'raise_margin' | 'limit_drawings' | 'longer_loan_term';
+
+/** One change the owner can make, re-scored with the same 3-month projection and 12-month model. */
+export interface RiskAdvice {
+  code: AdviceCode;
+  /** Amounts in minor units; shares and points as fractions (0.1 = 10%). */
+  params: Record<string, number | null>;
+  currency: Currency;
+  gain: number;
+  stress3m: { before: number; after: number } | null;
+  model12m: { before: number; after: number } | null;
+  conditions: Partial<Record<'cash_runway' | 'negative_cash_flow' | 'dscr', { before: number; after: number }>>;
+  cash3m: { before: number; after: number } | null;
+}
+
 /** GET /accounting/risk and POST /accounting/risk/loan-check (Layer 2). Amounts in the display currency's minor units. */
 export interface FutureRisk {
+  /** How to lower the risk (GET /accounting/risk only; empty when the risk is low). */
+  advice?: RiskAdvice[];
   model:
     | { available: false; reason: 'not_enough_history'; months: number; text: string }
     | {
