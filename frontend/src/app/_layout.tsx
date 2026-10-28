@@ -200,7 +200,8 @@ function AppFrame() {
   const pathname = usePathname();
   const router = useRouter();
   useEffect(() => {
-    const isPublicRoute = ['/launch', '/login', '/signup', '/forgot-password'].includes(pathname);
+    // Open without an account: the sign-in screens, and the policies they link to (read before signing up).
+    const isPublicRoute = ['/launch', '/login', '/signup', '/forgot-password', '/policies'].includes(pathname) || pathname.startsWith('/policy/');
     if (!isPublicRoute) {
       void getSession().then((session) => {
         if (!session) router.replace('/launch');

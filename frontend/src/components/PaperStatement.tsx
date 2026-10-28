@@ -9,10 +9,9 @@ import { colors, shadow } from '@/theme';
 /**
  * A statement drawn as a sheet of A4 paper, matching the PDF: black text on white in both themes, a formal heading,
  * one panel per period (side by side when the sheet is wide enough, stacked on a phone), small-caps section labels,
- * zero rows greyed, ruled subtotals and a double-ruled final total.
+ * every row in black ink, ruled subtotals and a double-ruled final total.
  */
 const INK = '#111111';
-const FAINT = '#A3A3A3';
 const HAIRLINE = '#E6E6E6';
 const A4 = 297 / 210;
 const SIDE_BY_SIDE = 560; // sheet width at which Current and Prior fit next to each other
@@ -21,7 +20,6 @@ function Row({ line, value, currency }: { line: StatementLine; value: number | u
   const { term } = useI18n();
   const style = line.style ?? 'line';
   const bold = style !== 'line';
-  const color = style === 'line' && !value ? FAINT : INK;
   return (
     <View style={{
       flexDirection: 'row', gap: 8, paddingVertical: style === 'total' ? 7 : 5,
@@ -29,8 +27,8 @@ function Row({ line, value, currency }: { line: StatementLine; value: number | u
       ...(style === 'subtotal' ? { borderTopWidth: 1, borderTopColor: INK } : {}),
       ...(style === 'total' ? { borderTopWidth: 1.5, borderTopColor: INK } : {}),
     }}>
-      <Text variant="micro" weight={bold ? 700 : 400} style={{ flex: 1, color }}>{term(line.label)}</Text>
-      <Text variant="micro" weight={bold ? 700 : 400} style={{ color, fontVariant: ['tabular-nums'] }}>
+      <Text variant="micro" weight={bold ? 700 : 400} style={{ flex: 1, color: INK }}>{term(line.label)}</Text>
+      <Text variant="micro" weight={bold ? 700 : 400} style={{ color: INK, fontVariant: ['tabular-nums'] }}>
         {value === undefined ? '—' : paperMoney(value, currency)}
       </Text>
     </View>

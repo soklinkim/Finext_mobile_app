@@ -4,6 +4,7 @@ import { Button } from '@/components/Button';
 import { Chip, ChipRow } from '@/components/Chip';
 import { Icon } from '@/components/Icon';
 import { OfflineBanner } from '@/components/OfflineBanner';
+import { PdfPreview } from '@/components/PdfPreview';
 import { ScreenShell } from '@/components/ScreenShell';
 import { EmptyState, ErrorState, LoadingState } from '@/components/StateViews';
 import { Text } from '@/components/Text';
@@ -11,7 +12,7 @@ import { useAnalysisQuery } from '@/hooks/useAnalysisQuery';
 import { useI18n, type TKey } from '@/i18n';
 import { getFutureRisk, getRatios, getStatements, type StatementPeriod } from '@/services/analysis';
 import { formatMoneyWhole } from '@/services/bookkeeping';
-import { exportLoanPack } from '@/services/loanPackPdf';
+import { loanPackHtml } from '@/services/loanPackPdf';
 import { percent } from '@/services/riskText';
 import { colors, radius } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
@@ -28,28 +29,20 @@ export default function LoanPack() {
   const statements = useAnalysisQuery(loadStatements);
   const risk = useAnalysisQuery(getFutureRisk);
   const ratios = useAnalysisQuery(getRatios);
-  const [exporting, setExporting] = useState(false);
-  const [exportError, setExportError] = useState(false);
+  // The pack to download, shown in a preview first; null while the preview is closed.
+  const [preview, setPreview] = useState<string | null>(null);
   const card = { padding: 16, borderRadius: radius.card, backgroundColor: dark ? colors.dark.surface : colors.white, borderWidth: 1, borderColor: dark ? colors.dark.border : colors.neutral[200], gap: 12 } as const;
 
   const ready = Boolean(statements.data) && !risk.loading && !ratios.loading;
-  const download = async () => {
+  const open = () => {
     if (!statements.data) return;
-    setExporting(true);
-    setExportError(false);
-    try {
-      await exportLoanPack({
-        statements: statements.data,
-        risk: risk.data ?? null,
-        ratios: ratios.data ?? [],
-        t,
-        date: new Date().toLocaleDateString(locale === 'km' ? 'km-KH' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
-      });
-    } catch {
-      setExportError(true);
-    } finally {
-      setExporting(false);
-    }
+    setPreview(loanPackHtml({
+      statements: statements.data,
+      risk: risk.data ?? null,
+      ratios: ratios.data ?? [],
+      t,
+      date: new Date().toLocaleDateString(locale === 'km' ? 'km-KH' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+    }));
   };
 
   const summary: { label: string; value: string; level?: 'low' | 'moderate' | 'high'; levelKey?: 'risk.level' | 'debt.level' }[] = [];
@@ -110,12 +103,12 @@ export default function LoanPack() {
               ))}
             </View>
 
-            <Button label={t('pack.download')} icon="download" onPress={download} loading={exporting || !ready} disabled={!ready} />
-            {exportError ? <Text variant="micro" tone="danger">{t('pack.failed')}</Text> : null}
+            <Button label={t('pack.download')} icon="download" onPress={open} loading={!ready} disabled={!ready} />
             <Text variant="micro" tone="neutral-500">{t('pack.consent')}</Text>
           </>
         )}
       </View>
+      <PdfPreview html={preview} title={`${t('pack.pdfTitle')} — ${statements.data?.business ?? ''}`} onClose={() => setPreview(null)} failedMessage={t('pack.failed')} />
     </ScreenShell>
   );
 }

@@ -8,7 +8,7 @@ import type { FutureRisk, RatioSnapshot, Statements } from '@/services/analysis'
 import { formatMoneyWhole } from '@/services/bookkeeping';
 import { formatBenchmark, formatRatio } from '@/services/ratioFormat';
 import { adviceText, driverValue, percent, reasonText } from '@/services/riskText';
-import { STATEMENT_CSS, esc, exportPdf, statementSection } from '@/services/statementPdf';
+import { STATEMENT_CSS, esc, statementSection } from '@/services/statementPdf';
 
 type Translate = (key: TKey, params?: Record<string, string | number>) => string;
 
@@ -115,8 +115,4 @@ export function loanPackHtml(input: LoanPackInput): string {
   ].filter(Boolean);
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(input.t('pack.pdfTitle'))} — ${esc(statements.business)}</title>
     <style>${STATEMENT_CSS}${PACK_CSS}</style></head><body>${pages.join('')}</body></html>`;
-}
-
-export function exportLoanPack(input: LoanPackInput): Promise<void> {
-  return exportPdf(loanPackHtml(input), `${input.t('pack.pdfTitle')} — ${input.statements.business}`);
 }

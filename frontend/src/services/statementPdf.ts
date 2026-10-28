@@ -1,6 +1,3 @@
-import { Platform } from 'react-native';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
 import type { Statement } from '@/services/analysis';
 import { formatMoney } from '@/services/bookkeeping';
 
@@ -9,7 +6,7 @@ export const esc = (value: string) =>
 
 /**
  * Print styles for statements (shared with the loan application pack): a formal heading block, then one panel per
- * period side by side (current, prior), small-caps section labels, zero rows greyed, ruled subtotals and a
+ * period side by side (current, prior), small-caps section labels, ruled subtotals and a
  * double-ruled final total.
  */
 export const STATEMENT_CSS = `
@@ -28,7 +25,6 @@ export const STATEMENT_CSS = `
     .stmt-col td { padding: 5px 0; border-bottom: 1px solid #e6e6e6; vertical-align: top; }
     .stmt-col td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; padding-left: 8px; }
     .stmt-col tr.section td { font-size: 6.8pt; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; padding-top: 14px; border-bottom: 0; }
-    .stmt-col tr.zero td { color: #a3a3a3; }
     .stmt-col tr.subtotal td { font-weight: 700; border-top: 1px solid #111; }
     .stmt-col tr.total td { font-weight: 700; border-top: 1.5px solid #111; border-bottom: 3px double #111; padding: 7px 0; }
     .stmt-check { font-size: 7.5pt; color: #666; margin-top: 14px; }`;
@@ -53,8 +49,7 @@ export function statementSection(statement: Statement, business: string): string
           .map((line) => {
             const value = index === 0 ? line.current : line.prior;
             const style = line.style ?? 'line';
-            const zero = style === 'line' && !value;
-            return `<tr class="${style}${zero ? ' zero' : ''}"><td>${esc(line.label)}</td><td class="num">${value === undefined ? '—' : esc(paperMoney(value, statement.currency))}</td></tr>`;
+            return `<tr class="${style}"><td>${esc(line.label)}</td><td class="num">${value === undefined ? '—' : esc(paperMoney(value, statement.currency))}</td></tr>`;
           })
           .join('');
         return title + lines;
@@ -85,42 +80,3 @@ export function statementHtml(statement: Statement, business: string): string {
   </body></html>`;
 }
 
-/** Browser: print the page from a hidden frame (expo-print on web would print the whole app). */
-function printOnWeb(html: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const frame = document.createElement('iframe');
-    frame.setAttribute('aria-hidden', 'true');
-    Object.assign(frame.style, { position: 'fixed', right: '0', bottom: '0', width: '0', height: '0', border: '0' });
-    frame.onload = () => {
-      try {
-        frame.contentWindow?.focus();
-        frame.contentWindow?.print();
-        resolve();
-      } catch (error) {
-        reject(error);
-      } finally {
-        setTimeout(() => frame.remove(), 1000);
-      }
-    };
-    frame.srcdoc = html;
-    document.body.appendChild(frame);
-  });
-}
-
-/**
- * Download a page as PDF: on a phone, make a PDF and open the share sheet (save to Files, send in a chat…);
- * in a browser, open the print dialog, where "Save as PDF" is one of the printers.
- */
-export async function exportPdf(html: string, title: string): Promise<void> {
-  if (Platform.OS === 'web') return printOnWeb(html);
-  const { uri } = await Print.printToFileAsync({ html });
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: title });
-  } else {
-    await Print.printAsync({ uri });
-  }
-}
-
-export function exportStatementPdf(statement: Statement, business: string): Promise<void> {
-  return exportPdf(statementHtml(statement, business), statement.title);
-}

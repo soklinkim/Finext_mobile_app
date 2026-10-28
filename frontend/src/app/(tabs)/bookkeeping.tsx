@@ -10,6 +10,7 @@ import { EmptyState, LoadingState } from '@/components/StateViews';
 import { SummaryHero } from '@/components/SummaryHero';
 import { Text } from '@/components/Text';
 import { UnusualEntriesCard } from '@/components/UnusualEntriesCard';
+import { handOffStatement, pickStatementFile } from '@/services/statementImport';
 import { useLocalQuery } from '@/hooks/useLocalQuery';
 import { useI18n, type TKey } from '@/i18n';
 import { formatInputDate, MONTHS } from '@/lib/format';
@@ -149,6 +150,15 @@ export default function Bookkeeping() {
 
       {/* 2. The main action */}
       <Button label={t('overview.addEntry')} icon="plus" onPress={() => router.push('/add-entry')} />
+      <View style={{ marginTop: 10 }}>
+        {/* Opens the file picker on this tap (browsers block pickers that are not), then the import screen reads it. */}
+        <Button variant="soft" label={t('import.button')} icon="upload" onPress={async () => {
+          const file = await pickStatementFile();
+          if (!file) return;
+          handOffStatement(file);
+          router.push('/import-statement');
+        }} />
+      </View>
 
       {/* 2b. Entries that look like mistakes (hidden when there are none) */}
       <UnusualEntriesCard />

@@ -69,12 +69,19 @@ Run [`sql/002_business_documents.sql`](sql/002_business_documents.sql) and [`sql
 
 **Lender portal.** Bank staff use the web portal at `http://localhost:8000/portal/`. They see only businesses that are currently sharing with their bank, and only the parts each business consented to. They can record a decision (reviewing, approved or declined) with a note, which the SME sees in the app. Set `SUPABASE_PUBLISHABLE_KEY` in `backend/.env` (the same public key as the app's `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`) so staff can sign in. A bank staff login is refused by the SME app and its API (`403`); `GET /me` reports whether a login is `sme` or `lender`.
 
-To add a bank and its staff:
+**Access is by invitation only.** Banks cannot sign up: otherwise anyone could claim to be a bank and see businesses' data. The portal has Sign in and Forgot password only, and the app's login screen links bank staff to it ("Bank or MFI staff? Lender portal"). A bank login used in the app is shown the way to the portal.
 
-1. Create each staff member's login in Supabase: Authentication › Users › Add user.
-2. From the `backend` folder, run:
+To add a bank and invite its staff (recommended):
+
+1. In Supabase, Authentication › URL Configuration › Redirect URLs, add the portal address (`http://localhost:8000/portal/`, or `PORTAL_URL` once deployed).
+2. Put the project's secret (service role) key in `backend/.env` as `SUPABASE_SECRET_KEY`. Only this script uses it; never put it in the app or the portal.
+3. From the `backend` folder, run:
 
 ```powershell
-venv/Scripts/python.exe scripts/add_lender.py "ACLEDA Bank" loans@acleda.example
+venv/Scripts/python.exe scripts/add_lender.py "ACLEDA Bank" loans@acleda.example --invite
 venv/Scripts/python.exe scripts/add_lender.py --list
 ```
+
+Each staff member gets an email. Its link opens the portal, where they choose their own password and go straight to their bank's applicants. FINEXT never sees or sends a password. Staff who forget theirs use **Forgot password?** on the portal.
+
+Without the secret key, create the login by hand (Authentication › Users › Add user), then run the same command without `--invite`, and send the staff member the portal link.

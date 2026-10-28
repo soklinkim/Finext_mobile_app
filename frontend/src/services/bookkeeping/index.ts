@@ -357,6 +357,11 @@ function lookups() {
 
 const live = () => isNull(schema.transactions.deletedAt);
 
+/** Live entries on or after a date: used to match imported bank statement rows (likely duplicates, the type used before). */
+export async function listEntriesSince(since: number): Promise<Transaction[]> {
+  return db.select().from(schema.transactions).where(and(live(), gte(schema.transactions.occurredAt, since))).all();
+}
+
 export async function listTransactions(opts: { limit?: number; offset?: number } = {}): Promise<TransactionView[]> {
   const { cats, banks, rel } = lookups();
   const q = db.select().from(schema.transactions).where(live()).orderBy(desc(schema.transactions.occurredAt));

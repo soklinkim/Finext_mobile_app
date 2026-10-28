@@ -3,15 +3,18 @@
     python -m finext_ml.export_model artifacts/polish_bankruptcy/<run id>
 
 Writes `<run>/export/model.json` (the XGBoost trees, in XGBoost's own portable format) and `<run>/export/model_meta.json`
-(feature order, plain labels, calibration, alert threshold, risk bands, version, headline results). The backend
+(feature order, plain labels, calibration, alert threshold, risk bands, version, headline results, and the training run
+it came from with SHA-256 fingerprints of its files, so the deployed copy can be traced back to one run). The backend
 needs only `xgboost` and `numpy` to use them: no pickles, no training code. The scorer that uses them lives in the
 backend (`backend/app/risk_model.py`) and is imported here for checks; copy the two files to
 `backend/app/risk_model_files/` to deploy.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[2] / "backend"))
@@ -29,6 +32,10 @@ LOCAL_PRIOR = {
     "source": "National Bank of Cambodia, Annual Supervision Report 2025",
     "url": "https://www.nbc.gov.kh/download_files/supervision/sup_an_rep_eng/EN%20Annual%20Supervision%20Report%202025.pdf",
 }
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def export(run_dir: str | Path) -> Path:
@@ -63,6 +70,13 @@ def export(run_dir: str | Path) -> Path:
                                                                                           "precision": h["at_alert_threshold"]["precision"]}
                     for name, h in report["holdout"].items()},
         "card": data.card["warning"],
+        # Which training run this is: `model.joblib` matches the file in ml/artifacts/<dataset>/<id>/, `model.json`
+        # the trees deployed next to this file (check with `sha256sum` or `Get-FileHash`).
+        "run": {
+            "id": run_dir.name, "dir": f"ml/artifacts/{report['dataset']}/{run_dir.name}",
+            "exported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "sha256": {"model.joblib": sha256(run_dir / "model.joblib"), "model.json": sha256(out / "model.json")},
+        },
     }
     (out / "model_meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
     return out

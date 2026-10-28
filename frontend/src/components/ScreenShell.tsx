@@ -71,7 +71,7 @@ export function ScreenShell({
           borderTopLeftRadius: sheetRadius,
           borderTopRightRadius: sheetRadius,
           overflow: 'hidden',
-          marginTop: hero || !noHeader ? 8 : 0,
+          marginTop: hero || !noHeader ? 12 : 0,
         }}
       >
         {scroll ? (

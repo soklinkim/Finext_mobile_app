@@ -1,9 +1,11 @@
 import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Button } from './Button';
 import { Chip, ChipRow } from './Chip';
-import { BeforeAfterBar, CashFanChart, DivergingBars, ProbabilityRing, ShareBar, StackedBar, TargetMeter, useChartColors } from './HealthCharts';
-import { Icon } from './Icon';
+import { FinHealthCard } from './FinHealthCard';
+import { BeforeAfterBar, CashFanChart, DivergingBars, ShareBar, StackedBar, TargetMeter, useChartColors } from './HealthCharts';
+import { Icon, type IconName } from './Icon';
 import { OfflineBanner } from './OfflineBanner';
 import { EmptyState, ErrorState } from './StateViews';
 import { Text } from './Text';
@@ -12,12 +14,14 @@ import { WhatIfCard } from './WhatIfCard';
 import { useAnalysisQuery } from '@/hooks/useAnalysisQuery';
 import { useI18n, type TKey } from '@/i18n';
 import { checkLoan, getFutureRisk, type FutureRisk, type ProposedLoan, type RiskAdvice, type RiskDriver, type RiskLevel } from '@/services/analysis';
+import { formatUpdated } from '@/lib/format';
 import { formatMoneyWhole, parseAmountInput } from '@/services/bookkeeping';
 import { adviceText, driverValue, percent, reasonText } from '@/services/riskText';
 import { colors, radius } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
 
 const LEVEL_COLOR: Record<RiskLevel, string> = { low: colors.success, moderate: colors.warning, high: colors.danger };
+const LEVEL_ORDER: RiskLevel[] = ['low', 'moderate', 'high'];
 type Model = Extract<FutureRisk['model'], { available: true }>;
 type Stress = Extract<FutureRisk['stress3m'], { available: true }>;
 type Capacity = Extract<FutureRisk['debtCapacity'], { available: true }>;
@@ -77,22 +81,114 @@ function Row({ label, hint, value, valueColor }: { label: string; hint?: string;
   );
 }
 
-/** The percentage in a ring coloured by level, the level beside it, and one short line under the level. */
-function Gauge({ probability, level, label, note }: { probability: number; level: RiskLevel; label: string; note?: string }) {
-  const { t } = useI18n();
-  const color = LEVEL_COLOR[level];
-  const levelText = t(`risk.level.${level}` as TKey);
+/** A step of the Health story: an icon tile and a blue heading (the same style as Edit Profile and Settings). */
+export function StoryHeading({ icon, title }: { icon: IconName; title: string }) {
+  const { dark } = useCard();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-      <View accessible accessibilityLabel={`${label}: ${percent(probability)}%, ${levelText}`}>
-        <ProbabilityRing probability={probability} color={color}>
-          <Text variant="title-lg" weight={700} tone="primary-900">{percent(probability)}%</Text>
-        </ProbabilityRing>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <View style={{ width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: dark ? colors.dark.field : colors.primary[50] }}>
+        <Icon name={icon} size={18} color={dark ? colors.dark.primary : colors.primary[500]} />
       </View>
-      <View style={{ flex: 1, gap: 6 }}>
-        <Pill label={levelText} color={color} />
-        {note ? <Text variant="micro" tone="neutral-600">{note}</Text> : null}
+      <Text variant="title" weight={700} tone="primary-900" accessibilityRole="header" style={{ flex: 1 }}>{title}</Text>
+    </View>
+  );
+}
+
+/**
+ * Where an AI answer comes from, under every AI card: the months of books it read, when, that it is an estimate, and
+ * a link to the AI Use Statement. `compact` keeps only the last two.
+ */
+function TrustFooter({ months, fetchedAt, compact }: { months?: number; fetchedAt?: number; compact?: boolean }) {
+  const { t, locale } = useI18n();
+  const router = useRouter();
+  const facts = [
+    !compact && months ? t('trust.basis', { months }) : null,
+    !compact && fetchedAt ? t('trust.updated', { time: formatUpdated(fetchedAt, locale) }) : null,
+    t('trust.estimate'),
+  ].filter(Boolean);
+  return (
+    <View style={{ gap: 6 }}>
+      <Divider />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Icon name="info" size={14} color={colors.neutral[500]} />
+        <Text variant="micro" tone="neutral-500" style={{ flex: 1 }}>{facts.join(' · ')}</Text>
       </View>
+      <Pressable accessibilityRole="link" onPress={() => router.push('/policy/ai')} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' }}>
+        <Text variant="caption" weight={600} tone="primary-500">{t('trust.how')}</Text>
+        <Icon name="chevronRight" size={14} color={colors.primary[500]} />
+      </Pressable>
+    </View>
+  );
+}
+
+/** One horizon in the headline: its percentage and level, or "not yet" with how many months there are. */
+function HorizonTile({ label, answer }: { label: string; answer: FutureRisk['model'] | FutureRisk['stress3m'] }) {
+  const { t } = useI18n();
+  const { soft } = useCard();
+  return (
+    <View style={{ flex: 1, minWidth: 0, gap: 6, padding: 12, borderRadius: 12, backgroundColor: soft }}
+      accessible accessibilityLabel={answer.available ? `${label}: ${percent(answer.probability)}%, ${t(`risk.level.${answer.riskClass}` as TKey)}` : `${label}: ${t('verdict.notYet')}`}>
+      <Text variant="micro" weight={600} tone="neutral-600">{label}</Text>
+      {answer.available ? (
+        <>
+          <Text variant="title-lg" weight={700} tone="primary-900">{percent(answer.probability)}%</Text>
+          <Pill label={t(`risk.level.${answer.riskClass}` as TKey)} color={LEVEL_COLOR[answer.riskClass]} />
+        </>
+      ) : (
+        <>
+          <Text variant="body-lg" weight={700} tone="neutral-500">{t('verdict.notYet')}</Text>
+          <Text variant="micro" tone="neutral-500">{t('risk.needsHistory', { count: answer.months })}</Text>
+        </>
+      )}
+    </View>
+  );
+}
+
+/** The worst level among the answers that are available. */
+function overallLevel(risk: FutureRisk): RiskLevel | null {
+  const levels = [risk.stress3m, risk.model].flatMap((answer) => (answer.available ? [answer.riskClass] : []));
+  return levels.length ? levels.reduce((a, b) => (LEVEL_ORDER.indexOf(b) > LEVEL_ORDER.indexOf(a) ? b : a)) : null;
+}
+
+/** Step 1, the answer: one overall verdict, both horizons side by side, and the main reason in a line. */
+function VerdictCard({ risk, fetchedAt }: { risk: FutureRisk; fetchedAt?: number }) {
+  const { t } = useI18n();
+  const { card } = useCard();
+  const level = overallLevel(risk);
+  const model = risk.model.available ? risk.model : null;
+  const raising = model?.topDrivers.find((d) => d.direction === 'raises risk');
+  const main = raising ?? model?.topDrivers.find((d) => d.direction === 'lowers risk');
+  const stressedNow = risk.stress3m.available ? risk.stress3m.stressedNow : [];
+  const months = model?.months ?? (risk.stress3m.available ? risk.stress3m.basedOnMonths : undefined);
+  return (
+    <View style={card}>
+      {level && (
+        <View style={{ gap: 4, borderLeftWidth: 4, borderLeftColor: LEVEL_COLOR[level], paddingLeft: 12 }}>
+          <Text variant="caption" tone="neutral-600">{t('verdict.overall')}</Text>
+          <Text variant="title-lg" weight={700} style={{ color: LEVEL_COLOR[level] }}>{t(`risk.level.${level}` as TKey)}</Text>
+          <Text variant="body-sm" tone="primary-900">{t(`verdict.body.${level}` as TKey)}</Text>
+        </View>
+      )}
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        <HorizonTile label={t('verdict.3m')} answer={risk.stress3m} />
+        <HorizonTile label={t('verdict.12m')} answer={risk.model} />
+      </View>
+      {main && (
+        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
+          <Icon name={raising ? 'expense' : 'income'} size={16} color={raising ? colors.warning : colors.success} />
+          <Text variant="body-sm" tone="primary-900" style={{ flex: 1 }}>
+            {t(raising ? 'verdict.mainRaise' : 'verdict.mainHelp', { reason: t(`risk.f.${main.feature}` as TKey), detail: driverValue(t, main) })}
+          </Text>
+        </View>
+      )}
+      {stressedNow.length > 0 && (
+        <View style={{ borderRadius: 10, padding: 10, gap: 2, backgroundColor: `${colors.danger}14` }}>
+          <Text variant="caption" weight={600} style={{ color: colors.danger }}>{t('stress.nowTitle')}</Text>
+          {stressedNow.map((c) => <Text key={c} variant="micro" tone="neutral-600">{t(`stress.now.${c}` as TKey)}</Text>)}
+        </View>
+      )}
+      {model?.confidence === 'low' && <Text variant="micro" tone="neutral-600">{t('risk.lowConfidence', { count: model.months })}</Text>}
+      <TrustFooter months={months} fetchedAt={fetchedAt} />
     </View>
   );
 }
@@ -109,14 +205,7 @@ function ShortTermView({ stress }: { stress: Stress }) {
     .filter((c) => (c !== 'dscr' || stress.instalments.some((x) => x > 0)) && stress.conditions[c] >= 0.01);
   return (
     <>
-      <Gauge probability={stress.probability} level={stress.riskClass} label={t('stress.title')} note={t('stress.basis', { months: stress.basedOnMonths })} />
-      {stress.stressedNow.length > 0 && (
-        <View style={{ borderRadius: 10, padding: 10, gap: 2, backgroundColor: `${colors.danger}14` }}>
-          <Text variant="caption" weight={600} style={{ color: colors.danger }}>{t('stress.nowTitle')}</Text>
-          {stress.stressedNow.map((c) => <Text key={c} variant="micro" tone="neutral-600">{t(`stress.now.${c}` as TKey)}</Text>)}
-        </View>
-      )}
-      <Divider />
+      <Text variant="micro" tone="neutral-600">{t('stress.basis', { months: stress.basedOnMonths })}</Text>
       <Text variant="caption" weight={600} tone="neutral-600">{t('stress.conditionsTitle')}</Text>
       {conditions.length === 0
         ? <Text variant="body-sm" tone="neutral-600">{t('stress.noConditions')}</Text>
@@ -149,9 +238,6 @@ function LongTermView({ model }: { model: Model }) {
   const valueOf = (driver: RiskDriver) => driverValue(t, driver);
   return (
     <>
-      <Gauge probability={model.probability} level={model.riskClass} label={t('risk.title')}
-        note={model.confidence === 'low' ? t('risk.lowConfidence', { count: model.months }) : undefined} />
-      <Divider />
       <Text variant="caption" weight={600} tone="neutral-600">{t('risk.whyTitle')}</Text>
       <DivergingBars
         leftLabel={t('risk.lowers')}
@@ -168,7 +254,6 @@ function LongTermView({ model }: { model: Model }) {
   );
 }
 
-/** Spec C3: probability of financial stress, over the next 3 months (projection) or 12 months (trained model). */
 /** Small two-option toggle that sits in a card header (the big SegmentedControl is for page-level tabs). */
 function HorizonToggle({ value, onChange }: { value: '3' | '12'; onChange: (value: '3' | '12') => void }) {
   const { t } = useI18n();
@@ -188,10 +273,11 @@ function HorizonToggle({ value, onChange }: { value: '3' | '12'; onChange: (valu
   );
 }
 
-function RiskCard({ risk }: { risk: FutureRisk }) {
+/** Step 2, why: what moves each answer (spec C3), one horizon at a time; the 12-month reasons first. */
+function WhyCard({ risk }: { risk: FutureRisk }) {
   const { t } = useI18n();
   const { card } = useCard();
-  const [horizon, setHorizon] = useState<'3' | '12'>('3');
+  const [horizon, setHorizon] = useState<'3' | '12'>(risk.model.available ? '12' : '3');
   return (
     <View style={card}>
       <CardHeader title={t(horizon === '3' ? 'stress.title' : 'risk.title')} subtitle={t(horizon === '3' ? 'stress.horizon' : 'risk.horizon')} />
@@ -203,6 +289,7 @@ function RiskCard({ risk }: { risk: FutureRisk }) {
         : risk.model.available
           ? <LongTermView model={risk.model} />
           : <Text variant="body-sm" tone="neutral-600">{t('risk.needsHistory', { count: risk.model.months })}</Text>}
+      <TrustFooter compact />
     </View>
   );
 }
@@ -411,6 +498,7 @@ function AdviceCard({ advice, lowRisk }: { advice: RiskAdvice[]; lowRisk: boolea
           </View>
         </View>
       ))}
+      <TrustFooter compact />
     </View>
   );
 }
@@ -448,48 +536,78 @@ function LockedCard({ months }: { months: number }) {
   );
 }
 
-/** Financial health, looking ahead: stress in 3 and 12 months, how to lower it, and the debt capacity check. */
+/**
+ * The Health tab as a story: the answer, why, what to do, whether the business can borrow, and the owner's own
+ * check-in next to the books. The ratio details follow on the Analysis screen.
+ */
 export function FutureRiskSection() {
   const { t } = useI18n();
   const query = useAnalysisQuery(getFutureRisk);
   const risk = query.data;
-  // Same weight as the other Health headings (Profitability, Liquidity…).
-  const heading = <Text variant="body-lg" weight={600} tone="primary-900">{t('analysis.futureRisk')}</Text>;
+  const answer = <StoryHeading icon="shield" title={t('story.answer')} />;
+  const checkIn = (
+    <View style={{ gap: 12 }}>
+      <StoryHeading icon="user" title={t('story.booksVsYou')} />
+      <FinHealthCard booksLevel={risk ? overallLevel(risk) : null} />
+    </View>
+  );
   // Say what is happening rather than hiding the section: loading, offline with nothing saved, or the error itself.
   if (!risk) {
     return (
-      <View style={{ gap: 12 }}>
-        {heading}
-        {query.loading ? <ActivityIndicator color={colors.primary[500]} style={{ paddingVertical: 24 }} /> : null}
-        {!query.loading && query.noCache ? <EmptyState titleKey="offline.noCache" bodyKey="offline.noCacheBody" icon="wifiOff" /> : null}
-        {!query.loading && query.error ? <ErrorState onRetry={query.reload} error={query.error} /> : null}
+      <View style={{ gap: 28 }}>
+        <View style={{ gap: 12 }}>
+          {answer}
+          {query.loading ? <ActivityIndicator color={colors.primary[500]} style={{ paddingVertical: 24 }} /> : null}
+          {!query.loading && query.noCache ? <EmptyState titleKey="offline.noCache" bodyKey="offline.noCacheBody" icon="wifiOff" /> : null}
+          {!query.loading && query.error ? <ErrorState onRetry={query.reload} error={query.error} /> : null}
+        </View>
+        {!query.loading && checkIn}
       </View>
     );
   }
+  const scored = risk.stress3m.available || risk.model.available;
+  const recorded = risk.stress3m.available ? risk.stress3m.basedOnMonths : risk.stress3m.months;
   // Not enough records for any of it yet: one compact card with progress, not empty cards and tabs.
-  if (!risk.stress3m.available && !risk.model.available && !risk.debtCapacity.available) {
+  if (!scored && !risk.debtCapacity.available) {
     return (
-      <View style={{ gap: 9 }}>
-        {heading}
-        <LockedCard months={risk.stress3m.months} />
+      <View style={{ gap: 28 }}>
+        <View style={{ gap: 12 }}>
+          {answer}
+          <LockedCard months={recorded} />
+        </View>
+        {checkIn}
       </View>
     );
   }
   return (
-    <View style={{ gap: 12 }}>
-      {heading}
-      {query.source === 'cache' && <OfflineBanner fetchedAt={query.fetchedAt} />}
-      <RiskCard risk={risk} />
-      {risk.advice && (risk.stress3m.available || risk.model.available) && (
-        <AdviceCard
-          advice={risk.advice}
-          lowRisk={[risk.stress3m, risk.model].every((answer) => !answer.available || answer.riskClass === 'low')}
-        />
+    <View style={{ gap: 28 }}>
+      <View style={{ gap: 12 }}>
+        {answer}
+        {query.source === 'cache' && <OfflineBanner fetchedAt={query.fetchedAt} />}
+        {scored ? <VerdictCard risk={risk} fetchedAt={query.fetchedAt} /> : <LockedCard months={recorded} />}
+      </View>
+      {scored && (
+        <View style={{ gap: 12 }}>
+          <StoryHeading icon="info" title={t('story.why')} />
+          <WhyCard risk={risk} />
+        </View>
       )}
-      {(risk.stress3m.available || risk.model.available) && <WhatIfCard />}
-      {risk.debtCapacity.available
-        ? <DebtCapacityCard capacity={risk.debtCapacity} />
-        : <NotYet title={t('debt.title')} body={t('debt.needsHistory', { count: risk.debtCapacity.months })} />}
+      {scored && (
+        <View style={{ gap: 12 }}>
+          <StoryHeading icon="star" title={t('story.whatToDo')} />
+          {risk.advice && (
+            <AdviceCard advice={risk.advice} lowRisk={[risk.stress3m, risk.model].every((a) => !a.available || a.riskClass === 'low')} />
+          )}
+          <WhatIfCard />
+        </View>
+      )}
+      <View style={{ gap: 12 }}>
+        <StoryHeading icon="dollar" title={t('story.borrow')} />
+        {risk.debtCapacity.available
+          ? <DebtCapacityCard capacity={risk.debtCapacity} />
+          : <NotYet title={t('debt.title')} body={t('debt.needsHistory', { count: risk.debtCapacity.months })} />}
+      </View>
+      {checkIn}
     </View>
   );
 }

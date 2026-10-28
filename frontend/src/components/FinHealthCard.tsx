@@ -6,17 +6,22 @@ import { ProbabilityRing, TargetMeter } from './HealthCharts';
 import { Text } from './Text';
 import { useI18n, type TKey } from '@/i18n';
 import { formatInputDate } from '@/lib/format';
+import type { RiskLevel } from '@/services/analysis';
 import { getCheckIn, PILLARS, scoreAnswers, type SavedCheckIn, type Tier } from '@/services/finHealth';
 import { colors, radius } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
 
 const TIER_COLOR: Record<Tier, string> = { healthy: colors.success, coping: colors.warning, vulnerable: colors.danger };
+const LEVEL_COLOR: Record<RiskLevel, string> = { low: colors.success, moderate: colors.warning, high: colors.danger };
+/** The check-in tier that says the same as each AI level, to tell whether the two agree. */
+const SAME_AS: Record<RiskLevel, Tier> = { low: 'healthy', moderate: 'coping', high: 'vulnerable' };
 
 /**
  * Owner check-in on the Health tab: the FinHealth Score of the owner's household, next to (never inside) the AI's
- * answer from the books. Before the first check-in it invites the owner to take it.
+ * answer from the books. Before the first check-in it invites the owner to take it. With `booksLevel` (the AI's
+ * overall level) it opens with the two side by side and whether they agree.
  */
-export function FinHealthCard() {
+export function FinHealthCard({ booksLevel }: { booksLevel?: RiskLevel | null }) {
   const { t } = useI18n();
   const router = useRouter();
   const dark = useAppTheme();
@@ -37,12 +42,29 @@ export function FinHealthCard() {
   return (
     <View style={card}>
       <View style={{ gap: 2 }}>
-        <Text variant="body" weight={700} tone="primary-900">{t('fh.title')}</Text>
+        <Text variant="body-lg" weight={700} tone="primary-900">{t('fh.title')}</Text>
         <Text variant="micro" tone="neutral-600">{t('fh.subtitle')}</Text>
       </View>
 
       {result && saved ? (
         <>
+          {booksLevel && (
+            <View style={{ gap: 8 }}>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                {[
+                  { label: t('compare.books'), value: t(`risk.level.${booksLevel}` as TKey), color: LEVEL_COLOR[booksLevel] },
+                  { label: t('compare.you'), value: t(`fh.tier.${result.tier}` as TKey), color: TIER_COLOR[result.tier] },
+                ].map((side) => (
+                  <View key={side.label} accessible accessibilityLabel={`${side.label}: ${side.value}`}
+                    style={{ flex: 1, minWidth: 0, gap: 4, padding: 12, borderRadius: 12, borderTopWidth: 3, borderTopColor: side.color, backgroundColor: dark ? colors.dark.field : colors.primary[50] }}>
+                    <Text variant="micro" weight={600} tone="neutral-600">{side.label}</Text>
+                    <Text variant="body-sm" weight={700} style={{ color: side.color }}>{side.value}</Text>
+                  </View>
+                ))}
+              </View>
+              <Text variant="body-sm" tone="primary-900">{t(SAME_AS[booksLevel] === result.tier ? 'compare.agree' : 'compare.differ')}</Text>
+            </View>
+          )}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}
             accessible accessibilityLabel={`${t('fh.score')} ${result.score}, ${t(`fh.tier.${result.tier}` as TKey)}`}>
             <ProbabilityRing probability={result.score / 100} color={TIER_COLOR[result.tier]}>

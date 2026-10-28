@@ -7,18 +7,21 @@ import { OfflineBanner } from '@/components/OfflineBanner';
 import { ScreenShell } from '@/components/ScreenShell';
 import { EmptyState, ErrorState, LoadingState } from '@/components/StateViews';
 import { PaperStatement } from '@/components/PaperStatement';
+import { PdfPreview } from '@/components/PdfPreview';
 import { Text } from '@/components/Text';
 import { useAnalysisQuery } from '@/hooks/useAnalysisQuery';
-import { useI18n } from '@/i18n';
+import { useI18n, type TKey } from '@/i18n';
 import { getStatements, type Statement, type StatementKind, type StatementPeriod } from '@/services/analysis';
 import { formatMoneyWhole } from '@/services/bookkeeping';
-import { exportStatementPdf } from '@/services/statementPdf';
+import { statementHtml } from '@/services/statementPdf';
 
 function kpiValue(k: Statement['kpis'][number], currency: Statement['currency'], showPlus: boolean): string {
   if (k.format === 'percent') return `${k.value.toFixed(1)}%`;
   if (k.format === 'ratio') return `${k.value.toFixed(2)}x`;
   return formatMoneyWhole(k.value, currency, { showPlus });
 }
+
+const REPORT_NAME: Record<StatementPeriod, TKey> = { weekly: 'stmt.weekly', monthly: 'stmt.monthly', annual: 'stmt.annual' };
 
 /** Income Statement / Balance Sheet / Cash Flow (§6.29). Data comes from the analysis service and is cached for offline use. */
 export default function StatementScreen() {
@@ -28,29 +31,21 @@ export default function StatementScreen() {
   const period: StatementPeriod = periodParam === 'weekly' || periodParam === 'annual' ? periodParam : 'monthly';
   const loadStatements = useCallback(() => getStatements(period), [period]);
   const q = useAnalysisQuery(loadStatements);
-  const statement = q.data?.[kind];
-  const [exporting, setExporting] = useState(false);
-  const [exportError, setExportError] = useState(false);
-
-  const download = async () => {
-    if (!statement || !q.data) return;
-    setExporting(true);
-    setExportError(false);
-    try {
-      await exportStatementPdf(statement, q.data.business);
-    } catch {
-      setExportError(true);
-    } finally {
-      setExporting(false);
-    }
-  };
+  const loaded = q.data?.[kind];
+  // Opened from a Weekly / Monthly / Annual Report tile: the same figures, headed as that report ("MONTHLY REPORT",
+  // "OCTOBER 2026") rather than as a formal statement.
+  const reportName = periodParam ? t(REPORT_NAME[period]) : null;
+  const statement = loaded && reportName && q.data
+    ? { ...loaded, title: reportName, heading: [q.data.business.toUpperCase(), reportName.toUpperCase(), loaded.periodLabel.toUpperCase()] as [string, string, string] }
+    : loaded;
+  // The page to download, shown in a preview first; null while the preview is closed.
+  const [preview, setPreview] = useState<string | null>(null);
 
   return (
     <ScreenShell title={t('screen.statements')} backFallbackHref="/statements" nav="statements" padding={24}>
       <View style={{ gap: 16 }}>
         {q.source === 'cache' && <OfflineBanner fetchedAt={q.fetchedAt} />}
-        <Button label={t('stmt.download')} icon="download" onPress={download} loading={exporting} disabled={!statement} />
-        {exportError ? <Text variant="micro" tone="danger">{t('stmt.downloadFailed')}</Text> : null}
+        <Button label={t('stmt.download')} icon="download" onPress={() => statement && q.data && setPreview(statementHtml(statement, q.data.business))} disabled={!statement} />
         {q.loading && !q.data ? <LoadingState /> : null}
         {q.noCache ? <EmptyState titleKey="offline.noCache" bodyKey="offline.noCacheBody" icon="wifiOff" /> : null}
         {q.data === null && <EmptyState titleKey="data.noStatementsTitle" bodyKey="data.noStatementsBody" />}
@@ -81,6 +76,7 @@ export default function StatementScreen() {
           </>
         )}
       </View>
+      <PdfPreview html={preview} title={statement?.title ?? t('screen.statements')} onClose={() => setPreview(null)} failedMessage={t('stmt.downloadFailed')} />
     </ScreenShell>
   );
 }

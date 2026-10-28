@@ -153,55 +153,50 @@ export function BusinessDocumentsSection() {
     }
   };
 
-  const surface = dark ? colors.dark.surface : colors.primary[50];
-  const card = dark ? colors.dark.field : colors.white;
+  const line = dark ? colors.dark.border : colors.neutral[200];
 
+  // The heading sits above this card (on the screen that shows it); the card holds one row per document.
   return (
-    <View style={{ gap: 14, padding: 16, borderRadius: radius.lg, backgroundColor: surface }}>
-      <View style={{ gap: 4 }}>
-        <Text variant="title" weight={700} tone="primary-900">{t('docs.title')}</Text>
-        <Text variant="micro" tone="neutral-600">{t('docs.subtitle')}</Text>
-      </View>
-
+    <View style={{ borderRadius: radius.card, borderWidth: 1, borderColor: line, backgroundColor: dark ? colors.dark.surface : colors.white, paddingHorizontal: 16 }}>
       {loading ? (
         <ActivityIndicator color={colors.primary[500]} style={{ paddingVertical: 16 }} />
       ) : loadError ? (
-        <View style={{ gap: 8, alignItems: 'flex-start' }}>
-          <Text variant="body-sm" tone="neutral-600">{t('docs.loadFailed')}</Text>
+        <View style={{ gap: 8, alignItems: 'flex-start', paddingVertical: 16 }}>
+          <Text variant="body" tone="neutral-600">{t('docs.loadFailed')}</Text>
           <ActionLink label={t('state.retry')} onPress={load} />
         </View>
       ) : (
-        BUSINESS_DOCUMENT_KINDS.map((kind) => {
+        BUSINESS_DOCUMENT_KINDS.map((kind, index) => {
           const doc = documents[kind];
           const isBusy = busy === kind;
           return (
-            <View key={kind} style={{ gap: 10, padding: 14, borderRadius: radius.card, backgroundColor: card, borderWidth: 1, borderColor: doc ? colors.primary[200] : dark ? colors.dark.border : colors.neutral[200], borderStyle: doc ? 'solid' : 'dashed' }}>
+            <View key={kind} style={{ gap: 10, paddingVertical: 14, borderTopWidth: index ? 1 : 0, borderTopColor: line }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <View style={{ width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: doc ? colors.primary[50] : dark ? colors.dark.subtle : colors.neutral[200] }}>
+                <View style={{ width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: doc ? (dark ? colors.dark.field : colors.primary[50]) : dark ? colors.dark.subtle : colors.neutral[200] }}>
                   <Icon name={doc ? 'file' : 'upload'} size={20} color={doc ? colors.primary[500] : colors.neutral[500]} />
                 </View>
                 <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                   <Text variant="body" weight={600} tone="primary-900">{t(LABELS[kind])}</Text>
                   {isBusy ? (
-                    <Text variant="micro" tone="neutral-600">{t('docs.uploading')}</Text>
+                    <Text variant="caption" weight={400} tone="neutral-600">{t('docs.uploading')}</Text>
                   ) : doc ? (
-                    <Text variant="micro" tone="neutral-600" numberOfLines={1}>
+                    <Text variant="caption" weight={400} tone="neutral-600" numberOfLines={1}>
                       {doc.fileName} · {formatSize(doc.sizeBytes)} · {new Date(doc.uploadedAt).toLocaleDateString(locale === 'km' ? 'km-KH' : 'en-GB')}
                     </Text>
                   ) : (
-                    <Text variant="micro" tone="neutral-500">{t('docs.notUploaded')}</Text>
+                    <Text variant="caption" weight={400} tone="neutral-500">{t('docs.notUploaded')}</Text>
                   )}
                 </View>
                 {isBusy ? <ActivityIndicator color={colors.primary[500]} /> : doc ? <Icon name="check" size={18} color={colors.success} /> : null}
               </View>
 
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 18 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 18, paddingLeft: 52 }}>
                 <ActionLink label={t(doc ? 'docs.replace' : 'docs.upload')} icon="upload" onPress={() => void pick(kind)} disabled={busy !== null} />
                 {doc && Platform.OS === 'web' && <ActionLink label={t('docs.view')} icon="eye" onPress={() => void view(kind)} disabled={isBusy} />}
                 {doc && <ActionLink label={t('docs.remove')} icon="close" tone="danger" onPress={() => remove(kind)} disabled={busy !== null} />}
               </View>
 
-              {errors[kind] ? <Text variant="micro" tone="danger">{errors[kind]}</Text> : null}
+              {errors[kind] ? <Text variant="caption" weight={400} tone="danger">{errors[kind]}</Text> : null}
             </View>
           );
         })

@@ -1,15 +1,18 @@
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { AuthHeader } from '@/components/AuthHeader';
 import { Button } from '@/components/Button';
 import { BusinessProfileForm, EMPTY_PROFILE, fromProfileValues, type BusinessProfileValues } from '@/components/BusinessProfileForm';
-import { Chip } from '@/components/Chip';
+import { Icon } from '@/components/Icon';
 import { ScreenShell } from '@/components/ScreenShell';
 import { Text } from '@/components/Text';
 import { TextField } from '@/components/TextField';
 import { useI18n, type TKey } from '@/i18n';
 import { signUp } from '@/services/auth';
 import { updateSettings } from '@/services/bookkeeping';
+import { colors } from '@/theme';
+import { useAppTheme } from '@/theme/AppTheme';
 
 type SignupStep = 0 | 1 | 2;
 type SummaryRow = { label: string; value: string };
@@ -31,10 +34,32 @@ function SummarySection({ title, rows, onEdit, editLabel }: { title: string; row
   );
 }
 
+const STEPS: TKey[] = ['auth.stepYou', 'auth.stepBusiness', 'auth.stepReview'];
+
+/** Where the owner is in sign-up: three labelled segments, done and current ones filled. */
+function StepBar({ step }: { step: SignupStep }) {
+  const { t } = useI18n();
+  const dark = useAppTheme();
+  return (
+    <View accessibilityRole="progressbar" accessibilityLabel={t('auth.stepProgress', { current: step + 1, total: 3 })} className="flex-row" style={{ gap: 8 }}>
+      {STEPS.map((label, index) => (
+        <View key={label} style={{ flex: 1, gap: 6 }}>
+          <View style={{ height: 6, borderRadius: 99, backgroundColor: index <= step ? colors.primary[500] : dark ? colors.dark.field : colors.neutral[200] }} />
+          <Text variant="caption" weight={index === step ? 700 : 500} tone={index <= step ? 'primary-900' : 'neutral-500'}>
+            {index + 1}. {t(label)}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 /** Multi-step signup: personal details, business details, then a review before continuing. */
 export default function Signup() {
   const router = useRouter();
   const { t } = useI18n();
+  const dark = useAppTheme();
+  const iconColor = dark ? colors.dark.primary : colors.primary[500];
   const [step, setStep] = useState<SignupStep>(0);
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirm: '' });
   const [business, setBusiness] = useState<BusinessProfileValues>(EMPTY_PROFILE);
@@ -145,34 +170,49 @@ export default function Signup() {
   ];
 
   return (
-    <ScreenShell title={t('auth.createAccount')} back={step === 0} backFallbackHref="/launch" bell={false} hero={<View style={{ height: 8 }} />}>
+    <ScreenShell back={step === 0} backFallbackHref="/launch" bell={false} padding={24}
+      hero={<AuthHeader large={step === 0} title={t('auth.signupTitle')} subtitle={t('auth.signupSubtitle')} />}>
       <View style={{ gap: 20 }}>
-        <Text variant="caption" tone="neutral-600">{t('auth.stepProgress', { current: step + 1, total: 3 })}</Text>
-        <Text variant="title" tone="primary-900">{t(titleKey)}</Text>
+        <StepBar step={step} />
+        <Text variant="title" weight={700} tone="primary-900">{t(titleKey)}</Text>
         {step === 0 && (
           <>
-            <TextField variant="form" label={t('auth.fullName')} value={form.name} onChangeText={set('name')} error={submitted ? personalErrors.name : undefined} />
-            <TextField variant="form" label={t('auth.email')} value={form.email} onChangeText={set('email')} autoCapitalize="none" keyboardType="email-address" error={submitted ? personalErrors.email : undefined} />
-            <TextField variant="form" label={t('auth.mobile')} value={form.phone} onChangeText={set('phone')} keyboardType="phone-pad" error={submitted ? personalErrors.phone : undefined} />
-            <TextField variant="form" label={t('auth.password')} value={form.password} onChangeText={set('password')} secureTextEntry error={submitted ? personalErrors.password : undefined} />
+            <TextField variant="form" label={t('auth.fullName')} value={form.name} onChangeText={set('name')} autoComplete="name"
+              left={<Icon name="user" size={18} color={iconColor} />} error={submitted ? personalErrors.name : undefined} />
+            <TextField variant="form" label={t('auth.email')} value={form.email} onChangeText={set('email')} autoCapitalize="none" keyboardType="email-address" autoComplete="email"
+              left={<Icon name="mail" size={18} color={iconColor} />} error={submitted ? personalErrors.email : undefined} />
+            <TextField variant="form" label={t('auth.mobile')} value={form.phone} onChangeText={set('phone')} keyboardType="phone-pad" autoComplete="tel"
+              left={<Icon name="phone" size={18} color={iconColor} />} error={submitted ? personalErrors.phone : undefined} />
+            <TextField variant="form" label={t('auth.password')} value={form.password} onChangeText={set('password')} secureTextEntry autoComplete="new-password"
+              left={<Icon name="lock" size={18} color={iconColor} />} error={submitted ? personalErrors.password : undefined} />
             <TextField
               variant="form"
               label={t('auth.confirmPassword')}
               value={form.confirm}
               onChangeText={set('confirm')}
               secureTextEntry
+              autoComplete="new-password"
+              left={<Icon name="lock" size={18} color={iconColor} />}
+              right={passwordsMatch ? <Icon name="check" size={18} color={colors.success} /> : undefined}
               error={submitted || form.confirm.length > 0 ? personalErrors.confirm : undefined}
             />
-            {passwordsMatch ? <Text variant="caption" tone="primary-900">{t('auth.passwordsMatch')}</Text> : null}
+            {passwordsMatch ? <Text variant="caption" style={{ color: colors.success }}>{t('auth.passwordsMatch')}</Text> : null}
+            {/* Terms: a real checkbox, with the policies one tap away */}
             <View style={{ gap: 4 }}>
-              <Chip label={t('auth.terms')} selected={agree} onPress={() => setAgree((value) => !value)} />
+              <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: agree }} onPress={() => setAgree((value) => !value)}
+                className="flex-row" style={{ gap: 10, alignItems: 'flex-start' }}>
+                <Icon name={agree ? 'checkSquare' : 'square'} size={22} color={agree ? colors.primary[500] : colors.neutral[500]} />
+                <Text variant="body-sm" tone="primary-900" style={{ flex: 1 }}>
+                  {t('auth.terms')}{' '}
+                  <Text variant="body-sm" weight={600} tone="primary-500" onPress={() => router.push({ pathname: '/policies', params: { from: 'auth' } })} accessibilityRole="link">{t('auth.readPolicies')}</Text>
+                </Text>
+              </Pressable>
               {submitted && personalErrors.terms ? <Text variant="caption" tone="danger">{personalErrors.terms}</Text> : null}
             </View>
-            <View style={{ paddingHorizontal: 40, paddingTop: 8 }}>
-              <Button label={t('common.next')} onPress={nextFromPersonal} />
-            </View>
-            <Text variant="caption" tone="primary-900" style={{ textAlign: 'center' }} onPress={() => router.push('/login')}>
-              {t('auth.haveAccount')}
+            <Button label={t('common.next')} trailingIcon="chevronRight" onPress={nextFromPersonal} />
+            <Text variant="body-sm" tone="neutral-600" style={{ textAlign: 'center' }}>
+              {t('auth.haveAccountPrompt')}{' '}
+              <Text variant="body-sm" weight={700} tone="primary-500" onPress={() => router.push('/login')} accessibilityRole="link">{t('auth.loginLink')}</Text>
             </Text>
           </>
         )}

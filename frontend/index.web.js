@@ -5,7 +5,8 @@ import * as SQLite from 'expo-sqlite';
 // The browser lets only one open copy of the app hold the database file. Right after a reload or a dev-server
 // restart, the previous copy can take a moment to let go, so opening is retried before giving up.
 const OPEN_ATTEMPTS = 5;
-const isLockedByAnotherCopy = (error) => /Access Handle|NoModificationAllowedError|createSyncAccessHandle/i.test(String(error?.message ?? error));
+// "Invalid VFS state" is how the SQLite worker reports it when it cannot take the file because another copy holds it.
+const isLockedByAnotherCopy = (error) => /Access Handle|NoModificationAllowedError|createSyncAccessHandle|Invalid VFS state/i.test(String(error?.message ?? error));
 
 async function openWebDatabase() {
   for (let attempt = 1; ; attempt++) {

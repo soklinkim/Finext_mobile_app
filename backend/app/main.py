@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from app.auth import current_user, is_lender_staff
 from app.config import config
 from app.db import pool, request_cache
-from app.routers import accounting, documents, lender, loan, sync
+from app.routers import accounting, documents, lender, loan, statements, sync
 
 
 @asynccontextmanager
@@ -28,6 +28,7 @@ app = FastAPI(title="FINEXT API", lifespan=lifespan)
 app.include_router(sync.router)
 app.include_router(accounting.router)
 app.include_router(documents.router)
+app.include_router(statements.router)
 app.include_router(loan.router)
 app.include_router(lender.router)
 

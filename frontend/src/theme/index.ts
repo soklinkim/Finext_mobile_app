@@ -54,6 +54,14 @@ export const shadow = {
     shadowRadius: 30,
     elevation: 2,
   } satisfies ViewStyle,
+  /** header buttons (back, bell): a faint lift off the pale top band */
+  icon: {
+    shadowColor: colors.primary[900],
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
+  } satisfies ViewStyle,
   button: {
     shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 4 },

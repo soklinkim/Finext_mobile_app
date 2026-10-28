@@ -44,6 +44,9 @@ async function bindLocalLedger(userId: string) {
   if (!ownerId) await AsyncStorage.setItem(LOCAL_OWNER_KEY, userId);
 }
 
+/** A partner-bank login used in the business app; the login screen points it to the lender portal. */
+export class LenderAccountError extends Error {}
+
 /** Partner-bank staff use the lender portal. Unknown (e.g. offline) counts as a business owner. */
 async function isLenderAccount(accessToken: string): Promise<boolean> {
   try {
@@ -62,7 +65,7 @@ export async function signIn(email: string, password: string): Promise<Session> 
   // Check before binding this device's offline ledger, so a bank login never claims it.
   if (await isLenderAccount(data.session.access_token)) {
     await getClient().auth.signOut({ scope: 'local' });
-    throw new Error('This is a partner bank account. Please sign in to the FINEXT lender portal instead.');
+    throw new LenderAccountError('This is a partner bank account. Please sign in to the FINEXT lender portal instead.');
   }
   await bindLocalLedger(data.session.user.id);
   return data.session;
@@ -105,5 +108,7 @@ export function subscribeToAuthChanges(onSignedIn: (signedIn: boolean) => void):
 export async function signOut(): Promise<void> {
   if (!supabase) return;
   const { error } = await getClient().auth.signOut({ scope: 'local' });
-  if (error) throw error;
+  // Supabase also tells its server. When that call fails (offline, a network blip: "Failed to fetch") it has still
+  // signed out on this device, which is all a local sign-out needs, so only a session left behind is a real failure.
+  if (error && (await getClient().auth.getSession()).data.session) throw error;
 }
