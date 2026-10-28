@@ -172,5 +172,14 @@
       "precision": 0.23148148148148148
     }
   },
-  "card": "**Real data, different businesses.** Annual accounts of Polish manufacturing companies (2000–2013) and whether they went bankrupt within a year. FINEXT computes the same ratios from an MSME's books, but Cambodian MSMEs are smaller and differently financed: describe output as *likely deterioration*, never as a prediction of loan default."
+  "card": "**Real data, different businesses.** Annual accounts of Polish manufacturing companies (2000–2013) and whether they went bankrupt within a year. FINEXT computes the same ratios from an MSME's books, but Cambodian MSMEs are smaller and differently financed: describe output as *likely deterioration*, never as a prediction of loan default.",
+  "run": {
+    "id": "20261027-162955",
+    "dir": "ml/artifacts/polish_bankruptcy/20261027-162955",
+    "exported_at": "2026-10-28T18:20:39+00:00",
+    "sha256": {
+      "model.joblib": "69081ee8637422b05b92486e43d578110d85742b81318fec44b9a0a6f7a54a05",
+      "model.json": "84717555fc4d4e0f1545fd4e056cad2870f9c7e0990d4b6f159ae2d4215de54e"
+    }
+  }
 }

@@ -1,0 +1,1136 @@
+{
+  "run_id": "20261027-162955",
+  "dataset": "polish_bankruptcy",
+  "target": "bankrupt_next_year",
+  "model_version": "polish_bankruptcy-xgboost-20261027-162955",
+  "winner": "xgboost",
+  "selection_rule": {
+    "margin": 0.02,
+    "folds_lost_allowed": 1
+  },
+  "selection": {
+    "logistic_regression": {
+      "mean_pr_auc_gain": -0.048054615473490034,
+      "folds_won": 1,
+      "beats_margin": false,
+      "consistent_across_folds": false,
+      "calibration_no_worse": true,
+      "segments_no_worse": false,
+      "replaces_champion": false
+    },
+    "random_forest": {
+      "mean_pr_auc_gain": -0.10777887803842086,
+      "folds_won": 0,
+      "beats_margin": false,
+      "consistent_across_folds": false,
+      "calibration_no_worse": true,
+      "segments_no_worse": false,
+      "replaces_champion": false
+    },
+    "lightgbm": {
+      "mean_pr_auc_gain": -0.03284270308536659,
+      "folds_won": 0,
+      "beats_margin": false,
+      "consistent_across_folds": false,
+      "calibration_no_worse": true,
+      "segments_no_worse": false,
+      "replaces_champion": false
+    }
+  },
+  "layer1": null,
+  "candidates": {
+    "xgboost": {
+      "notes": "Default champion: native missing values, monotonic constraints.",
+      "params": {
+        "subsample": 0.8,
+        "reg_lambda": 5.0,
+        "reg_alpha": 1.0,
+        "min_child_weight": 30,
+        "max_depth": 3,
+        "learning_rate": 0.03,
+        "gamma": 5.0,
+        "colsample_bytree": 0.5,
+        "n_estimators": 234
+      },
+      "configs_tried": 30,
+      "search": {
+        "best_cv": 0.6345842562020099,
+        "best_cv_gap": 0.09252902103339011,
+        "chosen_cv": 0.6345842562020099,
+        "chosen_gap": 0.09252902103339011
+      },
+      "train": {
+        "pr_auc": 0.744841087994186,
+        "roc_auc": 0.9555981648981559
+      },
+      "cv": {
+        "fold_pr_auc": [
+          0.6550029786151075,
+          0.5847162706607824,
+          0.6093847420940118,
+          0.661934554561109,
+          0.6618827350790389
+        ],
+        "pr_auc_mean": 0.6345842562020099,
+        "pr_auc_std": 0.03172381278325083,
+        "roc_auc_oof": 0.8975685904450224
+      },
+      "validation": {
+        "rows": 1170,
+        "positives": 82,
+        "pr_auc": 0.7502005027857817,
+        "roc_auc": 0.9457608500717359,
+        "brier": 0.032983402972040304,
+        "calibration_error": 0.025228124377168426,
+        "recall_at_precision": 0.9390243902439024,
+        "calibration_bins": [
+          {
+            "predicted": 0.00296857594421251,
+            "observed": 0.0,
+            "count": 117
+          },
+          {
+            "predicted": 0.005159239797781933,
+            "observed": 0.0,
+            "count": 117
+          },
+          {
+            "predicted": 0.007491305511964588,
+            "observed": 0.0,
+            "count": 117
+          },
+          {
+            "predicted": 0.01090697848140991,
+            "observed": 0.008547008547008548,
+            "count": 117
+          },
+          {
+            "predicted": 0.015132601646578581,
+            "observed": 0.0,
+            "count": 117
+          },
+          {
+            "predicted": 0.02262554038287041,
+            "observed": 0.008547008547008548,
+            "count": 117
+          },
+          {
+            "predicted": 0.032807564436430015,
+            "observed": 0.05982905982905983,
+            "count": 117
+          },
+          {
+            "predicted": 0.050911916126278906,
+            "observed": 0.017094017094017096,
+            "count": 117
+          },
+          {
+            "predicted": 0.10284854611476886,
+            "observed": 0.05982905982905983,
+            "count": 117
+          },
+          {
+            "predicted": 0.4457764086182643,
+            "observed": 0.5470085470085471,
+            "count": 117
+          }
+        ]
+      },
+      "segments_cv": {
+        "size": {
+          "large": {
+            "rows": 1171,
+            "positives": 44,
+            "pr_auc": 0.6736707583213983
+          },
+          "medium": {
+            "rows": 1168,
+            "positives": 66,
+            "pr_auc": 0.6926946663761158
+          },
+          "small": {
+            "rows": 1171,
+            "positives": 134,
+            "pr_auc": 0.6066993959462484
+          }
+        }
+      },
+      "worst_segment_pr_auc": 0.6066993959462484,
+      "seconds": 180.8
+    },
+    "logistic_regression": {
+      "notes": "Explainable baseline: median imputation + missing flags, rank-normal scaling.",
+      "params": {
+        "C": 1.0
+      },
+      "configs_tried": 6,
+      "search": {
+        "best_cv": 0.5904795136026587,
+        "best_cv_gap": 0.025935822365360628,
+        "chosen_cv": 0.5865296407285199,
+        "chosen_gap": 0.024971734215083363
+      },
+      "train": {
+        "pr_auc": 0.6101346665546199,
+        "roc_auc": 0.9111549195386144
+      },
+      "cv": {
+        "fold_pr_auc": [
+          0.5877675082015966,
+          0.6103707512837663,
+          0.5744515402059022,
+          0.5942173445449926,
+          0.5658410594063417
+        ],
+        "pr_auc_mean": 0.5865296407285199,
+        "pr_auc_std": 0.015510832135749726,
+        "roc_auc_oof": 0.8886641301838114
+      },
+      "validation": {
+        "rows": 1170,
+        "positives": 82,
+        "pr_auc": 0.6091446307991533,
+        "roc_auc": 0.9116189921090387,
+        "brier": 0.04142116617118623,
+        "calibration_error": 0.014442824051351895,
+        "recall_at_precision": 0.8780487804878049,
+        "calibration_bins": [
+          {
+            "predicted": 0.0029797387486858494,
+            "observed": 0.0,
+            "count": 117
+          },
+          {
+            "predicted": 0.006117287923204857,
+            "observed": 0.0,
+            "count": 117
+          },
+          {
+            "predicted": 0.009286381608605732,
+            "observed": 0.0,
+            "count": 117
+          },
+          {
+            "predicted": 0.012623004519674725,
+            "observed": 0.02564102564102564,
+            "count": 117
+          },
+          {
+            "predicted": 0.017054204680252837,
+            "observed": 0.0,
+            "count": 117
+          },
+          {
+            "predicted": 0.023885901242039962,
+            "observed": 0.008547008547008548,
+            "count": 117
+          },
+          {
+            "predicted": 0.033727570274501,
+            "observed": 0.05128205128205128,
+            "count": 117
+          },
+          {
+            "predicted": 0.05104725248908623,
+            "observed": 0.05982905982905983,
+            "count": 117
+          },
+          {
+            "predicted": 0.09056835720841595,
+            "observed": 0.09401709401709402,
+            "count": 117
+          },
+          {
+            "predicted": 0.4106897729582762,
+            "observed": 0.46153846153846156,
+            "count": 117
+          }
+        ]
+      },
+      "segments_cv": {
+        "size": {
+          "large": {
+            "rows": 1171,
+            "positives": 44,
+            "pr_auc": 0.5568284698318618
+          },
+          "medium": {
+            "rows": 1168,
+            "positives": 66,
+            "pr_auc": 0.68683607477485
+          },
+          "small": {
+            "rows": 1171,
+            "positives": 134,
+            "pr_auc": 0.5530922895021059
+          }
+        }
+      },
+      "worst_segment_pr_auc": 0.5530922895021059,
+      "seconds": 18.3
+    },
+    "random_forest": {
+      "notes": "Native missing values; no monotonic constraints.",
+      "params": {
+        "min_samples_leaf": 50,
+        "max_features": 0.5,
+        "max_depth": 6
+      },
+      "configs_tried": 30,
+      "search": {
+        "best_cv": 0.5268053781635891,
+        "best_cv_gap": 0.11221246565193166,
+        "chosen_cv": 0.5268053781635891,
+        "chosen_gap": 0.11221246565193166
+      },
+      "train": {
+        "pr_auc": 0.6496029590274774,
+        "roc_auc": 0.9529416341240601
+      },
+      "cv": {
+        "fold_pr_auc": [
+          0.5536413596808484,
+          0.4948232688727073,
+          0.5046897962385779,
+          0.5853938967794989,
+          0.4954785692463128
+        ],
+        "pr_auc_mean": 0.5268053781635891,
+        "pr_auc_std": 0.03645849051487686,
+        "roc_auc_oof": 0.8955307038237981
+      },
+      "validation": {
+        "rows": 1170,
+        "positives": 82,
+        "pr_auc": 0.6635706557245977,
+        "roc_auc": 0.9457496413199427,
+        "brier": 0.038384354652132906,
+        "calibration_error": 0.022201068362544228,
+        "recall_at_precision": 0.9512195121951219,
+        "calibration_bins": [
+          {
+            "predicted": 0.0011898301075115474,
+            "observed": 0.0,
+            "count": 117
+          },
+          {
+            "predicted": 0.0029511715485230025,
+            "observed": 0.0,
+            "count": 117
+          },
+          {
+            "predicted": 0.005041359364308423,
+            "observed": 0.0,
+            "count": 117
+          },
+          {
+            "predicted": 0.007836093220990166,
+            "observed": 0.0,
+            "count": 117
+          },
+          {
+            "predicted": 0.011885302238559962,
+            "observed": 0.0,
+            "count": 117
+          },
+          {
+            "predicted": 0.017902521500524883,
+            "observed": 0.017094017094017096,
+            "count": 117
+          },
+          {
+            "predicted": 0.027025903784246533,
+            "observed": 0.03418803418803419,
+            "count": 117
+          },
+          {
+            "predicted": 0.044108214488381634,
+            "observed": 0.042735042735042736,
+            "count": 117
+          },
+          {
+            "predicted": 0.10884229377203337,
+            "observed": 0.05982905982905983,
+            "count": 117
+          },
+          {
+            "predicted": 0.4122586603696058,
+            "observed": 0.5470085470085471,
+            "count": 117
+          }
+        ]
+      },
+      "segments_cv": {
+        "size": {
+          "large": {
+            "rows": 1171,
+            "positives": 44,
+            "pr_auc": 0.5264612714751574
+          },
+          "medium": {
+            "rows": 1168,
+            "positives": 66,
+            "pr_auc": 0.5819828844796044
+          },
+          "small": {
+            "rows": 1171,
+            "positives": 134,
+            "pr_auc": 0.482055473907216
+          }
+        }
+      },
+      "worst_segment_pr_auc": 0.482055473907216,
+      "seconds": 527.2
+    },
+    "lightgbm": {
+      "notes": "Gradient-boosting alternative: native missing values, monotonic constraints.",
+      "params": {
+        "subsample": 0.6,
+        "reg_lambda": 5.0,
+        "reg_alpha": 5.0,
+        "num_leaves": 3,
+        "min_child_samples": 100,
+        "learning_rate": 0.03,
+        "colsample_bytree": 0.5,
+        "n_estimators": 366
+      },
+      "configs_tried": 30,
+      "search": {
+        "best_cv": 0.618119574078429,
+        "best_cv_gap": 0.11303567679750781,
+        "chosen_cv": 0.6017415531166433,
+        "chosen_gap": 0.060206131563994014
+      },
+      "train": {
+        "pr_auc": 0.6653133840232427,
+        "roc_auc": 0.9381926806742091
+      },
+      "cv": {
+        "fold_pr_auc": [
+          0.6181025571430798,
+          0.5599218818988174,
+          0.5607961035379614,
+          0.6465031702586446,
+          0.6233840527447134
+        ],
+        "pr_auc_mean": 0.6017415531166433,
+        "pr_auc_std": 0.03511437698162571,
+        "roc_auc_oof": 0.8951253852408821
+      },
+      "validation": {
+        "rows": 1170,
+        "positives": 82,
+        "pr_auc": 0.7164854081012819,
+        "roc_auc": 0.9357738522238164,
+        "brier": 0.03534332198159851,
+        "calibration_error": 0.02063086858783157,
+        "recall_at_precision": 0.9024390243902439,
+        "calibration_bins": [
+          {
+            "predicted": 0.002128114509508991,
+            "observed": 0.0,
+            "count": 117
+          },
+          {
+            "predicted": 0.004063048313154998,
+            "observed": 0.0,
+            "count": 117
+          },
+          {
+            "predicted": 0.006327245004121296,
+            "observed": 0.0,
+            "count": 117
+          },
+          {
+            "predicted": 0.009627068409060465,
+            "observed": 0.008547008547008548,
+            "count": 117
+          },
+          {
+            "predicted": 0.01439417800004148,
+            "observed": 0.008547008547008548,
+            "count": 117
+          },
+          {
+            "predicted": 0.02178782669410678,
+            "observed": 0.017094017094017096,
+            "count": 117
+          },
+          {
+            "predicted": 0.033254504197795895,
+            "observed": 0.042735042735042736,
+            "count": 117
+          },
+          {
+            "predicted": 0.05185668872670891,
+            "observed": 0.017094017094017096,
+            "count": 117
+          },
+          {
+            "predicted": 0.11186557945997186,
+            "observed": 0.06837606837606838,
+            "count": 117
+          },
+          {
+            "predicted": 0.4440250205790247,
+            "observed": 0.5384615384615384,
+            "count": 117
+          }
+        ]
+      },
+      "segments_cv": {
+        "size": {
+          "large": {
+            "rows": 1171,
+            "positives": 44,
+            "pr_auc": 0.5584506429279917
+          },
+          "medium": {
+            "rows": 1168,
+            "positives": 66,
+            "pr_auc": 0.6651139963859001
+          },
+          "small": {
+            "rows": 1171,
+            "positives": 134,
+            "pr_auc": 0.5909686944301246
+          }
+        }
+      },
+      "worst_segment_pr_auc": 0.5584506429279917,
+      "seconds": 71.4
+    }
+  },
+  "holdout": {
+    "company_holdout": {
+      "rows": 1170,
+      "positives": 82,
+      "pr_auc": 0.6665342151280204,
+      "roc_auc": 0.9301134325681492,
+      "brier": 0.037850755083281645,
+      "calibration_error": 0.010369953343687215,
+      "at_alert_threshold": {
+        "threshold": 0.04760870513965622,
+        "confusion": {
+          "tn": 839,
+          "fp": 249,
+          "fn": 7,
+          "tp": 75
+        },
+        "precision": 0.23148148148148148,
+        "recall": 0.9146341463414634,
+        "f1": 0.3694581280788177,
+        "accuracy": 0.7811965811965812
+      },
+      "intervals": {
+        "pr_auc": [
+          0.5574132859701969,
+          0.7534899323934843
+        ],
+        "precision": [
+          0.18503216911764708,
+          0.2803093203541382
+        ],
+        "recall": [
+          0.8542191188040913,
+          0.9690024038461539
+        ]
+      },
+      "seed_pr_auc": [
+        0.6665342151280204,
+        0.6565558937584228,
+        0.6477642472013007,
+        0.6566452820523945,
+        0.6534341311569247
+      ],
+      "recall_at_precision": 0.926829268292683,
+      "risk_bands": {
+        "low": {
+          "count": 1097,
+          "observed_rate": 0.0300820419325433
+        },
+        "moderate": {
+          "count": 43,
+          "observed_rate": 0.5581395348837209
+        },
+        "high": {
+          "count": 30,
+          "observed_rate": 0.8333333333333334
+        }
+      },
+      "calibration_bins": [
+        {
+          "predicted": 0.002943479207220287,
+          "observed": 0.0,
+          "count": 117
+        },
+        {
+          "predicted": 0.004972249075756019,
+          "observed": 0.0,
+          "count": 117
+        },
+        {
+          "predicted": 0.007174287180503603,
+          "observed": 0.0,
+          "count": 117
+        },
+        {
+          "predicted": 0.010230514367538253,
+          "observed": 0.008547008547008548,
+          "count": 117
+        },
+        {
+          "predicted": 0.014599392851355898,
+          "observed": 0.008547008547008548,
+          "count": 117
+        },
+        {
+          "predicted": 0.022239388846930348,
+          "observed": 0.0,
+          "count": 117
+        },
+        {
+          "predicted": 0.03479734216931399,
+          "observed": 0.042735042735042736,
+          "count": 117
+        },
+        {
+          "predicted": 0.056930397066516016,
+          "observed": 0.042735042735042736,
+          "count": 117
+        },
+        {
+          "predicted": 0.11196438610331436,
+          "observed": 0.13675213675213677,
+          "count": 117
+        },
+        {
+          "predicted": 0.44982502808290115,
+          "observed": 0.46153846153846156,
+          "count": 117
+        }
+      ],
+      "segments": {
+        "size": {
+          "large": {
+            "rows": 405,
+            "positives": 14,
+            "pr_auc": 0.46813703552172237
+          },
+          "medium": {
+            "rows": 374,
+            "positives": 23,
+            "pr_auc": 0.7567870260944509
+          },
+          "small": {
+            "rows": 391,
+            "positives": 45,
+            "pr_auc": 0.6858971608854861
+          }
+        }
+      },
+      "baselines": {
+        "Altman Z'-score (textbook bankruptcy formula)": {
+          "pr_auc": 0.242877085774178,
+          "threshold": -1.23,
+          "confusion": {
+            "tn": 963,
+            "fp": 125,
+            "fn": 46,
+            "tp": 36
+          },
+          "precision": 0.2236024844720497,
+          "recall": 0.43902439024390244,
+          "f1": 0.29629629629629634,
+          "accuracy": 0.8538461538461538
+        },
+        "Loss-making this year": {
+          "pr_auc": 0.15977098781976828,
+          "threshold": 1.0,
+          "confusion": {
+            "tn": 901,
+            "fp": 187,
+            "fn": 31,
+            "tp": 51
+          },
+          "precision": 0.21428571428571427,
+          "recall": 0.6219512195121951,
+          "f1": 0.31875,
+          "accuracy": 0.8136752136752137
+        }
+      }
+    }
+  },
+  "alert_threshold": 0.04760870513965622,
+  "alert_thresholds": {
+    "validation": 0.09026426338337927,
+    "unseen_businesses": 0.04760870513965622
+  },
+  "learning_curve": [
+    {
+      "share": 0.25,
+      "businesses": 702,
+      "cv_pr_auc": 0.5164994757470135,
+      "train_pr_auc": 0.7511112462727542
+    },
+    {
+      "share": 0.5,
+      "businesses": 1404,
+      "cv_pr_auc": 0.6031599690680481,
+      "train_pr_auc": 0.7617672587231269
+    },
+    {
+      "share": 0.75,
+      "businesses": 2106,
+      "cv_pr_auc": 0.6309206844347638,
+      "train_pr_auc": 0.7496058992602954
+    },
+    {
+      "share": 1.0,
+      "businesses": 2808,
+      "cv_pr_auc": 0.6490845761657007,
+      "train_pr_auc": 0.7460349920548067
+    }
+  ],
+  "recall_target": 0.85,
+  "min_precision": 0.2,
+  "shap_global": {
+    "xgboost": [
+      {
+        "feature": "sales_growth",
+        "label": "Sales relative to last year",
+        "mean_abs_shap": 0.7355806231498718
+      },
+      {
+        "feature": "interest_coverage",
+        "label": "Operating profit relative to interest and finance costs",
+        "mean_abs_shap": 0.7047157287597656
+      },
+      {
+        "feature": "quick_ratio",
+        "label": "Quick ratio (current assets without stock, relative to short-term bills)",
+        "mean_abs_shap": 0.34397560358047485
+      },
+      {
+        "feature": "retained_earnings_to_assets",
+        "label": "Retained earnings relative to assets",
+        "mean_abs_shap": 0.2823496460914612
+      },
+      {
+        "feature": "asset_turnover",
+        "label": "Sales relative to assets",
+        "mean_abs_shap": 0.19207584857940674
+      },
+      {
+        "feature": "cash_earnings_to_liabilities",
+        "label": "Profit plus depreciation relative to liabilities",
+        "mean_abs_shap": 0.14009332656860352
+      },
+      {
+        "feature": "liabilities_to_assets",
+        "label": "Liabilities relative to assets",
+        "mean_abs_shap": 0.13725189864635468
+      },
+      {
+        "feature": "operating_margin",
+        "label": "Operating profit margin",
+        "mean_abs_shap": 0.1214749664068222
+      },
+      {
+        "feature": "inventory_days",
+        "label": "Inventory days",
+        "mean_abs_shap": 0.11303010582923889
+      },
+      {
+        "feature": "current_ratio",
+        "label": "Current ratio",
+        "mean_abs_shap": 0.0972098782658577
+      }
+    ],
+    "logistic_regression": [
+      {
+        "feature": "liabilities_to_assets",
+        "label": "Liabilities relative to assets",
+        "mean_abs_shap": 0.8880429428670552
+      },
+      {
+        "feature": "pretax_margin",
+        "label": "Profit before tax relative to sales",
+        "mean_abs_shap": 0.7581555066757861
+      },
+      {
+        "feature": "sales_growth",
+        "label": "Sales relative to last year",
+        "mean_abs_shap": 0.6386659563912768
+      },
+      {
+        "feature": "equity_to_assets",
+        "label": "Equity relative to assets",
+        "mean_abs_shap": 0.6315737680602618
+      },
+      {
+        "feature": "cash_earnings_to_liabilities",
+        "label": "Profit plus depreciation relative to liabilities",
+        "mean_abs_shap": 0.56090018323966
+      },
+      {
+        "feature": "quick_ratio",
+        "label": "Quick ratio (current assets without stock, relative to short-term bills)",
+        "mean_abs_shap": 0.49911088957434707
+      },
+      {
+        "feature": "ebit_to_assets",
+        "label": "Operating profit relative to assets",
+        "mean_abs_shap": 0.4826323690331376
+      },
+      {
+        "feature": "net_margin",
+        "label": "Net profit margin",
+        "mean_abs_shap": 0.43060436228828164
+      },
+      {
+        "feature": "net_profit_to_assets",
+        "label": "Net profit relative to assets",
+        "mean_abs_shap": 0.3321908891568038
+      },
+      {
+        "feature": "interest_coverage",
+        "label": "Operating profit relative to interest and finance costs",
+        "mean_abs_shap": 0.2788130931325281
+      }
+    ],
+    "random_forest": [
+      {
+        "feature": "interest_coverage",
+        "label": "Operating profit relative to interest and finance costs",
+        "mean_abs_shap": 0.1479988589477537
+      },
+      {
+        "feature": "sales_growth",
+        "label": "Sales relative to last year",
+        "mean_abs_shap": 0.11018994567784221
+      },
+      {
+        "feature": "quick_ratio",
+        "label": "Quick ratio (current assets without stock, relative to short-term bills)",
+        "mean_abs_shap": 0.04158165521529988
+      },
+      {
+        "feature": "cash_earnings_to_liabilities",
+        "label": "Profit plus depreciation relative to liabilities",
+        "mean_abs_shap": 0.02503880224010452
+      },
+      {
+        "feature": "operating_margin",
+        "label": "Operating profit margin",
+        "mean_abs_shap": 0.01982936965764428
+      },
+      {
+        "feature": "retained_earnings_to_assets",
+        "label": "Retained earnings relative to assets",
+        "mean_abs_shap": 0.01775714827332472
+      },
+      {
+        "feature": "asset_turnover",
+        "label": "Sales relative to assets",
+        "mean_abs_shap": 0.014916410943772593
+      },
+      {
+        "feature": "current_ratio",
+        "label": "Current ratio",
+        "mean_abs_shap": 0.011998735302148879
+      },
+      {
+        "feature": "cash_ratio",
+        "label": "Cash relative to short-term bills",
+        "mean_abs_shap": 0.010969028420766216
+      },
+      {
+        "feature": "net_profit_to_assets",
+        "label": "Net profit relative to assets",
+        "mean_abs_shap": 0.01079436693784875
+      }
+    ],
+    "lightgbm": [
+      {
+        "feature": "sales_growth",
+        "label": "Sales relative to last year",
+        "mean_abs_shap": 0.5209538062100594
+      },
+      {
+        "feature": "interest_coverage",
+        "label": "Operating profit relative to interest and finance costs",
+        "mean_abs_shap": 0.489989306845067
+      },
+      {
+        "feature": "retained_earnings_to_assets",
+        "label": "Retained earnings relative to assets",
+        "mean_abs_shap": 0.3853063092017775
+      },
+      {
+        "feature": "quick_ratio",
+        "label": "Quick ratio (current assets without stock, relative to short-term bills)",
+        "mean_abs_shap": 0.3558912939423816
+      },
+      {
+        "feature": "liabilities_to_assets",
+        "label": "Liabilities relative to assets",
+        "mean_abs_shap": 0.1936658927925567
+      },
+      {
+        "feature": "asset_turnover",
+        "label": "Sales relative to assets",
+        "mean_abs_shap": 0.15257646276092876
+      },
+      {
+        "feature": "cash_earnings_to_liabilities",
+        "label": "Profit plus depreciation relative to liabilities",
+        "mean_abs_shap": 0.13863897636196842
+      },
+      {
+        "feature": "inventory_days",
+        "label": "Inventory days",
+        "mean_abs_shap": 0.1313678049086863
+      },
+      {
+        "feature": "cash_ratio",
+        "label": "Cash relative to short-term bills",
+        "mean_abs_shap": 0.09194684933848331
+      },
+      {
+        "feature": "long_term_liabilities_to_equity",
+        "label": "Long-term debt relative to equity",
+        "mean_abs_shap": 0.08168712617169427
+      }
+    ]
+  },
+  "examples": [
+    {
+      "business_id": "PL05635",
+      "period": "last reported year",
+      "model_version": "polish_bankruptcy-xgboost-20261027-162955",
+      "p_bankrupt_next_year": 0.9556172846411485,
+      "risk_class": "high",
+      "confidence": "normal",
+      "top_drivers": [
+        {
+          "feature": "sales_growth",
+          "label": "Sales relative to last year",
+          "value": null,
+          "value_text": "not available",
+          "direction": "raises risk",
+          "contribution": 2.6544106006622314
+        },
+        {
+          "feature": "interest_coverage",
+          "label": "Operating profit relative to interest and finance costs",
+          "value": null,
+          "value_text": "not available",
+          "direction": "raises risk",
+          "contribution": 1.3482111692428589
+        },
+        {
+          "feature": "quick_ratio",
+          "label": "Quick ratio (current assets without stock, relative to short-term bills)",
+          "value": 0.12069,
+          "value_text": "0.12",
+          "direction": "raises risk",
+          "contribution": 0.48944440484046936
+        },
+        {
+          "feature": "operating_margin",
+          "label": "Operating profit margin",
+          "value": -0.11756,
+          "value_text": "-0.12",
+          "direction": "raises risk",
+          "contribution": 0.23609283566474915
+        },
+        {
+          "feature": "cash_earnings_to_liabilities",
+          "label": "Profit plus depreciation relative to liabilities",
+          "value": -0.3493,
+          "value_text": "-0.35",
+          "direction": "raises risk",
+          "contribution": 0.15858934819698334
+        }
+      ]
+    },
+    {
+      "business_id": "PL05546",
+      "period": "last reported year",
+      "model_version": "polish_bankruptcy-xgboost-20261027-162955",
+      "p_bankrupt_next_year": 0.935853517019819,
+      "risk_class": "high",
+      "confidence": "normal",
+      "top_drivers": [
+        {
+          "feature": "sales_growth",
+          "label": "Sales relative to last year",
+          "value": null,
+          "value_text": "not available",
+          "direction": "raises risk",
+          "contribution": 2.756659746170044
+        },
+        {
+          "feature": "interest_coverage",
+          "label": "Operating profit relative to interest and finance costs",
+          "value": null,
+          "value_text": "not available",
+          "direction": "raises risk",
+          "contribution": 1.8920719623565674
+        },
+        {
+          "feature": "quick_ratio",
+          "label": "Quick ratio (current assets without stock, relative to short-term bills)",
+          "value": 0.34566,
+          "value_text": "0.35",
+          "direction": "raises risk",
+          "contribution": 0.23758767545223236
+        },
+        {
+          "feature": "inventory_days",
+          "label": "Inventory days",
+          "value": 26.328,
+          "value_text": "26.33",
+          "direction": "raises risk",
+          "contribution": 0.11610033363103867
+        },
+        {
+          "feature": "operating_margin",
+          "label": "Operating profit margin",
+          "value": 0.039709,
+          "value_text": "0.04",
+          "direction": "lowers risk",
+          "contribution": -0.11471833288669586
+        }
+      ]
+    },
+    {
+      "business_id": "PL05562",
+      "period": "last reported year",
+      "model_version": "polish_bankruptcy-xgboost-20261027-162955",
+      "p_bankrupt_next_year": 0.9326218527378152,
+      "risk_class": "high",
+      "confidence": "normal",
+      "top_drivers": [
+        {
+          "feature": "sales_growth",
+          "label": "Sales relative to last year",
+          "value": null,
+          "value_text": "not available",
+          "direction": "raises risk",
+          "contribution": 2.6948797702789307
+        },
+        {
+          "feature": "interest_coverage",
+          "label": "Operating profit relative to interest and finance costs",
+          "value": null,
+          "value_text": "not available",
+          "direction": "raises risk",
+          "contribution": 1.561777949333191
+        },
+        {
+          "feature": "operating_margin",
+          "label": "Operating profit margin",
+          "value": -0.10032,
+          "value_text": "-0.10",
+          "direction": "raises risk",
+          "contribution": 0.21606957912445068
+        },
+        {
+          "feature": "asset_turnover",
+          "label": "Sales relative to assets",
+          "value": 0.91078,
+          "value_text": "0.91",
+          "direction": "lowers risk",
+          "contribution": -0.2026427537202835
+        },
+        {
+          "feature": "quick_ratio",
+          "label": "Quick ratio (current assets without stock, relative to short-term bills)",
+          "value": 0.40194,
+          "value_text": "0.40",
+          "direction": "raises risk",
+          "contribution": 0.1874971091747284
+        }
+      ]
+    }
+  ],
+  "card": {
+    "warning": "**Real data, different businesses.** Annual accounts of Polish manufacturing companies (2000\u20132013) and whether they went bankrupt within a year. FINEXT computes the same ratios from an MSME's books, but Cambodian MSMEs are smaller and differently financed: describe output as *likely deterioration*, never as a prediction of loan default.",
+    "data": [
+      "Polish companies bankruptcy data (UCI 365, CC BY 4.0; Tomczak, Zi\u0119ba et al. 2016), `5year.arff`: 5,850 companies after dropping 60 exact duplicate rows.",
+      "Attribute meanings checked against ratios built from the same figures: assets/liabilities = 1/(liabilities/assets) 99.98%, working capital/assets = (current ratio - 1) \u00d7 short-term bills/assets 99.98%, sales/receivables = 365/receivable days 99.98%, sales/inventory = 365/inventory days 99.98%.",
+      "**Target** `bankrupt_next_year`: 408 bankrupt within a year (7.0%).",
+      "23 of the 64 ratios are used: those FINEXT can also compute from a shop's books."
+    ],
+    "splits": "Companies split 60 / 20 / 20 into train (grouped CV inside), validation and a company holdout, each stratified by outcome. The data has no years, so there is no time holdout.",
+    "limitations": [
+      "Polish manufacturing companies, annual accounts: much larger than Cambodian MSMEs, a different economy and period.",
+      "No years in the data, so results cannot be checked on a later period.",
+      "No cash flow statement or loan schedules, so DSCR and cash runway are approximated (liquid days of expenses).",
+      "Some extreme values in the source (e.g. negative liabilities ratios) are kept: tree models are not sensitive to them."
+    ]
+  },
+  "data": {
+    "rows": 5850,
+    "groups": 5850,
+    "positives": 408,
+    "sha256": "cb3f6f250ac46bd8d18e9a222f489fe8ee3e396fcec18959f5a0ef8e8169b2fc",
+    "splits": {
+      "train": {
+        "rows": 3510,
+        "positives": 244,
+        "groups": 3510
+      },
+      "validation": {
+        "rows": 1170,
+        "positives": 82,
+        "groups": 1170
+      },
+      "company_holdout": {
+        "rows": 1170,
+        "positives": 82,
+        "groups": 1170
+      }
+    }
+  },
+  "features": [
+    "net_profit_to_assets",
+    "liabilities_to_assets",
+    "working_capital_to_assets",
+    "current_ratio",
+    "liquid_days_of_expenses",
+    "retained_earnings_to_assets",
+    "ebit_to_assets",
+    "asset_turnover",
+    "equity_to_assets",
+    "pretax_margin",
+    "inventory_days",
+    "sales_growth",
+    "net_margin",
+    "cash_earnings_to_liabilities",
+    "interest_coverage",
+    "payable_days",
+    "cash_ratio",
+    "operating_margin",
+    "receivable_days",
+    "quick_ratio",
+    "short_term_liabilities_to_assets",
+    "costs_to_sales",
+    "long_term_liabilities_to_equity"
+  ],
+  "seed": 20261027,
+  "folds": 5,
+  "configs_per_model": 30,
+  "versions": {
+    "python": "3.11.9",
+    "numpy": "2.4.6",
+    "pandas": "2.3.3",
+    "scikit-learn": "1.9.1",
+    "xgboost": "3.2.0",
+    "lightgbm": "4.7.0",
+    "shap": "0.51.0"
+  },
+  "minutes": 13.7
+}
