@@ -1,0 +1,406 @@
+/**
+ * FINEXT's policies, shown under Settings > Policies. Drafts written from what the app actually does (checked against
+ * the code: what is stored, how sharing with lenders works, what the AI uses) and from the frameworks that apply in
+ * Cambodia as of October 2026. They are not legal advice and must be reviewed by a lawyer before launch; items in
+ * [brackets] are decisions still to be made. English only for now: a legal text needs a checked Khmer translation.
+ */
+export type PolicyId = 'policy' | 'privacy' | 'ai' | 'terms' | 'governance';
+
+export interface PolicySection {
+  heading: string;
+  body?: string[];
+  bullets?: string[];
+}
+
+export interface Policy {
+  id: PolicyId;
+  title: string;
+  summary: string;
+  sections: PolicySection[];
+}
+
+export const POLICY_ORDER: PolicyId[] = ['policy', 'privacy', 'ai', 'terms', 'governance'];
+
+export const POLICIES: Record<PolicyId, Policy> = {
+  policy: {
+    id: 'policy',
+    title: 'FINEXT Data and AI Policy',
+    summary: 'The formal policy: how FINEXT governs the data it holds and the AI it uses.',
+    sections: [
+      {
+        heading: 'Document control',
+        bullets: [
+          'Policy owner: Data Protection Lead and AI Model Owner, jointly. [Names to be appointed.]',
+          'Approved by: [FINEXT management, to be confirmed].',
+          'Effective date: [to be set on approval].',
+          'Review: at least once a year, and whenever a law or framework named in section 5 changes.',
+        ],
+      },
+      {
+        heading: '1. Purpose',
+        body: [
+          "This policy sets out how FINEXT collects, uses, protects and shares data, and how it designs, tests, uses and oversees artificial intelligence (AI). Its aim is that small business owners can trust FINEXT with their records, and that FINEXT's AI helps them understand their business without harming them.",
+        ],
+      },
+      {
+        heading: '2. Scope',
+        body: [
+          'This policy applies to the FINEXT mobile app, its servers and the lender portal; to all data FINEXT holds about its users and their businesses; to every AI feature in FINEXT; and to everyone who builds, runs or has access to FINEXT, including partner lenders when they view shared data.',
+        ],
+      },
+      {
+        heading: '3. Definitions',
+        bullets: [
+          'User: a business owner with a FINEXT account.',
+          'Personal data: information about an identifiable person, such as name, email or phone number.',
+          'Business data: bookkeeping entries, statements, documents and profile details of a business.',
+          'Lender: a bank or financial institution that a user chooses to share data with.',
+          'AI feature: any FINEXT function that estimates or forecasts from data, whether a trained model or a statistical method.',
+          'Model: the trained risk model that estimates the chance of serious financial difficulty within 12 months.',
+        ],
+      },
+      {
+        heading: '4. Policy statement',
+        body: ['FINEXT commits to the following principles:'],
+        bullets: [
+          'Lawfulness: we follow the laws of Cambodia and prepare early for laws still in draft.',
+          'User control: users own their data. Nothing is shared with a lender without the user\'s explicit, specific and time-limited consent.',
+          'Minimisation: we collect only what the features need and use it only for the purposes stated in this policy.',
+          'Security: data is protected against loss, unauthorised access, change and disclosure.',
+          'Human decision-making: AI informs users; it never makes a credit decision about anyone.',
+          'Transparency: every AI estimate is explained, and its limits are stated.',
+          'Fairness: AI uses business figures only, never personal traits.',
+          'Accountability: named people are responsible for data and for AI, and their decisions are recorded.',
+        ],
+      },
+      {
+        heading: '5. Legal and framework basis',
+        bullets: [
+          'Constitution of the Kingdom of Cambodia: the right to privacy.',
+          'Law on Electronic Commerce (2019): the duty to protect stored electronic data.',
+          'Law on Consumer Protection (2019): clear information and fair treatment of consumers.',
+          'Draft Law on Personal Data Protection: followed in advance (legal grounds for using data, rights of the people concerned, answering requests within one month); this policy will be updated when it is adopted.',
+          'NIST AI Risk Management Framework (AI RMF 1.0): the Govern, Map, Measure and Manage functions.',
+          'OECD AI Principles: benefit to people, human rights and fairness, transparency, robustness and safety, accountability.',
+          'ASEAN Guide on AI Governance and Ethics (2024) and the direction of Cambodia\'s draft National AI Strategy 2025-2030.',
+        ],
+      },
+      {
+        heading: '6. Data governance',
+        body: [
+          '6.1 Collection. FINEXT collects account details, business and owner profiles, bookkeeping entries, the names of cash, bank and wallet accounts, uploaded business documents and app settings. It does not collect location, contacts, bank log-in details or credit bureau records. Owner check-in answers stay on the user\'s device. Bank statement PDFs that users import are read and deleted at once; only the entries the user confirms are kept.',
+          '6.2 Use. Data is used to keep the user\'s books, produce statements, health ratios and AI estimates, sync between the user\'s devices, and prepare loan packs at the user\'s request. Data is never sold or used for advertising.',
+          '6.3 Consent and sharing. A lender can see a user\'s data only after the user gives consent in the app, choosing the lender, the information (loan readiness score, statements, health ratios, trends, documents) and the period (30, 90 or 180 days). Users can withdraw consent at any time, with immediate effect. Every lender view is recorded. AI risk estimates are not shared with lenders.',
+          '6.4 Storage and security. Data is kept on the user\'s device and in FINEXT\'s cloud database. Access requires sign-in, and each account can reach only its own data. [Before launch: confirm encrypted connections (HTTPS) everywhere and state the server location.]',
+          '6.5 Retention and deletion. Data is kept while the account is open. On a deletion request, data is removed [within 30 days], except records the law requires FINEXT to keep, which are kept only as long as required. [An in-app deletion option is to be added.]',
+          '6.6 Rights of users. Users can see, correct, copy (statements as PDF) and ask to delete their data, and withdraw consent to sharing. Requests are answered within one month.',
+          '6.7 Data quality. Entries are checked against accounting rules when recorded, and unusual entries (likely duplicates, an extra zero, a cost recorded as income, future dates) are flagged for the user to review before they affect estimates.',
+        ],
+      },
+      {
+        heading: '7. AI governance',
+        body: [
+          '7.1 Permitted uses. AI in FINEXT is used to estimate 12-month financial risk, forecast 3-month cash stress, check debt capacity, show the effect of changes (what-if), and flag unusual entries. Any new AI use needs the approval of the AI Model Owner and an update to this policy.',
+          '7.2 Human oversight. AI outputs are guidance for the user. FINEXT does not approve or refuse loans, and lenders make their own decisions. Users can question any estimate, and a person reviews it.',
+          '7.3 Transparency and explainability. Each estimate shows its level (low, moderate, high), its main reasons, and a note on its limits. The app states where AI is used, what data it uses and how it was tested.',
+          '7.4 Fairness. AI features use only the business\'s financial figures. They never use gender, age, ethnicity, religion, location or other personal traits.',
+          '7.5 Validation. Before release, each model version is tested on companies it has never seen, across countries, against simple rules (the Altman Z-score and "loss-making"), and on small-business profiles run through the real app. Results and known limits are recorded in a model card. Finance-direction constraints ensure that, all else equal, higher profit, more cash or lower debt cannot raise the estimate.',
+          '7.6 Local calibration. Estimates are set to Cambodia\'s published bad-loan rate (8.3%, National Bank of Cambodia, 2025). Lenders can test the model on their own records with FINEXT\'s validation kit; only summary figures leave the lender.',
+          '7.7 Monitoring and change. Models are re-checked when new data becomes available and at least once a year. A feature that gives wrong or unfair results is paused or clearly labelled until fixed. Each change of model version is recorded.',
+        ],
+      },
+      {
+        heading: '8. Roles and responsibilities',
+        bullets: [
+          'Management: approves this policy and gives the resources to carry it out.',
+          'Data Protection Lead: answers user requests, keeps records of consent and sharing, handles data incidents. [To be appointed.]',
+          'AI Model Owner: approves AI features and model versions, keeps model cards, oversees monitoring. [To be appointed.]',
+          'Developers and staff: follow this policy and report any concern straight away.',
+          'Lenders: view shared data only for assessing the user\'s application, within the consent given.',
+        ],
+      },
+      {
+        heading: '9. Incidents',
+        body: [
+          'Any suspected data breach or harmful AI behaviour is reported to the Data Protection Lead or AI Model Owner at once, investigated without delay, and recorded. Affected users and the relevant authorities are told as the law requires, and the cause is fixed before the feature is used again.',
+        ],
+      },
+      {
+        heading: '10. Compliance and exceptions',
+        body: [
+          'Compliance is checked at each annual review and before each release. Any exception needs written approval from the policy owners, with the reason and an end date. Breaches of this policy are handled under FINEXT\'s disciplinary and contractual terms.',
+        ],
+      },
+      {
+        heading: '11. Related documents',
+        bullets: ['Privacy and data', 'How FINEXT uses AI', 'Terms of use', 'Data and AI governance', 'Model card of the current risk model'],
+      },
+      {
+        heading: '12. Contact',
+        body: ['Questions about this policy: [contact email and address to be added].'],
+      },
+    ],
+  },
+
+  privacy: {
+    id: 'privacy',
+    title: 'Privacy and data',
+    summary: 'What we collect, why, where it is kept, and the control you have over it.',
+    sections: [
+      {
+        heading: 'In short',
+        bullets: [
+          'Your books belong to you. We use them to run FINEXT for you, and for nothing else.',
+          'We never sell your data and show no advertising.',
+          'A bank sees your information only if you choose to share it, only what you pick, and only for as long as you allow.',
+        ],
+      },
+      {
+        heading: 'What we collect',
+        bullets: [
+          'Account: your email address and sign-in details (passwords are handled by our sign-in provider; we never see them).',
+          'Business and owner profile: the details you enter, such as business name, type and contact details.',
+          'Bookkeeping: the entries you record (sales, costs, stock, loans, savings) and the cash, bank and wallet accounts you name.',
+          'Documents you upload: your patent tax certificate and certificate of incorporation.',
+          'Bank statements you import: the PDF is read on our server and deleted straight away. Only the entries you choose to keep are saved, like entries you type in; the full account number is never kept.',
+          'Settings: language, currency and exchange rate.',
+        ],
+      },
+      {
+        heading: 'What we do not collect',
+        bullets: [
+          'Your location, contacts, photos or messages.',
+          'Bank or wallet log-in details: FINEXT does not connect to your bank accounts.',
+          'Credit bureau records or any data about you from outside the app.',
+          'Your owner check-in answers: they stay on your phone and are never sent to us.',
+        ],
+      },
+      {
+        heading: 'Why we use it',
+        bullets: [
+          'To keep your books, including when you are offline, and to sync them between your devices.',
+          'To produce your statements, financial health ratios and the AI estimates described in "How FINEXT uses AI".',
+          'To prepare a loan pack and share it with a bank, only when you ask us to.',
+        ],
+      },
+      {
+        heading: 'Where it is kept',
+        body: [
+          'On your device, so the app works without internet, and in our cloud database so your books are safe and available on your other devices. Each account can reach only its own data, and you must sign in to see it. [Server location and provider terms to be confirmed and stated here.]',
+        ],
+      },
+      {
+        heading: 'Sharing with banks',
+        bullets: [
+          'Nothing is shared until you give consent in the loan pack.',
+          'You choose the bank, what it sees (loan readiness score, statements, health ratios, trends, documents) and for how long (30, 90 or 180 days).',
+          'You can stop sharing at any time; access ends straight away.',
+          'Each time a bank opens your information, we record it.',
+          'The AI risk estimate is shown only to you. It is not sent to banks.',
+        ],
+      },
+      {
+        heading: 'Your rights',
+        bullets: [
+          'See your data: everything you entered is in the app.',
+          'Correct it: edit or cancel any entry.',
+          'Take a copy: download your statements as PDF.',
+          'Withdraw consent: stop sharing with any bank at any time.',
+          'Delete your account and data: [contact method to be added]. We aim to answer requests within one month.',
+        ],
+      },
+      {
+        heading: 'How long we keep it',
+        body: [
+          'While your account is open. After you ask us to delete it, we remove your data [within 30 days], except anything the law requires us to keep, which we keep only for as long as required.',
+        ],
+      },
+      {
+        heading: 'Security and problems',
+        body: [
+          'Your data is protected by sign-in. [Before launch: confirm every connection is encrypted (HTTPS) and state it here.] If a security incident affects your data, we will tell you and the relevant authorities as the law requires.',
+        ],
+      },
+      {
+        heading: 'Laws we follow',
+        body: [
+          "FINEXT follows Cambodian law, including the right to privacy in the Constitution, the Law on Electronic Commerce (2019), which requires anyone storing electronic data to protect it from loss, unauthorised access, change or disclosure, and the Law on Consumer Protection (2019). Cambodia's Law on Personal Data Protection is still a draft; this policy is designed to meet its main requirements, and we will update it when the law is adopted.",
+        ],
+      },
+      {
+        heading: 'Contact and changes',
+        body: [
+          'Questions or requests: [contact email and address to be added]. We will tell you in the app before any important change to this policy.',
+        ],
+      },
+    ],
+  },
+
+  ai: {
+    id: 'ai',
+    title: 'How FINEXT uses AI',
+    summary: 'Where AI is used, what it looks at, how it was tested, and its limits.',
+    sections: [
+      {
+        heading: 'In short',
+        bullets: [
+          'The AI gives estimates to help you plan. It does not make decisions about you.',
+          'It looks only at the books you keep in FINEXT.',
+          'Every estimate comes with the reasons behind it.',
+          'FINEXT never approves or refuses a loan. Banks make their own decisions, and the AI estimate is not sent to them.',
+        ],
+      },
+      {
+        heading: 'Where it is used',
+        bullets: [
+          '12-month risk estimate (a trained model): how likely the business is to run into serious difficulty in the next year, shown as low, moderate or high, with the main reasons.',
+          '3-month cash forecast (a statistical simulation): 2,000 possible paths for your cash, built from your own month-to-month records.',
+          'Debt check and what-if sliders (calculations): how much repayment the business can carry, and how changes to prices, costs or collections would move the estimates.',
+          'Unusual-entry alerts (statistical checks): entries that look like mistakes, such as duplicates or an extra zero. Nothing is changed without you.',
+        ],
+      },
+      {
+        heading: 'What it looks at',
+        body: [
+          "Only the business's own figures from your bookkeeping: sales, costs, stock, cash, what is owed to and by the business, and how these change. It never uses your gender, age, ethnicity, religion, location, or any information about you as a person, and never uses other users' data to judge you.",
+        ],
+      },
+      {
+        heading: 'How it was built and tested',
+        bullets: [
+          'The risk model learned from real, public company accounts (Polish companies, 2000 to 2013, published by the UCI Machine Learning Repository) and whether each company failed within a year.',
+          'On 1,170 companies it had never seen, it ranked a failing company above a healthy one 93% of the time and flagged 92% of the companies that later failed. About 1 in 4 of its warnings were real problems, so treat a warning as a reason to look closer.',
+          "Its percentages are set to Cambodia's 2025 bad-loan rate of 8.3% (National Bank of Cambodia, Annual Supervision Report 2025).",
+          'It has not yet been tested on Cambodian businesses: no public data links Cambodian business books to loan outcomes. Banks can test it on their own records with our validation kit, without sharing them.',
+        ],
+      },
+      {
+        heading: 'Limits',
+        bullets: [
+          'Estimates, not certainties: read the level (low, moderate, high) more than the exact percentage.',
+          'A risk estimate needs at least 6 complete months of records; more months make it steadier.',
+          'It is only as good as your records. Missing or wrong entries change the answer.',
+          'It is not financial, tax or legal advice.',
+        ],
+      },
+      {
+        heading: 'Your choices',
+        bullets: [
+          'Correct any entry and the estimates update.',
+          'Mark an unusual-entry alert as right if it is.',
+          'Switch between plain and accounting language in Profile.',
+          'Question an estimate: [contact method to be added]. A person will review it.',
+        ],
+      },
+      {
+        heading: 'Principles we follow',
+        body: [
+          'Our AI governance is aligned with the NIST AI Risk Management Framework (AI RMF 1.0) and the OECD AI Principles: AI that benefits people, respects privacy and fairness, is transparent and explainable, is robust, secure and safe, and has clear accountability. "Data and AI governance" sets out how we apply them.',
+          "In the region, we also follow the ASEAN Guide on AI Governance and Ethics (2024) and the direction of Cambodia's draft National AI Strategy 2025-2030 on ethical and responsible AI.",
+        ],
+      },
+    ],
+  },
+
+  terms: {
+    id: 'terms',
+    title: 'Terms of use',
+    summary: 'The rules for using FINEXT.',
+    sections: [
+      {
+        heading: 'What FINEXT is',
+        body: [
+          'A bookkeeping app for small businesses, with statements, financial health checks and AI estimates built from your own records. It is not a bank, does not lend money and does not decide on loans.',
+        ],
+      },
+      {
+        heading: 'Your responsibilities',
+        bullets: [
+          'Keep your entries accurate and complete. Statements and estimates come from what you record.',
+          'Keep your sign-in details private and tell us if you think someone else has used your account.',
+          'Use FINEXT only for your own lawful business.',
+        ],
+      },
+      {
+        heading: 'Statements and estimates',
+        body: [
+          'Statements are produced automatically from your entries and are not audited. Estimates are guidance, not advice. Check important decisions with a qualified adviser and with your bank.',
+        ],
+      },
+      {
+        heading: 'Banks in the app',
+        body: [
+          'In this version, the partner banks listed are examples for demonstration. No information is sent to a real bank. [Replace this paragraph when real partnerships are signed.]',
+        ],
+      },
+      {
+        heading: 'Availability',
+        body: [
+          'We work to keep FINEXT available and your data safe, but cannot promise the service will never be interrupted. Your entries stay on your device and sync when the connection returns.',
+        ],
+      },
+      {
+        heading: 'Liability, ending and law',
+        body: [
+          '[Limits of liability, how either side can end the service, and how disputes are settled under Cambodian law: to be written with a lawyer.]',
+        ],
+      },
+    ],
+  },
+
+  governance: {
+    id: 'governance',
+    title: 'Data and AI governance',
+    summary: 'How FINEXT is run responsibly: who is accountable, and the checks we keep.',
+    sections: [
+      {
+        heading: 'Who is accountable',
+        bullets: [
+          'Data protection lead: answers privacy requests and incidents. [Name to be appointed.]',
+          'AI model owner: approves each model version before release and watches how it performs. [Name to be appointed.]',
+        ],
+      },
+      {
+        heading: 'Data',
+        bullets: [
+          'Collect only what the features need, and use it only for the purposes in the privacy policy.',
+          'Sharing with a bank always needs consent, has a chosen scope and an end date, can be stopped at any time, and every view is recorded.',
+          'Each account can reach only its own data.',
+          'Requests to see, correct or delete data are answered within one month.',
+        ],
+      },
+      {
+        heading: 'AI models',
+        bullets: [
+          'Every model version has a model card: the data it learned from, how it was tested, and its known limits.',
+          'Before release, a model is tested on companies it never saw, in another country (Poland to the United States and back), against simple rules (the Altman Z-score and "loss-making"), and on 18 small-business profiles run through the real app.',
+          'Finance-direction constraints: with everything else the same, higher profit, more cash or lower debt cannot raise the estimate.',
+          'Every estimate shows its reasons, and the app says what the AI is and is not.',
+          'Banks can test the model on their own loan records with our validation kit; only summary figures leave the bank.',
+          'The model is checked again whenever new data is available, and at least once a year.',
+        ],
+      },
+      {
+        heading: 'Frameworks we align with',
+        body: [
+          'Our approach is organised around the four functions of the NIST AI Risk Management Framework (AI RMF 1.0) and the OECD AI Principles:',
+        ],
+        bullets: [
+          'Govern: named owners for data and for the AI model, these written policies, and a yearly review.',
+          'Map: each AI feature has a stated purpose, the data it uses and who it affects. It informs owners and does not decide on loans.',
+          'Measure: models are tested on companies they never saw, in another country, against simple rules and on real small-business profiles, and each version has a model card.',
+          'Manage: unusual-entry checks catch bad data before it is scored, a feature is paused or labelled if it misbehaves, and banks can test the model on their own records without sharing them.',
+          'OECD AI Principles: benefit to people (helping small businesses reach credit); privacy and fairness (only business figures, never personal traits); transparency and explainability (reasons shown with every estimate); robustness, security and safety (validation and data checks); accountability (named owners and records of who saw shared data).',
+        ],
+      },
+      {
+        heading: 'Problems and reviews',
+        bullets: [
+          'Security incidents are investigated straight away, and affected users and authorities are told as the law requires.',
+          'If the AI is found to give wrong or unfair results, the affected feature is paused or labelled until it is fixed.',
+          "These policies are reviewed every year, and when Cambodia's Law on Personal Data Protection is adopted.",
+        ],
+      },
+    ],
+  },
+};

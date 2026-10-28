@@ -16,6 +16,9 @@ const defaultApiUrl = Platform.OS === 'web'
 
 export const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || defaultApiUrl).replace(/\/+$/, '');
 
+/** The lender portal for partner-bank staff, served by the same API. */
+export const LENDER_PORTAL_URL = `${API_BASE_URL}/portal/`;
+
 /** Most API calls answer in well under a second; uploads, file downloads and sync can take longer on mobile data. */
 export const REQUEST_TIMEOUT_MS = 15_000;
 export const LONG_REQUEST_TIMEOUT_MS = 60_000;

@@ -27,9 +27,12 @@ import {
   Info,
   KeyRound,
   Layers,
+  Lock,
   LogOut,
+  Mail,
   NotebookPen,
   PencilLine,
+  Phone,
   Pill,
   Plane,
   Plus,
@@ -114,6 +117,10 @@ const LIBRARY = {
   savings: Coins,
   wedding: Gem,
   more: Plus,
+  // sign-in and sign-up fields
+  mail: Mail,
+  lock: Lock,
+  phone: Phone,
 } satisfies Record<string, LucideLike>;
 
 export type IconName = keyof typeof LIBRARY | 'analysis';

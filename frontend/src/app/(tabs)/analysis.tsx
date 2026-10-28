@@ -4,8 +4,7 @@ import { useRouter } from 'expo-router';
 import { BarChartCard } from '@/components/BarChartCard';
 import { AnalysisLoading } from '@/components/AnalysisLoading';
 import { FinancialHealthChart } from '@/components/FinancialHealthChart';
-import { FinHealthCard } from '@/components/FinHealthCard';
-import { FutureRiskSection } from '@/components/FutureRiskSection';
+import { FutureRiskSection, StoryHeading } from '@/components/FutureRiskSection';
 import { IncomeExpenseForecastCard } from '@/components/IncomeExpenseForecastCard';
 import { LoanReadinessSection } from '@/components/LoanReadinessSection';
 import { OfflineBanner } from '@/components/OfflineBanner';
@@ -103,14 +102,17 @@ export default function Analysis() {
       )}
 
       {section === 'health' && (
-        <View style={{ marginTop: 24, gap: 12 }}>
-          {ratios.loading && !ratios.data ? <AnalysisLoading mode="health" /> : null}
-          {ratios.noCache ? <EmptyState titleKey="offline.noCache" bodyKey="offline.noCacheBody" icon="wifiOff" /> : null}
-          {ratios.error ? <ErrorState onRetry={ratios.reload} error={ratios.error} /> : null}
-          {ratios.data && ratios.data.length > 0 && <FinancialHealthChart ratios={ratios.data} />}
-          {!ratios.loading && <View style={{ marginTop: 12 }}><FutureRiskSection /></View>}
-          {/* What the owner tells us, next to what the books show */}
-          {!ratios.loading && <View style={{ marginTop: 12 }}><FinHealthCard /></View>}
+        // A story from the answer down to the details: the AI's answer, why, what to do, borrowing, the owner's
+        // check-in, then the ratios behind it all.
+        <View style={{ marginTop: 24, gap: 28 }}>
+          <FutureRiskSection />
+          <View style={{ gap: 12 }}>
+            <StoryHeading icon="chart" title={t('story.numbers')} />
+            {ratios.loading && !ratios.data ? <AnalysisLoading mode="health" /> : null}
+            {ratios.noCache ? <EmptyState titleKey="offline.noCache" bodyKey="offline.noCacheBody" icon="wifiOff" /> : null}
+            {ratios.error ? <ErrorState onRetry={ratios.reload} error={ratios.error} /> : null}
+            {ratios.data && ratios.data.length > 0 && <FinancialHealthChart ratios={ratios.data} />}
+          </View>
         </View>
       )}
 

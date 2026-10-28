@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { BusinessProfileForm, EMPTY_PROFILE, fromProfileValues, toProfileValues, type BusinessProfileValues } from '@/components/BusinessProfileForm';
 import { BusinessDocumentsSection } from '@/components/BusinessDocumentsSection';
 import { Button } from '@/components/Button';
+import { Icon, type IconName } from '@/components/Icon';
 import { ScreenShell } from '@/components/ScreenShell';
 import { LoadingState } from '@/components/StateViews';
 import { Text } from '@/components/Text';
@@ -52,8 +53,29 @@ export default function EditProfile() {
     phone: ownerPhone.replace(/\D/g, '').length < 8 ? t('error.invalidPhone') : undefined,
   };
 
-  const toggle = (label: string, value: boolean, onChange: (v: boolean) => void) => (
-    <View className="flex-row items-center justify-between" style={{ minHeight: 48 }}>
+  const line = isDark ? colors.dark.border : colors.neutral[200];
+  const card = { borderRadius: radius.card, borderWidth: 1, borderColor: line, backgroundColor: isDark ? colors.dark.surface : colors.white } as const;
+
+  /** A section: a blue heading with its icon (and an optional one-line hint) above a plain white card. */
+  const section = (heading: string | null, icon: IconName, children: React.ReactNode, hint?: string, bare = false) => (
+    <View style={{ gap: 10 }}>
+      {heading && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={{ width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? colors.dark.field : colors.primary[50] }}>
+            <Icon name={icon} size={18} color={isDark ? colors.dark.primary : colors.primary[500]} />
+          </View>
+          <View style={{ flex: 1, gap: 1 }}>
+            <Text variant="title" weight={700} tone="primary-900" accessibilityRole="header">{heading}</Text>
+            {hint ? <Text variant="caption" weight={400} tone="neutral-500">{hint}</Text> : null}
+          </View>
+        </View>
+      )}
+      {bare ? children : <View style={{ ...card, paddingHorizontal: 16, paddingVertical: 2 }}>{children}</View>}
+    </View>
+  );
+
+  const toggle = (label: string, value: boolean, onChange: (v: boolean) => void, first?: boolean) => (
+    <View className="flex-row items-center justify-between" style={{ minHeight: 56, borderTopWidth: first ? 0 : 1, borderTopColor: line }}>
       <Text variant="body" weight={500} tone="primary-900">
         {label}
       </Text>
@@ -66,33 +88,34 @@ export default function EditProfile() {
       {!values ? (
         <LoadingState />
       ) : (
-        <View style={{ gap: 20 }}>
-          {profileSection !== 'owner' && (
-            <View style={{ gap: 20, padding: 16, borderRadius: radius.lg, backgroundColor: isDark ? colors.dark.surface : colors.primary[50] }}>
-              {profileSection === 'all' && <Text variant="title" weight={700} tone="primary-900">{t('auth.businessDetails')}</Text>}
-              <BusinessProfileForm
-                values={values}
-                onChange={(p) => setValues((v) => ({ ...(v ?? EMPTY_PROFILE), ...p }))}
-                errors={{ businessName: error }}
-                showStartDate={false}
-                showContact={false}
-                showOwner={false}
-                fieldBackgroundColor={colors.white}
-              />
-            </View>
+        <View style={{ gap: 24 }}>
+          {profileSection !== 'owner' && section(
+            profileSection === 'all' ? t('auth.businessDetails') : null,
+            'home',
+            <BusinessProfileForm
+              values={values}
+              onChange={(p) => setValues((v) => ({ ...(v ?? EMPTY_PROFILE), ...p }))}
+              errors={{ businessName: error }}
+              showStartDate={false}
+              showContact={false}
+              showOwner={false}
+              appearance="row"
+            />,
           )}
-          {profileSection !== 'owner' && <BusinessDocumentsSection />}
-          {profileSection !== 'business' && (
-            <View style={{ gap: 20, padding: 16, borderRadius: radius.lg, backgroundColor: isDark ? colors.dark.surface : colors.primary[50] }}>
-              {profileSection === 'all' && <Text variant="title" weight={700} tone="primary-900">{t('auth.personalDetails')}</Text>}
+          {profileSection !== 'owner' && section(t('docs.title'), 'file', <BusinessDocumentsSection />, t('docs.subtitle'), true)}
+          {profileSection !== 'business' && section(
+            profileSection === 'all' ? t('auth.personalDetails') : null,
+            'user',
+            <>
               <TextField
                 variant="form"
                 label={t('auth.fullName')}
                 value={values.ownerName}
                 onChangeText={(ownerName) => setValues((current) => ({ ...(current ?? EMPTY_PROFILE), ownerName }))}
                 error={ownerSubmitted ? ownerErrors.name : undefined}
-                fieldBackgroundColor={colors.white}
+                appearance="row"
               />
+              <View style={{ height: 1, backgroundColor: line }} />
               <TextField
                 variant="form"
                 label={t('auth.email')}
@@ -101,8 +124,9 @@ export default function EditProfile() {
                 autoCapitalize="none"
                 keyboardType="email-address"
                 error={ownerSubmitted ? ownerErrors.email : undefined}
-                fieldBackgroundColor={colors.white}
+                appearance="row"
               />
+              <View style={{ height: 1, backgroundColor: line }} />
               <TextField
                 variant="form"
                 label={t('auth.mobile')}
@@ -110,22 +134,25 @@ export default function EditProfile() {
                 onChangeText={setOwnerPhone}
                 keyboardType="phone-pad"
                 error={ownerSubmitted ? ownerErrors.phone : undefined}
-                fieldBackgroundColor={colors.white}
+                appearance="row"
               />
-            </View>
+            </>,
           )}
-          {profileSection !== 'owner' && (
-            <>
-              {toggle(t('profile.push'), push, setPush)}
+          {profileSection !== 'owner' && section(
+            t('profile.preferences'),
+            'settings',
+            <View style={{ ...card, paddingHorizontal: 16 }}>
+              {toggle(t('profile.push'), push, setPush, true)}
               {toggle(t('profile.dark'), dark, (value) => {
                 setDark(value);
                 void updateSettings({ darkTheme: value });
               })}
-            </>
+            </View>,
+            undefined,
+            true,
           )}
-          <View className="items-center">
+          <View>
             <Button
-              variant="tint"
               label={t('profile.update')}
               onPress={async () => {
                 if (profileSection === 'owner') {

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ScreenShell } from '@/components/ScreenShell';
-import { StatementTile } from '@/components/StatementTile';
+import { StatementTile, TILE_COLUMN } from '@/components/StatementTile';
 import { SummaryHero } from '@/components/SummaryHero';
 import { useI18n, type TKey } from '@/i18n';
 import type { StatementPeriod } from '@/services/analysis';
@@ -39,7 +39,7 @@ export default function Statements() {
         {/* One PDF for a lender: statements, ratios and the AI risk assessment (replaces the planned 'Add New Template'). */}
         <StatementTile label={t('pack.tile')} icon="file" selected={selected === 'pack'} onPress={() => { setSelected('pack'); router.push('/loan-pack'); }} />
         {/* Fill the last row to 3 slots so its tiles line up with the columns above. */}
-        {Array.from({ length: (3 - ((TILES.length + 1) % 3)) % 3 }, (_, i) => <View key={`filler-${i}`} style={{ width: 105 }} />)}
+        {Array.from({ length: (3 - ((TILES.length + 1) % 3)) % 3 }, (_, i) => <View key={`filler-${i}`} style={TILE_COLUMN} />)}
       </View>
     </ScreenShell>
   );
