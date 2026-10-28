@@ -161,6 +161,47 @@ export interface FutureRisk {
       };
 }
 
+/** GET /accounting/unusual: a recent entry that looks like a mistake, with its reason. Amounts in the entry's own currency. */
+export interface UnusualEntry {
+  id: string;
+  title: string;
+  typeId: string;
+  direction: 'in' | 'out' | 'move';
+  amount: number;
+  currency: Currency;
+  occurredAt: number;
+  code: 'duplicate' | 'spike' | 'extra_zero' | 'maybe_expense' | 'future_date';
+  params: { otherId?: string; otherAt?: number; usual?: number; times?: number; usualType?: string };
+}
+
+/** POST /accounting/risk/what-if: the owner's levers. Shares are fractions (0.1 = 10%); omitted means no change. */
+export interface WhatIfChanges {
+  priceChange?: number;
+  costCut?: number;
+  collectDays?: number;
+  drawingsCut?: number;
+}
+
+export interface WhatIfAnswers {
+  stress3m: { probability: number; riskClass: RiskLevel } | null;
+  model12m: { probability: number; riskClass: RiskLevel } | null;
+  /** Middle path of cash at the end of the 3 months, minor units. */
+  cash3m: number | null;
+  netMargin: number | null;
+  receivableDays: number | null;
+  monthlyProfit: number;
+}
+
+export type WhatIf =
+  | { available: false; reason: 'not_enough_history'; months: number }
+  | {
+      available: true;
+      /** The business's current monthly figures, to label each lever in money (minor units). */
+      baseline: { currency: Currency; monthlyRevenue: number; monthlyCosts: number; monthlyDrawings: number; receivableDays: number | null };
+      before: WhatIfAnswers;
+      after: WhatIfAnswers;
+    };
+
 export type ReadinessLevel = 'ready' | 'almost' | 'not_ready' | 'insufficient_data';
 export type ReadinessPillarId = 'repayment' | 'strength' | 'profitability' | 'records' | 'documents';
 
@@ -314,6 +355,15 @@ export interface RatioSnapshot {
   red: number;
   betterWhen: 'higher' | 'lower';
   message?: string | null;
+}
+
+/** GET /accounting/snapshots: one complete month. `features` holds each ratio's value (same units as RatioSnapshot.value). */
+export interface HealthHistoryMonth {
+  period: string;
+  complete?: boolean;
+  integrity: { ok: boolean };
+  features: Record<string, number | null> | null;
+  ratioStatus?: Record<string, RatioSnapshot['status']>;
 }
 
 /** Wrapper returned by every analysis call so the UI can show the "Offline · last updated …" banner. */

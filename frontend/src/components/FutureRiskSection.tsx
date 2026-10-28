@@ -2,11 +2,13 @@ import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { Button } from './Button';
 import { Chip, ChipRow } from './Chip';
+import { BeforeAfterBar, CashFanChart, DivergingBars, ProbabilityRing, ShareBar, StackedBar, TargetMeter, useChartColors } from './HealthCharts';
 import { Icon } from './Icon';
 import { OfflineBanner } from './OfflineBanner';
 import { EmptyState, ErrorState } from './StateViews';
 import { Text } from './Text';
 import { TextField } from './TextField';
+import { WhatIfCard } from './WhatIfCard';
 import { useAnalysisQuery } from '@/hooks/useAnalysisQuery';
 import { useI18n, type TKey } from '@/i18n';
 import { checkLoan, getFutureRisk, type FutureRisk, type ProposedLoan, type RiskAdvice, type RiskDriver, type RiskLevel } from '@/services/analysis';
@@ -78,17 +80,14 @@ function Row({ label, hint, value, valueColor }: { label: string; hint?: string;
 /** The percentage in a ring coloured by level, the level beside it, and one short line under the level. */
 function Gauge({ probability, level, label, note }: { probability: number; level: RiskLevel; label: string; note?: string }) {
   const { t } = useI18n();
-  const { dark } = useCard();
   const color = LEVEL_COLOR[level];
   const levelText = t(`risk.level.${level}` as TKey);
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-      <View
-        accessible
-        accessibilityLabel={`${label}: ${percent(probability)}%, ${levelText}`}
-        style={{ width: 76, height: 76, borderRadius: 38, borderWidth: 6, borderColor: color, alignItems: 'center', justifyContent: 'center', backgroundColor: dark ? colors.dark.surface : colors.white }}
-      >
-        <Text variant="title-lg" weight={700} tone="primary-900">{percent(probability)}%</Text>
+      <View accessible accessibilityLabel={`${label}: ${percent(probability)}%, ${levelText}`}>
+        <ProbabilityRing probability={probability} color={color}>
+          <Text variant="title-lg" weight={700} tone="primary-900">{percent(probability)}%</Text>
+        </ProbabilityRing>
       </View>
       <View style={{ flex: 1, gap: 6 }}>
         <Pill label={levelText} color={color} />
@@ -100,8 +99,11 @@ function Gauge({ probability, level, label, note }: { probability: number; level
 
 function ShortTermView({ stress }: { stress: Stress }) {
   const { t, locale } = useI18n();
-  const { soft } = useCard();
+  const { series } = useChartColors();
   const money = (amount: number) => formatMoneyWhole(Math.round(amount), stress.currency);
+  const points = stress.cash.map((m) => ({ label: monthName(m.month, locale), median: m.median, low: m.low, high: m.high }));
+  const readout = (p: { label: string; median: number; low: number; high: number }) =>
+    t('stress.readout', { month: p.label, median: money(p.median), low: money(p.low), high: money(p.high) });
   // Only the signs that appear in some futures; repayment cover only when there are loan instalments.
   const conditions = (['cash_runway', 'negative_cash_flow', 'dscr'] as const)
     .filter((c) => (c !== 'dscr' || stress.instalments.some((x) => x > 0)) && stress.conditions[c] >= 0.01);
@@ -119,24 +121,25 @@ function ShortTermView({ stress }: { stress: Stress }) {
       {conditions.length === 0
         ? <Text variant="body-sm" tone="neutral-600">{t('stress.noConditions')}</Text>
         : conditions.map((c) => (
-          <Row key={c} label={t(`stress.condition.${c}` as TKey)} value={`${percent(stress.conditions[c])}%`}
-            valueColor={stress.conditions[c] > 0.3 ? colors.danger : stress.conditions[c] >= 0.1 ? colors.warning : undefined} />
+          <ShareBar key={c} label={t(`stress.condition.${c}` as TKey)} share={stress.conditions[c]} value={`${percent(stress.conditions[c])}%`}
+            color={stress.conditions[c] > 0.3 ? colors.danger : stress.conditions[c] >= 0.1 ? colors.warning : series} />
         ))}
       <Divider />
       <Text variant="caption" weight={600} tone="neutral-600">{t('stress.cashTitle')}</Text>
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        {stress.cash.map((m) => {
-          const short = m.median < stress.runwayFloor;
-          return (
-            <View key={m.month} style={{ flex: 1, minWidth: 0, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 6, alignItems: 'center', gap: 2, backgroundColor: short ? `${colors.danger}14` : soft }}
-              accessible accessibilityLabel={`${monthName(m.month, locale)}: ${money(m.median)} (${money(m.low)} – ${money(m.high)})`}>
-              <Text variant="micro" tone="neutral-600">{monthName(m.month, locale)}</Text>
-              <Text variant="caption" weight={700} tone="primary-900" numberOfLines={1} adjustsFontSizeToFit style={{ ...(short ? { color: colors.danger } : {}) }}>{money(m.median)}</Text>
-            </View>
-          );
-        })}
-      </View>
-      <Text variant="micro" tone="neutral-500">{t('stress.floor', { amount: money(stress.runwayFloor) })} {t('stress.note')}</Text>
+      {points.length > 0 && (
+        <CashFanChart
+          start={{ label: t('stress.now'), value: stress.startingCash }}
+          points={points}
+          floor={stress.runwayFloor}
+          money={money}
+          startLabel={t('stress.now')}
+          floorLabel={t('stress.floorShort')}
+          legend={{ median: t('stress.median'), range: t('stress.range') }}
+          readout={readout}
+          accessibilityLabel={`${t('stress.cashTitle')}: ${points.map(readout).join('; ')}`}
+        />
+      )}
+      <Text variant="micro" tone="neutral-500">{t('stress.tapHint')} {t('stress.note')}</Text>
     </>
   );
 }
@@ -150,22 +153,16 @@ function LongTermView({ model }: { model: Model }) {
         note={model.confidence === 'low' ? t('risk.lowConfidence', { count: model.months }) : undefined} />
       <Divider />
       <Text variant="caption" weight={600} tone="neutral-600">{t('risk.whyTitle')}</Text>
-      {model.topDrivers.slice(0, 3).map((driver) => {
-        const raises = driver.direction === 'raises risk';
-        const color = raises ? colors.danger : colors.success;
-        return (
-          <View key={driver.feature} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }} accessible
-            accessibilityLabel={`${t(`risk.f.${driver.feature}` as TKey)}: ${valueOf(driver)}, ${t(raises ? 'risk.raises' : 'risk.lowers')}`}>
-            <View style={{ width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: `${color}1f`, marginTop: 1 }}>
-              <Text variant="micro" weight={700} style={{ color }}>{raises ? '↑' : '↓'}</Text>
-            </View>
-            <View style={{ flex: 1, gap: 1 }}>
-              <Text variant="body-sm" tone="primary-900">{t(`risk.f.${driver.feature}` as TKey)}</Text>
-              <Text variant="micro" tone="neutral-600">{valueOf(driver)} · <Text variant="micro" style={{ color }}>{t(raises ? 'risk.raises' : 'risk.lowers')}</Text></Text>
-            </View>
-          </View>
-        );
-      })}
+      <DivergingBars
+        leftLabel={t('risk.lowers')}
+        rightLabel={t('risk.raises')}
+        items={model.topDrivers.slice(0, 5).map((driver) => ({
+          key: driver.feature,
+          label: t(`risk.f.${driver.feature}` as TKey),
+          detail: valueOf(driver),
+          amount: (driver.direction === 'raises risk' ? 1 : -1) * Math.abs(driver.contribution),
+        }))}
+      />
       <Text variant="micro" tone="neutral-500">{t('risk.note')}</Text>
     </>
   );
@@ -310,6 +307,17 @@ function DebtCapacityCard({ capacity }: { capacity: Capacity }) {
   const money = (amount: number) => formatMoneyWhole(Math.round(amount), capacity.currency);
   const reasons = capacity.reasons.filter((r) => !r.code.startsWith('loan_'));
   const coverColor = capacity.dscr === null ? undefined : capacity.dscr < 1 ? colors.danger : capacity.dscr < capacity.targetDscr ? colors.warning : undefined;
+  const { dark } = useCard();
+  const { series } = useChartColors();
+  // The money available for repayments, split into what loans already take, what a new loan could take, and the margin kept back.
+  const existing = capacity.existingMonthlyInstalments;
+  const room = capacity.affordableMonthlyInstalment;
+  const buffer = Math.max(0, capacity.monthlyCapacity - existing - room);
+  const split = [
+    { key: 'existing', label: t('debt.instalments'), value: existing, color: existing > capacity.monthlyCapacity ? colors.danger : dark ? colors.dark.primary : colors.primary[900], text: money(existing) },
+    { key: 'room', label: t('debt.room'), value: room, color: series, text: money(room) },
+    { key: 'buffer', label: t('debt.buffer'), value: buffer, color: dark ? colors.dark.subtle : colors.primary[200], text: money(buffer) },
+  ];
   return (
     <View style={card}>
       <CardHeader title={t('debt.title')} subtitle={t('debt.subtitle')} right={<Pill label={t(`debt.level.${capacity.level}` as TKey)} color={color} />} />
@@ -320,8 +328,18 @@ function DebtCapacityCard({ capacity }: { capacity: Capacity }) {
       </View>
       <Row label={t('debt.capacity')} hint={t('debt.capacityHint')} value={money(capacity.monthlyCapacity)} valueColor={capacity.monthlyCapacity <= 0 ? colors.danger : undefined} />
       <Row label={t('debt.instalments')} hint={t('debt.perMonth')} value={money(capacity.existingMonthlyInstalments)} />
+      {capacity.monthlyCapacity > 0 && (
+        <View style={{ gap: 8 }}>
+          <Text variant="caption" weight={600} tone="neutral-600">{t('debt.split')}</Text>
+          <StackedBar parts={split} accessibilityLabel={`${t('debt.split')}: ${split.map((part) => `${part.label} ${part.text}`).join(', ')}`} />
+        </View>
+      )}
+      <Divider />
       <Row label={t('debt.cover')} hint={t('debt.coverHint', { target: capacity.targetDscr })}
         value={capacity.dscr === null ? '—' : t('risk.times', { value: capacity.dscr.toFixed(1) })} valueColor={coverColor} />
+      {capacity.dscr !== null && (
+        <TargetMeter value={capacity.dscr} target={capacity.targetDscr} max={Math.max(capacity.targetDscr * 2, capacity.dscr)} color={coverColor ?? colors.success} />
+      )}
       {reasons.length > 0 && <Divider />}
       {reasons.map((reason) => (
         <View key={reason.code} style={{ flexDirection: 'row', gap: 10 }}>
@@ -335,14 +353,24 @@ function DebtCapacityCard({ capacity }: { capacity: Capacity }) {
   );
 }
 
-/** One line of what the change does: each improved figure as "label before → after". */
+/** What the change does: each improved probability as a before → after bar; otherwise the cash it brings, as text. */
 function Effects({ item }: { item: RiskAdvice }) {
   const { t } = useI18n();
   const money = (n: number) => formatMoneyWhole(Math.round(n), item.currency);
+  const bars: { label: string; before: number; after: number }[] = [];
+  if (item.stress3m && item.stress3m.after < item.stress3m.before) bars.push({ label: t('advice.stress3m'), ...item.stress3m });
+  if (item.model12m && item.model12m.after < item.model12m.before - 0.001) bars.push({ label: t('advice.model12m'), ...item.model12m });
+  if (bars.length) {
+    return (
+      <View style={{ gap: 8, marginTop: 2 }}>
+        {bars.map((bar) => (
+          <BeforeAfterBar key={bar.label} label={bar.label} before={bar.before} after={bar.after} beforeText={`${percent(bar.before)}%`} afterText={`${percent(bar.after)}%`} />
+        ))}
+      </View>
+    );
+  }
   const parts: { label: string; before: string; after: string }[] = [];
-  if (item.stress3m && item.stress3m.after < item.stress3m.before) parts.push({ label: t('stress.tab3'), before: `${percent(item.stress3m.before)}%`, after: `${percent(item.stress3m.after)}%` });
-  if (item.model12m && item.model12m.after < item.model12m.before - 0.001) parts.push({ label: t('stress.tab12'), before: `${percent(item.model12m.before)}%`, after: `${percent(item.model12m.after)}%` });
-  if (!parts.length && item.cash3m && item.cash3m.after > item.cash3m.before) parts.push({ label: t('advice.cash3m'), before: money(item.cash3m.before), after: money(item.cash3m.after) });
+  if (item.cash3m && item.cash3m.after > item.cash3m.before) parts.push({ label: t('advice.cash3m'), before: money(item.cash3m.before), after: money(item.cash3m.after) });
   return (
     <Text variant="micro" tone="neutral-600">
       {parts.map((part, i) => (
@@ -458,6 +486,7 @@ export function FutureRiskSection() {
           lowRisk={[risk.stress3m, risk.model].every((answer) => !answer.available || answer.riskClass === 'low')}
         />
       )}
+      {(risk.stress3m.available || risk.model.available) && <WhatIfCard />}
       {risk.debtCapacity.available
         ? <DebtCapacityCard capacity={risk.debtCapacity} />
         : <NotYet title={t('debt.title')} body={t('debt.needsHistory', { count: risk.debtCapacity.months })} />}

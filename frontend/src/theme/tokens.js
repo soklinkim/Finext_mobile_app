@@ -3,7 +3,10 @@
  * The ONLY place raw hex values live. Plain CommonJS so tailwind.config.js can read it too.
  */
 const colors = {
-  primary: { 900: '#0D47A1', 500: '#2196F3', 200: '#90CAF9', 50: '#E3F2FD' },
+  primary: { 900: '#0D47A1', 500: '#2196F3', 200: '#90CAF9', 50: '#F2F8FE' },
+  // Soft mist: the band behind every screen's top section. Both it and primary-50 are tints of primary-500
+  // (about 12% and 6% on white), so they stay in the brand's own hue instead of drifting grey.
+  mist: '#E3F2FD',
   accent: { expense: '#0068FF', tile: '#6CB4FF', 'tile-strong': '#3D9BFF' },
   neutral: { 900: '#343434', 600: '#898989', 500: '#989898', 300: '#CACACA', 200: '#E0E0E0' },
   dark: {

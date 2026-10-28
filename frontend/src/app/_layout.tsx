@@ -25,6 +25,7 @@ import { AppThemeProvider, useAppTheme } from '@/theme/AppTheme';
 import { colors } from '@/theme';
 import type { Locale } from '@/theme';
 import { getSession, subscribeToAuthChanges } from '@/services/auth';
+import { getPlainLanguage, subscribeToPlainLanguage } from '@/services/preferences';
 
 if (process.env.EXPO_OS !== 'web') {
   SplashScreen.preventAutoHideAsync().catch(() => undefined);
@@ -89,6 +90,7 @@ function useDatabase(): { ready: boolean; error: Error | null; bookkeeping: Book
 function LocaleGate({ children, bookkeeping }: { children: ReactNode; bookkeeping: Bookkeeping }) {
   const [locale, setLocale] = useState<Locale>('en-GB');
   const [darkTheme, setDarkTheme] = useState(false);
+  const [plain, setPlain] = useState(true);
   useEffect(() => {
     const load = () => bookkeeping.getSettings().then((s) => {
       setLocale(s.language);
@@ -97,9 +99,13 @@ function LocaleGate({ children, bookkeeping }: { children: ReactNode; bookkeepin
     load();
     return bookkeeping.subscribeToChanges(load);
   }, [bookkeeping]);
+  useEffect(() => {
+    void getPlainLanguage().then(setPlain);
+    return subscribeToPlainLanguage(setPlain);
+  }, []);
   return (
     <AppThemeProvider dark={darkTheme}>
-      <I18nProvider locale={locale}>{children}</I18nProvider>
+      <I18nProvider locale={locale} plain={plain}>{children}</I18nProvider>
     </AppThemeProvider>
   );
 }

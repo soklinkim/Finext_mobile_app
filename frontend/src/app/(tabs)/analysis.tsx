@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { BarChartCard } from '@/components/BarChartCard';
 import { AnalysisLoading } from '@/components/AnalysisLoading';
 import { FinancialHealthChart } from '@/components/FinancialHealthChart';
+import { FinHealthCard } from '@/components/FinHealthCard';
 import { FutureRiskSection } from '@/components/FutureRiskSection';
 import { IncomeExpenseForecastCard } from '@/components/IncomeExpenseForecastCard';
 import { LoanReadinessSection } from '@/components/LoanReadinessSection';
@@ -37,9 +38,9 @@ export default function Analysis() {
   return (
     <ScreenShell title={t('screen.analysis')} nav="analysis" hero={<SummaryHero statusKey="budget.okSale" />}>
       {usingCache && <OfflineBanner fetchedAt={analysis.fetchedAt ?? targets.fetchedAt ?? ratios.fetchedAt} />}
-      <View style={{ marginBottom: 16 }}>
+      <View style={{ marginBottom: 20 }}>
         <SegmentedControl
-          variant="tab"
+          variant="underline"
           options={[
             { value: 'performance', label: t('analysis.performance') },
             { value: 'health', label: t('analysis.healthShort') },
@@ -108,6 +109,8 @@ export default function Analysis() {
           {ratios.error ? <ErrorState onRetry={ratios.reload} error={ratios.error} /> : null}
           {ratios.data && ratios.data.length > 0 && <FinancialHealthChart ratios={ratios.data} />}
           {!ratios.loading && <View style={{ marginTop: 12 }}><FutureRiskSection /></View>}
+          {/* What the owner tells us, next to what the books show */}
+          {!ratios.loading && <View style={{ marginTop: 12 }}><FinHealthCard /></View>}
         </View>
       )}
 

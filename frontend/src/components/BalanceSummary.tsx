@@ -1,8 +1,8 @@
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Icon } from './Icon';
 import { Text } from './Text';
 import { useI18n } from '@/i18n';
-import { colors } from '@/theme';
+import { colors, radius } from '@/theme';
 import { formatMoney, type Currency } from '@/services/bookkeeping';
 import { useAppTheme } from '@/theme/AppTheme';
 
@@ -10,33 +10,43 @@ interface Props {
   balance: number;
   expense: number; // positive minor units; shown with a leading "-"
   currency: Currency;
+  /** Opens the detail (Account Balance); the card then shows a chevron. */
+  onPress?: () => void;
+  accessibilityLabel?: string;
 }
 
-/** §6.2 — two columns split by a 1 px white divider: Total Balance (white) | Total Expense (accent-expense). */
-export function BalanceSummary({ balance, expense, currency }: Props) {
+/** One card on the hero band: Total Balance as the headline figure, Total Expense as a quieter line under it. */
+export function BalanceSummary({ balance, expense, currency, onPress, accessibilityLabel }: Props) {
   const { t } = useI18n();
   const dark = useAppTheme();
-  return (
-    <View className="flex-row items-center px-6" style={{ gap: 20, width: '100%' }}>
-      <View className="flex-1 items-center" style={{ gap: 2 }}>
-        <View className="flex-row items-center justify-center" style={{ gap: 6 }}>
-          <Icon name="income" size={12} color={dark ? colors.dark.primary : colors.neutral[900]} />
-          <Text variant="caption" style={{ textAlign: 'center' }}>{t('summary.totalBalance')}</Text>
-        </View>
-        <Text variant="amount-xl" tone="white" style={{ textAlign: 'center' }} adjustsFontSizeToFit numberOfLines={1}>
-          {formatMoney(balance, currency)}
-        </Text>
+  const muted = dark ? colors.dark.muted : colors.neutral[600];
+  const body = (
+    <>
+      <View className="flex-row items-center justify-between" style={{ gap: 8 }}>
+        <Text variant="caption" tone="neutral-600">{t('summary.totalBalance')}</Text>
+        {onPress && <Icon name="chevronRight" size={18} color={muted} />}
       </View>
-      <View className="bg-white" style={{ width: 1, height: 40, ...(dark ? { backgroundColor: colors.dark.border } : {}) }} />
-      <View className="flex-1 items-center" style={{ gap: 2 }}>
-        <View className="flex-row items-center justify-center" style={{ gap: 6 }}>
-          <Icon name="expense" size={12} color={dark ? colors.dark.primary : colors.neutral[900]} />
-          <Text variant="caption" style={{ textAlign: 'center' }}>{t('summary.totalExpense')}</Text>
+      <Text variant="amount-xl" tone="primary-900" adjustsFontSizeToFit numberOfLines={1}>
+        {formatMoney(balance, currency)}
+      </Text>
+      <View style={{ height: 1, backgroundColor: dark ? colors.dark.border : colors.neutral[200], marginVertical: 4 }} />
+      <View className="flex-row items-center" style={{ gap: 8 }}>
+        <View className="items-center justify-center" style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: dark ? colors.dark.field : colors.primary[50] }}>
+          <Icon name="expense" size={14} color={dark ? colors.dark.primary : colors.accent.expense} />
         </View>
-        <Text variant="amount-xl" tone="expense" style={{ textAlign: 'center' }} adjustsFontSizeToFit numberOfLines={1}>
+        <Text variant="body-sm" tone="neutral-600" style={{ flex: 1 }}>{t('summary.totalExpense')}</Text>
+        <Text variant="body" weight={700} tone="expense" numberOfLines={1}>
           {formatMoney(-expense, currency)}
         </Text>
       </View>
-    </View>
+    </>
+  );
+  const style = { marginHorizontal: 24, padding: 16, gap: 4, borderRadius: radius.card, backgroundColor: dark ? colors.dark.surface : colors.white };
+  return onPress ? (
+    <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} onPress={onPress} style={style}>
+      {body}
+    </Pressable>
+  ) : (
+    <View style={style}>{body}</View>
   );
 }

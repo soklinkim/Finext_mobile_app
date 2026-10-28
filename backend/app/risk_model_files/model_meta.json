@@ -62,6 +62,13 @@
     "low": 0.1,
     "high": 0.3
   },
+  "local_prior": {
+    "rate": 0.083,
+    "what": "Non-performing loan ratio, commercial banks, Cambodia, end-2025",
+    "source": "National Bank of Cambodia, Annual Supervision Report 2025",
+    "url": "https://www.nbc.gov.kh/download_files/supervision/sup_an_rep_eng/EN%20Annual%20Supervision%20Report%202025.pdf",
+    "training_rate": 0.06951566951566951
+  },
   "range": {
     "net_profit_to_assets": {
       "low": -0.5342955,

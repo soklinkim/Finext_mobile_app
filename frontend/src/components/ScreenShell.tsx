@@ -3,19 +3,16 @@ import { KeyboardAvoidingView, Platform, ScrollView, View, type LayoutChangeEven
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Href } from 'expo-router';
-import { BottomNav, NAV_HEIGHT, type NavKey } from './BottomNav';
+import { BottomNav, NAV_HEIGHT, navBottomPad, type NavKey } from './BottomNav';
 import { HeaderBar } from './HeaderBar';
 import { colors, radius, shadow } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
 
 interface Props {
   title?: string;
-  /** hero band colour: primary-200 (default) or accent-tile (Financial Statements, §5) */
-  heroTone?: 'primary' | 'tile';
   back?: boolean;
   backFallbackHref?: Href;
   bell?: boolean;
-  lightHeader?: boolean;
   /** hide the bell + back row entirely (onboarding screens) */
   noHeader?: boolean;
   hero?: ReactNode;
@@ -31,14 +28,12 @@ interface Props {
   children?: ReactNode;
 }
 
-/** §5 — light-blue hero band on top, white sheet with 72 px top corners sliding over it, optional bottom nav. */
+/** §5 — pale mist hero band on top, white sheet with 72 px top corners sliding over it, optional bottom nav. */
 export function ScreenShell({
   title,
-  heroTone = 'primary',
   back = true,
   backFallbackHref,
   bell = true,
-  lightHeader = false,
   noHeader = false,
   hero,
   nav = null,
@@ -51,7 +46,7 @@ export function ScreenShell({
   const insets = useSafeAreaInsets();
   const dark = useAppTheme();
   const [footerH, setFooterH] = useState(0);
-  const navSpace = nav ? NAV_HEIGHT : 0;
+  const navSpace = nav ? NAV_HEIGHT + navBottomPad(insets.bottom) : 0;
   const bottomPad = navSpace + footerH + 24 + (nav ? 0 : insets.bottom);
 
   return (
@@ -61,10 +56,11 @@ export function ScreenShell({
       behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
       keyboardVerticalOffset={0}
     >
-    <View className={`flex-1 ${heroTone === 'tile' ? 'bg-accent-tile' : 'bg-primary-200'}`} style={{ width: '100%', alignSelf: 'stretch', ...(dark ? { backgroundColor: colors.dark.hero } : {}) }}>
+    {/* Every screen's top band is the same pale mist; blue is kept for accents. */}
+    <View className="flex-1" style={{ width: '100%', alignSelf: 'stretch', backgroundColor: dark ? colors.dark.hero : colors.mist }}>
       <StatusBar style={dark ? 'light' : 'dark'} />
       <View style={{ height: insets.top }} />
-      {!noHeader && <HeaderBar title={title} back={back} backFallbackHref={backFallbackHref} light={lightHeader} bell={bell} />}
+      {!noHeader && <HeaderBar title={title} back={back} backFallbackHref={backFallbackHref} bell={bell} />}
       {hero}
       <View
         style={{

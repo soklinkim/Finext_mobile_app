@@ -11,13 +11,11 @@ interface Props {
   title?: string;
   back?: boolean;
   backFallbackHref?: Href;
-  /** back arrow colour: primary-900 normally, primary-50 on Calendar / Search / Statements (§6.1) */
-  light?: boolean;
   bell?: boolean;
 }
 
-/** §6.1 — back arrow, centred title, 32 px bell button. */
-export function HeaderBar({ title, back = true, backFallbackHref, light = false, bell = true }: Props) {
+/** §6.1 — 32 px back button, centred title, 32 px bell button. */
+export function HeaderBar({ title, back = true, backFallbackHref, bell = true }: Props) {
   const router = useRouter();
   const { t } = useI18n();
   const dark = useAppTheme();
@@ -38,10 +36,10 @@ export function HeaderBar({ title, back = true, backFallbackHref, light = false,
               if (router.canGoBack()) router.back();
               else router.replace('/home');
             }}
-            className="items-start justify-center"
-            style={{ height: 44 }}
+            // Same 32 px white circle as the bell on the right, so the header has one button style.
+            style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: dark ? colors.dark.field : colors.white }}
           >
-            <Icon name="back" size={24} color={light ? colors.primary[50] : dark ? colors.dark.primary : colors.primary[900]} />
+            <Icon name="chevronLeft" size={20} strokeWidth={2} color={dark ? colors.dark.primary : colors.primary[900]} />
           </Pressable>
         )}
       </View>

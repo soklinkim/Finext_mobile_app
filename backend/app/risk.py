@@ -31,7 +31,7 @@ MIN_DSCR = 1.0          # below this the instalments are not covered
 CAPACITY_MONTHS = 3     # minimum complete months to judge repayment capacity
 MISSED_SHARE = 0.9      # repayments below 90% of the instalments due over 3 months count as missed
 NOTE = ("Indicative, not a credit decision. The distress score comes from a model trained on real company accounts "
-        "(Poland); Cambodian MSMEs differ, so read it as a level (low / moderate / high), not an exact chance.")
+        "(Poland), with percentages set to Cambodia's 2025 bad-loan rate (8.3%, NBC); Cambodian MSMEs still differ, so read it as a level (low / moderate / high), not an exact chance.")
 
 
 def _usable(snapshot: dict) -> bool:
@@ -271,6 +271,19 @@ def debt_capacity(snapshots: list[dict], transactions: list[dict], currency: str
             "maxAmount": int(result["affordableMonthlyInstalment"] / per_unit) if per_unit > 0 else None,
         })
     return result
+
+
+def what_if(transactions: list[dict], banks: list[dict], changes: dict, settings: dict | None = None,
+            opening: list[dict] | None = None, through: datetime | None = None, model=None) -> dict:
+    """The owner's what-if levers (app/what_if.py) on the same books `assess` reads."""
+    from app.what_if import what_if as run
+    settings = settings or {}
+    currency, rate = settings.get("displayCurrency", "USD"), settings.get("rateKhrPerUsd", 4000)
+    snapshots = monthly_snapshots(transactions, banks, settings, opening, through)
+    live = [tx for tx in transactions if tx.get("deletedAt") is None]
+    cancelled = reversed_ids(live)
+    effective = [tx for tx in live if tx["id"] not in cancelled and tx.get("typeId") != REVERSAL]
+    return run(snapshots, effective, currency, rate, lambda books: score(books, model), changes)
 
 
 def assess(transactions: list[dict], banks: list[dict], settings: dict | None = None, opening: list[dict] | None = None,

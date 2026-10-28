@@ -170,3 +170,25 @@ def test_a_proposed_loan_raises_short_term_stress():
                                             "rateType": "flat", "repaymentFrequency": "monthly"})
     change = assess(shop(), proposed)["debtCapacity"]["proposed"]["stress3m"]
     assert change["probabilityAfter"] > change["probabilityBefore"]
+
+
+def test_percentages_follow_the_local_bad_loan_rate_without_reordering_or_new_alerts(tmp_path):
+    """The model learned where ~7% of companies failed; the published Cambodian rate moves its percentages, not its order."""
+    import json
+    import shutil
+
+    from app.risk_model import MODEL_DIR, RiskModel
+    shutil.copy(MODEL_DIR / "model.json", tmp_path / "model.json")
+    meta = json.loads((MODEL_DIR / "model_meta.json").read_text(encoding="utf-8"))
+    assert meta["local_prior"]["source"] and meta["local_prior"]["url"].startswith("https://www.nbc.gov.kh/")
+    (tmp_path / "model_meta.json").write_text(json.dumps({k: v for k, v in meta.items() if k != "local_prior"}), encoding="utf-8")
+    local, trained = RiskModel(MODEL_DIR), RiskModel(tmp_path)
+
+    rows = [{f: lo + (hi - lo) * share for f, (lo, hi) in ((f, (r["low"], r["high"])) for f, r in meta["range"].items())}
+            for share in (0.05, 0.2, 0.35, 0.5, 0.65, 0.8, 0.95)]
+    before, after = trained.probability(rows), local.probability(rows)
+    odds = lambda p: p / (1 - p)  # noqa: E731
+    factor = odds(meta["local_prior"]["rate"]) / odds(meta["local_prior"]["training_rate"])
+    assert after == pytest.approx(odds(before) * factor / (1 + odds(before) * factor))
+    assert list(before.argsort()) == list(after.argsort())
+    assert [r["alert"] for r in trained.score(rows)] == [r["alert"] for r in local.score(rows)]

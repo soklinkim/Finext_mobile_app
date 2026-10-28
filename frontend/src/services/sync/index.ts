@@ -5,7 +5,7 @@ import { API_BASE_URL, LONG_REQUEST_TIMEOUT_MS, REQUEST_TIMEOUT_MS, fetchWithTim
 import { SYNCED_TABLES, type SyncedTable } from '@/db/schema';
 import { emitChange } from '@/services/bookkeeping/events';
 import { getSession, refreshSession } from '@/services/auth';
-import { AccountingDataError, ApiRequestError, type AnalysisPeriod, type AnalysisResult, type AppNotification, type CategorySlice, type FutureRisk, type IncomeExpenseForecast, type LoanReadiness, type ProposedLoan, type RatioSnapshot, type StatementPeriod, type Statements, type Summary } from '@/services/analysis/types';
+import { AccountingDataError, ApiRequestError, type AnalysisPeriod, type AnalysisResult, type AppNotification, type CategorySlice, type FutureRisk, type IncomeExpenseForecast, type HealthHistoryMonth, type LoanReadiness, type ProposedLoan, type RatioSnapshot, type StatementPeriod, type Statements, type Summary, type UnusualEntry, type WhatIf, type WhatIfChanges } from '@/services/analysis/types';
 
 export type SyncRow = Record<string, unknown> & {
   id: string;
@@ -102,10 +102,16 @@ export interface SyncService {
   getFutureRisk(): Promise<FutureRisk>;
   /** The same as if a proposed loan were taken (nothing is saved). */
   checkLoan(loan: ProposedLoan): Promise<FutureRisk>;
+  /** Sync pending rows then list recent entries that look like mistakes. */
+  getUnusualEntries(): Promise<UnusualEntry[]>;
+  /** The risk answers again with the owner's what-if levers (nothing is saved). */
+  whatIf(changes: WhatIfChanges): Promise<WhatIf>;
   /** Sync pending rows then retrieve the server's loan-readiness assessment. */
   getLoanReadiness(): Promise<LoanReadiness>;
   /** Retrieve ratio snapshots and health alerts calculated by the backend. */
   getFinancialHealth(syncFirst?: boolean): Promise<{ period: string; ratios: RatioSnapshot[]; alerts: AppNotification[] }>;
+  /** Sync pending rows then retrieve one ratio snapshot per complete month. */
+  getHealthHistory(): Promise<HealthHistoryMonth[]>;
   getAnalysis(period: AnalysisPeriod): Promise<AnalysisResult>;
   getCategories(): Promise<CategorySlice[]>;
   dismissAlert(id: string): Promise<void>;
@@ -370,6 +376,16 @@ async function checkLoan(loan: ProposedLoan): Promise<FutureRisk> {
   return requestJson('/accounting/risk/loan-check', { method: 'POST', body: JSON.stringify(loan) });
 }
 
+async function getUnusualEntries(): Promise<UnusualEntry[]> {
+  await syncForAccountingReports();
+  return (await requestJson<{ items: UnusualEntry[] }>('/accounting/unusual')).items;
+}
+
+async function whatIf(changes: WhatIfChanges): Promise<WhatIf> {
+  await syncForAccountingReports();
+  return requestJson('/accounting/risk/what-if', { method: 'POST', body: JSON.stringify(changes) });
+}
+
 async function getLoanReadiness(): Promise<LoanReadiness> {
   await syncForAccountingReports();
   return requestJson('/loan/readiness');
@@ -393,6 +409,11 @@ async function getFinancialHealth(syncFirst = true): Promise<{ period: string; r
   return requestJson('/accounting/health');
 }
 
+async function getHealthHistory(): Promise<HealthHistoryMonth[]> {
+  await syncForAccountingReports();
+  return (await requestJson<{ snapshots: HealthHistoryMonth[] }>('/accounting/snapshots')).snapshots;
+}
+
 async function getAnalysis(period: AnalysisPeriod): Promise<AnalysisResult> {
   await syncForAccountingReports();
   return requestJson(`/accounting/analysis?period=${encodeURIComponent(period)}`);
@@ -407,4 +428,4 @@ async function dismissAlert(id: string): Promise<void> {
   await requestJson(`/accounting/health/${encodeURIComponent(id)}/dismiss`, { method: 'POST' });
 }
 
-export const syncService: SyncService = { pushPending, pullChanges, sync, getJournal, previewImpact, getStatements, getSummary, getForecast, getFutureRisk, checkLoan, getLoanReadiness, getFinancialHealth, getAnalysis, getCategories, dismissAlert };
+export const syncService: SyncService = { pushPending, pullChanges, sync, getJournal, previewImpact, getStatements, getSummary, getForecast, getFutureRisk, checkLoan, whatIf, getUnusualEntries, getLoanReadiness, getFinancialHealth, getHealthHistory, getAnalysis, getCategories, dismissAlert };

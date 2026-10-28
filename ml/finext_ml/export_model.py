@@ -19,6 +19,17 @@ from app.risk_model import RiskModel  # noqa: E402,F401  (the backend's scorer)
 
 from finext_ml.evaluation.evaluation_metrics import RISK_BANDS  # noqa: E402
 
+# Where FINEXT is used, how common bad outcomes are: the published non-performing loan ratio of Cambodia's commercial
+# banks at end-2025 (loans 90+ days overdue, share of the loan book). An official figure, not an estimate of ours. The
+# model learned where about 7% of companies failed; the backend moves its percentages to this rate (prior correction:
+# the order of businesses and who is flagged stay the same). Update it when the NBC publishes a new report.
+LOCAL_PRIOR = {
+    "rate": 0.083,
+    "what": "Non-performing loan ratio, commercial banks, Cambodia, end-2025",
+    "source": "National Bank of Cambodia, Annual Supervision Report 2025",
+    "url": "https://www.nbc.gov.kh/download_files/supervision/sup_an_rep_eng/EN%20Annual%20Supervision%20Report%202025.pdf",
+}
+
 
 def export(run_dir: str | Path) -> Path:
     import joblib
@@ -41,6 +52,8 @@ def export(run_dir: str | Path) -> Path:
         "missing_text": {f: t for f, t in data.missing_text.items() if f in trained.features},
         "calibration": {"slope": float(platt.coef_[0][0]), "intercept": float(platt.intercept_[0])},
         "alert_threshold": report["alert_threshold"], "risk_bands": RISK_BANDS,
+        # The calibration matches the training companies' failure rate; this moves it to the local rate (see LOCAL_PRIOR).
+        "local_prior": LOCAL_PRIOR | {"training_rate": float(data.parts["train"][data.target].mean())},
         # The 1st and 99th percentiles of each input in training. In the training data a missing value usually meant
         # trouble (e.g. no sales last year: 96% bankrupt), so the backend does not send "missing" where FINEXT knows
         # the gap is harmless (no bills owed, no interest paid): it sends the healthy end of this range instead.
