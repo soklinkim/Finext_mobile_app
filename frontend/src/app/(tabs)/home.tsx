@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Image, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { BalanceSummary } from '@/components/BalanceSummary';
 import { BellButton } from '@/components/BellButton';
@@ -19,6 +19,8 @@ import { getTargets } from '@/services/analysis';
 import { formatMoney, getPeriodTotals, getSettings, listTransactions, type RollingPeriod } from '@/services/bookkeeping';
 import { colors, radius } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
+
+const FEATHER = require('../../../assets/images/feather.png');
 
 const IN_KEY: Record<RollingPeriod, TKey> = { daily: 'home.inToday', weekly: 'home.inWeek', monthly: 'home.inMonth' };
 const OUT_KEY: Record<RollingPeriod, TKey> = { daily: 'home.outToday', weekly: 'home.outWeek', monthly: 'home.outMonth' };
@@ -42,20 +44,26 @@ export default function Home() {
   const profit = targets.data?.find((x) => x.id === 'profit-goals');
 
   const currency = summary?.displayCurrency ?? 'USD';
+  const businessName = settings?.businessName?.trim();
 
   const hero = (
     <View style={{ gap: 20, paddingTop: 8, paddingBottom: 16 }}>
-      <View className="flex-row items-start justify-between px-9">
-        <View>
-          <Text variant="title" tone="primary-900" weight={700}>
-            {t(greetingKey())}{settings?.businessName?.trim() ? `, ${settings.businessName.trim()}` : ''}
-          </Text>
+      <View className="flex-row items-center px-6" style={{ gap: 12 }}>
+        {/* FINEXT mark, then the greeting small and the business name as the headline. */}
+        <Image source={FEATHER} style={{ width: 40, height: 40 }} resizeMode="contain" accessibilityLabel="FINEXT" />
+        <View style={{ flex: 1, gap: 1 }}>
+          <Text variant="caption" tone="primary-900" numberOfLines={1}>{t(greetingKey())}</Text>
+          <Text variant="body-lg" tone="primary-900" weight={700} numberOfLines={1}>{businessName || 'FINEXT'}</Text>
         </View>
         <BellButton />
       </View>
-      <Pressable accessibilityRole="button" accessibilityLabel={t('screen.accountBalance')} onPress={() => router.push('/account-balance')}>
-        <BalanceSummary balance={summary?.totalBalance ?? 0} expense={summary?.totalExpense ?? 0} currency={currency} />
-      </Pressable>
+      <BalanceSummary
+        balance={summary?.totalBalance ?? 0}
+        expense={summary?.totalExpense ?? 0}
+        currency={currency}
+        onPress={() => router.push('/account-balance')}
+        accessibilityLabel={t('screen.accountBalance')}
+      />
       <BudgetProgress percent={summary?.budgetPercent ?? 0} target={summary?.budgetTarget ?? 0} currency={currency} status={summary?.budgetStatus ?? 'ok'} />
     </View>
   );

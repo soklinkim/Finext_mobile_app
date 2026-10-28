@@ -22,7 +22,7 @@ export default function Statements() {
   const { t } = useI18n();
   const [selected, setSelected] = useState('income');
   return (
-    <ScreenShell title={t('screen.statements')} heroTone="tile" lightHeader nav="statements" hero={<SummaryHero statusKey="budget.okSale" />}>
+    <ScreenShell title={t('screen.statements')} nav="statements" hero={<SummaryHero statusKey="budget.okSale" />}>
       <View className="flex-row flex-wrap justify-between" style={{ rowGap: 24 }}>
         {TILES.map((tile) => (
           <StatementTile

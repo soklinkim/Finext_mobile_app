@@ -37,7 +37,13 @@ const PACK_CSS = `
     .level { display: inline-block; font-size: 8.5pt; font-weight: 700; padding: 2px 8px; border-radius: 999px; color: #fff; }
     ul { margin: 6px 0 0 18px; padding: 0; }
     li { margin: 3px 0; }
+    body { font-size: 10pt; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-weight: 600; font-size: 8.5pt; color: #555; padding: 4px 6px; border-bottom: 1px solid #999; }
+    td { padding: 5px 6px; border-bottom: 1px solid #e3e3e3; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .kv td { border-bottom: 1px solid #eee; }
+    .stmt-col th, .stmt-col td, .stmt-col table { font-size: 8.5pt; }
     .note { font-size: 8.5pt; color: #555; margin-top: 14px; line-height: 1.45; }`;
 
 function levelBadge(t: Translate, level: 'low' | 'moderate' | 'high', key: 'risk.level' | 'debt.level'): string {

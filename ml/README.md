@@ -164,6 +164,13 @@ bills in days of cost of goods, can only move risk in the direction finance expe
 raised CV PR-AUC (0.630 → 0.635) and narrowed the gap (0.096 → 0.093). Inventory days and sales-to-assets were tried
 too and left out: each cost accuracy on unseen companies (sales-to-assets: 0.635 → 0.616).
 
+**Cambodian failure rate (prior correction).** The calibration matches the training companies (6.95% failed). The
+backend moves every percentage to Cambodia's published rate: the commercial banks' non-performing loan ratio at
+end-2025, 8.3% (National Bank of Cambodia, Annual Supervision Report 2025; `LOCAL_PRIOR` in `export_model.py`). Odds
+are multiplied by 1.21 (10% becomes 11.9%). Rankings and alerts do not change, and it is not a test on Cambodian
+businesses: no public data links Cambodian MSME accounts to loan outcomes. The ratio is a share of loan value, not of
+borrowers, so it approximates how often businesses fail.
+
 **Risk levels:** low < 10% ≤ moderate ≤ 30% < high, chosen on validation companies for the 7% failure rate (about 1%,
 16% and 74% of each level failed; the company holdout confirmed 2%, 14%, 67%).
 

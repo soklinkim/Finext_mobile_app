@@ -9,6 +9,7 @@ import { ScreenShell } from '@/components/ScreenShell';
 import { EmptyState, LoadingState } from '@/components/StateViews';
 import { SummaryHero } from '@/components/SummaryHero';
 import { Text } from '@/components/Text';
+import { UnusualEntriesCard } from '@/components/UnusualEntriesCard';
 import { useLocalQuery } from '@/hooks/useLocalQuery';
 import { useI18n, type TKey } from '@/i18n';
 import { formatInputDate, MONTHS } from '@/lib/format';
@@ -149,6 +150,8 @@ export default function Bookkeeping() {
       {/* 2. The main action */}
       <Button label={t('overview.addEntry')} icon="plus" onPress={() => router.push('/add-entry')} />
 
+      {/* 2b. Entries that look like mistakes (hidden when there are none) */}
+      <UnusualEntriesCard />
       {/* 3. This month's entries */}
       <View style={{ marginTop: 28 }}>
         <SectionHeader title={t('overview.entriesTitle', { month: monthLabel })} action={t('overview.seeAll')} onAction={() => router.push('/transactions')} />

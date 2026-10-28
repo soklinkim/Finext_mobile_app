@@ -343,6 +343,29 @@ def loan_check(loan: Annotated[dict, Body()], user_id: str = Depends(current_sme
     return _risk(user_id, proposed)
 
 
+@router.get("/unusual")
+def unusual(user_id: str = Depends(current_sme)):
+    """Recent entries that look like mistakes (duplicates, spikes, an extra zero, a cost recorded as income, a future
+    date), for the owner to check. Nothing is changed."""
+    from app.unusual import find_unusual
+    return {"items": find_unusual(db.get_table_rows(user_id, "transactions"))}
+
+
+@router.post("/risk/what-if")
+def what_if(changes: Annotated[dict, Body()], user_id: str = Depends(current_sme)):
+    """Recalculate the 3-month stress and 12-month risk with the owner's levers (priceChange, costCut, collectDays,
+    drawingsCut). Nothing is saved."""
+    from app import what_if as levers
+    try:
+        valid = levers.validate(changes)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    _ensure_valid_bookkeeping(user_id)
+    settings = next((r for r in db.get_table_rows(user_id, "settings") if r.get("id") == "app"), {})
+    return risk.what_if(db.get_table_rows(user_id, "transactions"), db.get_table_rows(user_id, "banks", include_deleted=True),
+                        valid, settings, db.get_table_rows(user_id, "onboarding_financial_entries"))
+
+
 @router.get("/summary")
 def summary(user_id: str = Depends(current_sme)):
     """Return server-calculated bookkeeping totals for the summary hero."""

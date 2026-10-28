@@ -2,7 +2,7 @@
 
 The model files in `app/risk_model_files/` come from `python -m finext_ml.export_model <run>` (ml/). They hold the
 trees in XGBoost's portable JSON format and a metadata file (feature order, plain labels, calibration, alert
-threshold, risk bands, version). Only xgboost and numpy are needed here: no pickles, no training code.
+threshold, risk bands, local failure rate, version). Only xgboost and numpy are needed here: no pickles, no training code.
 """
 from __future__ import annotations
 
@@ -27,6 +27,15 @@ class RiskModel:
         self.booster = xgboost.Booster()
         self.booster.load_model(export_dir / "model.json")
         self._xgboost = xgboost
+        # Prior correction: the calibration matches how often the training companies failed; `local_prior` (an official
+        # local bad-loan rate) moves every percentage to that rate. Monotonic, so rankings and alerts do not change.
+        prior = self.meta.get("local_prior")
+        logit = lambda p: np.log(p / (1 - p))  # noqa: E731
+        self.prior_shift = float(logit(prior["rate"]) - logit(prior["training_rate"])) if prior else 0.0
+        self.alert_threshold = float(self._shift(np.array(self.meta["alert_threshold"])))
+
+    def _shift(self, p: np.ndarray) -> np.ndarray:
+        return 1 / (1 + np.exp(-(np.log(p / (1 - p)) + self.prior_shift)))
 
     def _matrix(self, rows: list[dict]):
         values = np.array([[np.nan if r.get(f) is None else float(r[f]) for f in self.features] for r in rows], dtype=float)
@@ -35,7 +44,7 @@ class RiskModel:
     def probability(self, rows: list[dict]) -> np.ndarray:
         raw = np.clip(self.booster.predict(self._matrix(rows)), 1e-6, 1 - 1e-6)
         c = self.meta["calibration"]
-        return 1 / (1 + np.exp(-(c["slope"] * np.log(raw / (1 - raw)) + c["intercept"])))
+        return 1 / (1 + np.exp(-(c["slope"] * np.log(raw / (1 - raw)) + c["intercept"] + self.prior_shift)))
 
     def band(self, p: float) -> str:
         bands = self.meta["risk_bands"]
@@ -61,7 +70,7 @@ class RiskModel:
                                 "value_text": text, "direction": "raises risk" if contrib[i] > 0 else "lowers risk",
                                 "contribution": float(contrib[i])})
             out.append({"probability": float(p), "risk_class": self.band(float(p)),
-                        "alert": bool(p >= self.meta["alert_threshold"]), "top_drivers": drivers,
+                        "alert": bool(p >= self.alert_threshold), "top_drivers": drivers,
                         "model_version": self.meta["model_version"]})
         return out
 

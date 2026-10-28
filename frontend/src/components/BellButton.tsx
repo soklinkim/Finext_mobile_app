@@ -18,13 +18,13 @@ export function BellButton() {
       accessibilityLabel={count > 0 ? t('common.notificationsUnread', { count }) : t('common.notifications')}
       hitSlop={6}
       onPress={() => router.push('/notifications')}
-      className="items-center justify-center rounded-pill bg-primary-50"
-      style={{ width: 32, height: 32, ...(dark ? { backgroundColor: colors.dark.field } : {}) }}
+      className="items-center justify-center rounded-pill"
+      style={{ width: 32, height: 32, backgroundColor: dark ? colors.dark.field : colors.white }}
     >
       <Icon name="bell" size={18} color={dark ? colors.dark.primary : undefined} />
       {count > 0 && (
         <View
-          style={{ position: 'absolute', top: 5, right: 6, width: 9, height: 9, borderRadius: 5, backgroundColor: colors.danger, borderWidth: 1.5, borderColor: dark ? colors.dark.field : colors.primary[50] }}
+          style={{ position: 'absolute', top: 5, right: 6, width: 9, height: 9, borderRadius: 5, backgroundColor: colors.danger, borderWidth: 1.5, borderColor: dark ? colors.dark.field : colors.white }}
         />
       )}
     </Pressable>

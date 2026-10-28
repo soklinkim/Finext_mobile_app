@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
+import Svg, { Line, Path } from 'react-native-svg';
 import { AnalysisLoading } from './AnalysisLoading';
+import { StatusMark, type MarkKind } from './HealthCharts';
 import { Button } from './Button';
 import { Icon } from './Icon';
 import { OfflineBanner } from './OfflineBanner';
@@ -59,71 +61,211 @@ function Pill({ label, color }: { label: string; color: string }) {
   );
 }
 
+const SCORE_BANDS = [50, 70]; // "almost" from 50, "ready" from 70 (backend loan_readiness.assess)
+const MIN_MONTHS = 3; // months with entries before there is a score (backend MIN_ACTIVE_MONTHS)
+const CHECK_STATUSES = ['pass', 'warn', 'fail', 'missing'] as const;
+type CheckStatus = (typeof CHECK_STATUSES)[number];
+type Check = LoanReadiness['checks'][number];
+
+const scoreColor = (score: number) => (score >= 70 ? colors.success : score >= 50 ? colors.warning : colors.danger);
+
+const CHECK_MARK: Record<CheckStatus, MarkKind> = { pass: 'good', warn: 'watch', fail: 'bad', missing: 'none' };
+
+function StatusIcon({ status }: { status: CheckStatus }) {
+  return <StatusMark kind={CHECK_MARK[status]} />;
+}
+
+function checkValue(t: ReturnType<typeof useI18n>['t'], check: Check): string | null {
+  if (check.value === null) return null;
+  if (check.format === 'percent') return `${Math.round(check.value * 100)}%`;
+  if (check.format === 'times') return t('risk.times', { value: check.value.toFixed(1) });
+  if (check.format === 'months') return t('loan.value.months', { count: check.value });
+  if (check.format === 'days') return t('loan.value.days', { count: check.value });
+  return null;
+}
+
+/** Score out of 100 on a half gauge; the notches mark where "almost" (50) and "ready" (70) begin. */
+function ScoreGauge({ score, color }: { score: number | null; color: string }) {
+  const { dark, track } = useCard();
+  const notch = dark ? colors.dark.surface : colors.primary[50];
+  const W = 200;
+  const stroke = 14;
+  const r = (W - stroke) / 2;
+  const cx = W / 2;
+  const cy = r + stroke / 2;
+  const arc = `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`;
+  const length = Math.PI * r;
+  return (
+    <View style={{ width: W, height: cy + stroke / 2, alignItems: 'center', justifyContent: 'flex-end' }}>
+      <Svg width={W} height={cy + stroke / 2} style={{ position: 'absolute', top: 0 }}>
+        <Path d={arc} stroke={track} strokeWidth={stroke} fill="none" strokeLinecap="round" />
+        {score !== null && score > 0 && (
+          <Path d={arc} stroke={color} strokeWidth={stroke} fill="none" strokeLinecap="round" strokeDasharray={`${(score / 100) * length} ${length}`} />
+        )}
+        {SCORE_BANDS.map((band) => {
+          const angle = Math.PI * (1 - band / 100);
+          const inner = r - stroke / 2 - 1;
+          const outer = r + stroke / 2 + 1;
+          return (
+            <Line key={band} x1={cx + inner * Math.cos(angle)} y1={cy - inner * Math.sin(angle)} x2={cx + outer * Math.cos(angle)} y2={cy - outer * Math.sin(angle)}
+              stroke={notch} strokeWidth={3} />
+          );
+        })}
+      </Svg>
+      <View style={{ alignItems: 'center' }}>
+        <Text variant="amount-xl" tone="primary-900">{score ?? '—'}</Text>
+        <Text variant="micro" tone="neutral-600">/ 100</Text>
+      </View>
+    </View>
+  );
+}
+
+/** Every check in one bar, split by result, with the counts underneath. */
+function ChecksBar({ checks }: { checks: Check[] }) {
+  const { t } = useI18n();
+  const counts = CHECK_STATUSES.map((status) => ({ status, count: checks.filter((check) => check.status === status).length }));
+  const label = counts.map(({ status, count }) => `${count} ${t(`loan.status.${status}` as TKey)}`).join(', ');
+  const passed = counts[0].count;
+  return (
+    <View style={{ gap: 8 }} accessible accessibilityLabel={`${t('loan.checksTitle')}: ${label}`}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+        <Text variant="caption" weight={600} tone="primary-900">{t('loan.checksTitle')}</Text>
+        <Text variant="micro" tone="neutral-600">{t('loan.passedOf', { count: passed, total: checks.length })}</Text>
+      </View>
+      <View style={{ height: 8, flexDirection: 'row', gap: 2, borderRadius: 4, overflow: 'hidden' }}>
+        {counts.filter(({ count }) => count > 0).map(({ status, count }) => (
+          <View key={status} style={{ flex: count, backgroundColor: STATUS_COLOR[status] }} />
+        ))}
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 4 }}>
+        {counts.map(({ status, count }) => (
+          <View key={status} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: STATUS_COLOR[status] }} />
+            <Text variant="micro" tone="neutral-600"><Text variant="micro" weight={700} tone="primary-900">{count}</Text> {t(`loan.status.${status}` as TKey)}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 function ScoreCard({ readiness }: { readiness: LoanReadiness }) {
   const { t } = useI18n();
   const { dark } = useCard();
   const color = LEVEL_COLOR[readiness.level];
+  const waiting = readiness.level === 'insufficient_data';
+  const level = t(`loan.level.${readiness.level}` as TKey);
+  // While there is no score, show what is missing (months recorded) instead of an empty gauge.
+  const months = readiness.checks.find((check) => check.id === 'history')?.value ?? 0;
+  const line = dark ? colors.dark.border : colors.white;
   return (
-    <View style={{ padding: 16, borderRadius: radius.card, backgroundColor: dark ? colors.dark.surface : colors.primary[50], gap: 12 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-        <View
-          accessible
-          accessibilityLabel={t('loan.scoreLabel', { score: readiness.score ?? '—' })}
-          style={{ width: 84, height: 84, borderRadius: 42, borderWidth: 7, borderColor: color, alignItems: 'center', justifyContent: 'center', backgroundColor: dark ? colors.dark.field : colors.white }}
-        >
-          <Text variant="amount-xl" tone="primary-900">{readiness.level === 'insufficient_data' ? '—' : readiness.score ?? '—'}</Text>
-          <Text variant="micro" tone="neutral-600">/ 100</Text>
+    <View style={{ padding: 16, borderRadius: radius.card, backgroundColor: dark ? colors.dark.surface : colors.primary[50], gap: 16 }}>
+      <View style={{ gap: 12 }} accessible accessibilityLabel={`${t('loan.scoreLabel', { score: waiting ? '—' : readiness.score ?? '—' })}, ${level}`}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <Text variant="body" weight={700} tone="primary-900">{t('loan.title')}</Text>
+          <Pill label={level} color={color} />
         </View>
-        <View style={{ flex: 1, gap: 6 }}>
-          <Pill label={t(`loan.level.${readiness.level}` as TKey)} color={color} />
-          <Text variant="body-sm" tone="neutral-600">{t(`loan.levelBody.${readiness.level}` as TKey)}</Text>
+        <View style={{ alignItems: 'center', gap: 4 }}>
+          <ScoreGauge score={waiting ? null : readiness.score} color={color} />
+          <Text variant="micro" tone="neutral-500">
+            {waiting && months < MIN_MONTHS ? t('loan.monthsProgress', { count: months, months: MIN_MONTHS }) : t('loan.readyAt')}
+          </Text>
         </View>
+        <Text variant="body-sm" tone="neutral-600">{t(`loan.levelBody.${readiness.level}` as TKey)}</Text>
       </View>
-      <Text variant="micro" tone="neutral-600">{t('loan.coverage', { percent: Math.round(readiness.coverage * 100) })}</Text>
+      <View style={{ height: 1, backgroundColor: line }} />
+      <View style={{ gap: 6 }}>
+        <ChecksBar checks={readiness.checks} />
+        <Text variant="micro" tone="neutral-500">{t('loan.coverageShort', { percent: Math.round(readiness.coverage * 100) })}</Text>
+      </View>
     </View>
   );
 }
 
+/** Each area's score as a bar; tap one to see the checks behind it. */
 function Pillars({ readiness }: { readiness: LoanReadiness }) {
   const { t } = useI18n();
   const { card, track } = useCard();
+  const [open, setOpen] = useState<string | null>(null);
   return (
     <View style={card}>
-      <Text variant="body" weight={700} tone="primary-900">{t('loan.breakdown')}</Text>
-      {readiness.pillars.map((pillar) => (
-        <View key={pillar.id} style={{ gap: 6 }} accessible accessibilityLabel={`${t(`loan.pillar.${pillar.id}` as TKey)}: ${pillar.score ?? t('loan.noData')}`}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text variant="caption" weight={500} tone="primary-900">{t(`loan.pillar.${pillar.id}` as TKey)} <Text variant="micro" tone="neutral-500">· {pillar.weight}%</Text></Text>
-            <Text variant="caption" weight={700} tone="primary-900">{pillar.score ?? '—'}</Text>
+      <View style={{ gap: 2 }}>
+        <Text variant="body" weight={700} tone="primary-900">{t('loan.breakdown')}</Text>
+        <Text variant="micro" tone="neutral-600">{t('loan.tapPillar')}</Text>
+      </View>
+      {readiness.pillars.map((pillar, index) => {
+        const expanded = open === pillar.id;
+        const name = t(`loan.pillar.${pillar.id}` as TKey);
+        return (
+          <View key={pillar.id} style={{ gap: 10, ...(index > 0 ? { borderTopWidth: 1, borderTopColor: track, paddingTop: 12 } : {}) }}>
+            <Pressable accessibilityRole="button" accessibilityState={{ expanded }} accessibilityLabel={`${name}: ${pillar.score ?? t('loan.noData')}`}
+              onPress={() => setOpen(expanded ? null : pillar.id)} style={{ gap: 7 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text variant="caption" weight={600} tone="primary-900" style={{ flex: 1 }}>{name} <Text variant="micro" tone="neutral-500">· {pillar.weight}%</Text></Text>
+                <Text variant="caption" weight={700} tone="primary-900">{pillar.score ?? '—'}</Text>
+                <View style={{ transform: [{ rotate: expanded ? '180deg' : '0deg' }] }}><Icon name="chevronDown" size={16} color={colors.neutral[500]} /></View>
+              </View>
+              <View style={{ height: 8, borderRadius: 99, backgroundColor: track, overflow: 'hidden' }}>
+                {pillar.score ? <View style={{ width: `${pillar.score}%`, height: '100%', borderRadius: 99, backgroundColor: scoreColor(pillar.score) }} /> : null}
+              </View>
+            </Pressable>
+            {expanded && readiness.checks.filter((check) => check.pillar === pillar.id).map((check) => {
+              const value = checkValue(t, check);
+              return (
+                <View key={check.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                  accessible accessibilityLabel={`${t(`loan.check.${check.id}` as TKey)}: ${t(`loan.status.${check.status}` as TKey)}${value ? `, ${value}` : ''}`}>
+                  <StatusIcon status={check.status} />
+                  <Text variant="body-sm" tone="primary-900" style={{ flex: 1 }}>{t(`loan.check.${check.id}` as TKey)}</Text>
+                  {value ? <Text variant="caption" weight={600} tone="primary-900">{value}</Text> : null}
+                </View>
+              );
+            })}
           </View>
-          <View style={{ height: 7, borderRadius: 99, backgroundColor: track, overflow: 'hidden' }}>
-            <View style={{ width: `${pillar.score ?? 0}%`, height: '100%', borderRadius: 99, backgroundColor: colors.primary[500] }} />
-          </View>
-        </View>
-      ))}
+        );
+      })}
     </View>
   );
 }
 
+/** The checks to work on first: titles only, tap one for how to fix it. */
 function Improvements({ readiness }: { readiness: LoanReadiness }) {
   const { t } = useI18n();
-  const { card } = useCard();
-  const items = readiness.improvements.slice(0, 5).map((id) => readiness.checks.find((check) => check.id === id)!).filter(Boolean);
+  const { card, track } = useCard();
+  const [open, setOpen] = useState<string | null>(null);
+  const [all, setAll] = useState(false);
+  const items = readiness.improvements.map((id) => readiness.checks.find((check) => check.id === id)).filter((check): check is Check => Boolean(check));
+  const shown = all ? items : items.slice(0, 3);
   return (
     <View style={card}>
-      <Text variant="body" weight={700} tone="primary-900">{t('loan.improveTitle')}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <Text variant="body" weight={700} tone="primary-900">{t('loan.improveTitle')}</Text>
+        {items.length > 0 && <Text variant="caption" weight={700} tone="neutral-600">{items.length}</Text>}
+      </View>
       {items.length === 0 ? (
-        <Text variant="body-sm" tone="neutral-600">{t('loan.improveNone')}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <StatusIcon status="pass" />
+          <Text variant="body-sm" tone="neutral-600" style={{ flex: 1 }}>{t('loan.improveNone')}</Text>
+        </View>
       ) : (
-        items.map((check) => (
-          <View key={check.id} style={{ flexDirection: 'row', gap: 10 }}>
-            <View style={{ width: 8, height: 8, borderRadius: 4, marginTop: 7, backgroundColor: STATUS_COLOR[check.status] }} />
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text variant="caption" weight={600} tone="primary-900">{t(`loan.check.${check.id}` as TKey)}</Text>
-              <Text variant="micro" tone="neutral-600">{t(`loan.tip.${check.id}` as TKey)}</Text>
-            </View>
-          </View>
-        ))
+        shown.map((check, index) => {
+          const expanded = open === check.id;
+          return (
+            <Pressable key={check.id} accessibilityRole="button" accessibilityState={{ expanded }} onPress={() => setOpen(expanded ? null : check.id)}
+              style={{ gap: 6, ...(index > 0 ? { borderTopWidth: 1, borderTopColor: track, paddingTop: 12 } : {}) }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <StatusIcon status={check.status} />
+                <Text variant="body-sm" weight={600} tone="primary-900" style={{ flex: 1 }}>{t(`loan.check.${check.id}` as TKey)}</Text>
+                <View style={{ transform: [{ rotate: expanded ? '180deg' : '0deg' }] }}><Icon name="chevronDown" size={16} color={colors.neutral[500]} /></View>
+              </View>
+              {expanded && <Text variant="body-sm" tone="neutral-600" style={{ paddingLeft: 30 }}>{t(`loan.tip.${check.id}` as TKey)}</Text>}
+            </Pressable>
+          );
+        })
+      )}
+      {items.length > 3 && (
+        <Pressable accessibilityRole="button" onPress={() => setAll((value) => !value)} style={{ alignSelf: 'flex-start', paddingVertical: 2 }}>
+          <Text variant="caption" weight={600} style={{ color: colors.primary[500] }}>{all ? t('loan.showLess') : t('loan.showMore', { count: items.length - 3 })}</Text>
+        </Pressable>
       )}
     </View>
   );

@@ -22,11 +22,15 @@ import type {
   CachedResult,
   CategorySlice,
   FutureRisk,
+  HealthHistoryMonth,
   IncomeExpenseForecast,
   ProposedLoan,
   Statements,
   StatementPeriod,
   Target,
+  UnusualEntry,
+  WhatIf,
+  WhatIfChanges,
   RatioSnapshot,
   Summary,
 } from './types';
@@ -64,6 +68,15 @@ export function checkLoan(loan: ProposedLoan): Promise<FutureRisk> {
   return syncService.checkLoan(loan);
 }
 
+export function getUnusualEntries(): Promise<CachedResult<UnusualEntry[]>> {
+  return withCache('accounting:unusual:v1', () => syncService.getUnusualEntries(), { requireOnline: true });
+}
+
+/** What-if levers: online only, never cached. */
+export function whatIf(changes: WhatIfChanges): Promise<WhatIf> {
+  return syncService.whatIf(changes);
+}
+
 export function getSummary(): Promise<CachedResult<Summary>> {
   return withCache('accounting:summary', async () => syncService.getSummary(), { requireOnline: true });
 }
@@ -78,6 +91,10 @@ export function previewAccountingImpact(input: AccountingPreviewInput): Promise<
 
 export function getRatios(): Promise<CachedResult<RatioSnapshot[]>> {
   return withCache('accounting:ratios', async () => (await syncService.getFinancialHealth()).ratios, { requireOnline: true });
+}
+
+export function getHealthHistory(): Promise<CachedResult<HealthHistoryMonth[]>> {
+  return withCache('accounting:snapshots:v1', () => syncService.getHealthHistory(), { requireOnline: true });
 }
 
 export const NOTIFICATIONS_CACHE_KEY = 'accounting:notifications';

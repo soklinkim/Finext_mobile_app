@@ -30,7 +30,6 @@ export default function Search() {
   return (
     <ScreenShell
       title={t('screen.search')}
-      lightHeader
       nav="analysis"
       hero={
         <View className="px-9" style={{ paddingBottom: 16 }}>

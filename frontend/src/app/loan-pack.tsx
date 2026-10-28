@@ -61,7 +61,7 @@ export default function LoanPack() {
   }
 
   return (
-    <ScreenShell title={t('pack.title')} backFallbackHref="/statements" nav="statements" lightHeader={false} padding={24}>
+    <ScreenShell title={t('pack.title')} backFallbackHref="/statements" nav="statements" padding={24}>
       <View style={{ gap: 16 }}>
         {statements.source === 'cache' && <OfflineBanner fetchedAt={statements.fetchedAt} />}
         <Text variant="body-sm" tone="neutral-600">{t('pack.intro')}</Text>

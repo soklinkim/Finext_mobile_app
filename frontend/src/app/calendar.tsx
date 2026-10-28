@@ -43,7 +43,7 @@ export default function CalendarScreen() {
   );
 
   return (
-    <ScreenShell title={t('screen.calendar')} lightHeader nav="analysis" hero={<View style={{ height: 64 }} />}>
+    <ScreenShell title={t('screen.calendar')} nav="analysis" hero={<View style={{ height: 64 }} />}>
       <CalendarGrid year={cursor.year} month={cursor.month} onMonthChange={(year, month) => setCursor({ year, month })} selected={selected} onSelect={setSelected} activeDays={active ?? []} />
       <View className="flex-row" style={{ gap: 16, marginTop: 24, marginBottom: 24 }}>
         {pill('spends', t('calendar.spends'))}
