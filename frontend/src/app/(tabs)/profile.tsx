@@ -19,7 +19,7 @@ const GROUPS: { title: TKey; items: Item[] }[] = [
     title: 'profile.group.account',
     items: [
       { key: 'edit', icon: 'user', label: 'profile.menu.edit', hint: 'profile.hint.edit', href: '/edit-profile' },
-      { key: 'security', icon: 'shield', label: 'profile.menu.security', hint: 'profile.hint.security' },
+      { key: 'security', icon: 'shield', label: 'profile.menu.security', hint: 'profile.hint.security', href: '/security' },
     ],
   },
   {
@@ -27,7 +27,7 @@ const GROUPS: { title: TKey; items: Item[] }[] = [
     items: [
       { key: 'settings', icon: 'settings', label: 'profile.menu.settings', hint: 'profile.hint.settings', href: '/settings' },
       { key: 'policies', icon: 'shield', label: 'profile.menu.policies', hint: 'profile.hint.policies', href: '/policies' },
-      { key: 'help', icon: 'help', label: 'profile.menu.help', hint: 'profile.hint.help' },
+      { key: 'help', icon: 'help', label: 'profile.menu.help', hint: 'profile.hint.help', href: '/help' },
     ],
   },
 ];

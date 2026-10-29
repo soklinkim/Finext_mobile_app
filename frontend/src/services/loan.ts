@@ -60,6 +60,14 @@ export async function listShares(): Promise<LoanShare[]> {
   return (await json<{ shares: LoanShare[] }>('/loan/shares')).shares;
 }
 
+/** The partner banks and this business's shares, saved for offline reading: a bank's decision stays visible without signal. */
+export function getSharing(): Promise<CachedResult<{ lenders: Lender[]; shares: LoanShare[] }>> {
+  return withCache('loan:sharing', async () => {
+    const [lenders, shares] = await Promise.all([listLenders(), listShares()]);
+    return { lenders, shares };
+  });
+}
+
 export function shareWithLender(input: { lenderId: string; scopes: ShareScope[]; days: (typeof SHARE_DAYS)[number] }): Promise<LoanShare> {
   return json('/loan/shares', {
     method: 'POST',

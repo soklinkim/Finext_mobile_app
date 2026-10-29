@@ -14,8 +14,9 @@ logger = logging.getLogger(__name__)
 def current_user(creds: HTTPAuthorizationCredentials = Depends(bearer)) -> str:
     try:
         key = _jwks.get_signing_key_from_jwt(creds.credentials).key
+        # leeway: a fresh token is "issued in the future" if this computer's clock runs a little behind Supabase's.
         payload = jwt.decode(creds.credentials, key,
-                             algorithms=["ES256", "RS256"], audience="authenticated")
+                             algorithms=["ES256", "RS256"], audience="authenticated", leeway=60)
         return payload["sub"]
     except Exception as exc:
         # Log only the exception class; never write the user's bearer token to logs.

@@ -1,8 +1,9 @@
+import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Icon, type IconName } from '@/components/Icon';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { ScreenShell } from '@/components/ScreenShell';
-import { EmptyState, ErrorState, LoadingState } from '@/components/StateViews';
+import { EmptyState, ErrorState, LoadingState, useErrorText } from '@/components/StateViews';
 import { Text } from '@/components/Text';
 import { useAnalysisQuery } from '@/hooks/useAnalysisQuery';
 import { useI18n, type TKey } from '@/i18n';
@@ -19,6 +20,8 @@ export default function Notifications() {
   const { t, locale } = useI18n();
   const dark = useAppTheme();
   const q = useAnalysisQuery(getNotifications);
+  const errorText = useErrorText();
+  const [dismissError, setDismissError] = useState<string | null>(null);
   const groups = (['today', 'yesterday', 'weekend'] as const).map((g) => ({ g, items: (q.data ?? []).filter((n) => n.group === g) })).filter((x) => x.items.length > 0);
 
   return (
@@ -26,7 +29,8 @@ export default function Notifications() {
       {q.source === 'cache' && <OfflineBanner fetchedAt={q.fetchedAt} />}
       {q.loading && !q.data ? <LoadingState /> : null}
       {q.noCache ? <EmptyState titleKey="offline.noCache" bodyKey="offline.noCacheBody" icon="wifiOff" /> : null}
-      {q.error ? <ErrorState onRetry={q.reload} /> : null}
+      {q.error ? <ErrorState onRetry={q.reload} error={q.error} /> : null}
+      {dismissError ? <Text variant="caption" tone="danger" accessibilityLiveRegion="polite" style={{ marginBottom: 12 }}>{dismissError}</Text> : null}
       {!q.loading && groups.length === 0 && <Text variant="body-sm" tone="neutral-600" style={{ textAlign: 'center', paddingVertical: 40 }}>{t('notifications.empty')}</Text>}
       {groups.map(({ g, items }) => (
         <View key={g}>
@@ -54,7 +58,7 @@ export default function Notifications() {
                 </View>
               </View>
               <View className="flex-row items-center justify-between">
-                <Pressable accessibilityRole="button" onPress={() => void dismissNotification(n.id).then(q.reload).catch(() => undefined)} hitSlop={8}>
+                <Pressable accessibilityRole="button" onPress={() => { setDismissError(null); void dismissNotification(n.id).then(q.reload).catch((e: unknown) => setDismissError(errorText(e))); }} hitSlop={8}>
                   <Text variant="caption" weight={500} tone="primary-500">{t('notifications.dismiss')}</Text>
                 </Pressable>
                 <Text variant="caption" weight={400} tone="primary-500">

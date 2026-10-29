@@ -6,6 +6,17 @@ import { colors } from '@/theme';
 import { useI18n, type TKey } from '@/i18n';
 import { OnlineRequiredError, ServerUnreachableError } from '@/services/analysis/types';
 
+/**
+ * The sentence to show for a failed action: no internet, or the FINEXT server did not answer (in the owner's language),
+ * else the server's own message. Never a raw network error ("Failed to fetch") or the API address.
+ */
+export function useErrorText(): (error: unknown) => string {
+  const { t } = useI18n();
+  return (error) => error instanceof ServerUnreachableError ? t('state.serverUnreachable')
+    : error instanceof OnlineRequiredError ? t('state.needsInternet')
+      : error instanceof Error && error.message ? error.message : t('state.error');
+}
+
 export function LoadingState() {
   return (
     <View className="items-center justify-center" style={{ paddingVertical: 48 }} accessibilityRole="progressbar">

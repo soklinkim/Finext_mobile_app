@@ -97,6 +97,33 @@ export async function refreshSession(): Promise<Session | null> {
   return data.session;
 }
 
+/** Who is signed in on this device, for Profile > Security. */
+export async function getAccount(): Promise<{ email: string; lastSignInAt: string | null } | null> {
+  const session = await getSession();
+  if (!session) return null;
+  return { email: session.user.email ?? '', lastSignInAt: session.user.last_sign_in_at ?? null };
+}
+
+/** Thrown when the current password given to changePassword is wrong. */
+export class WrongPasswordError extends Error {}
+
+/** Change the password, after checking the current one (so an unlocked phone alone cannot change it). */
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  const client = getClient();
+  const email = (await getSession())?.user.email;
+  if (!email) throw new Error('You are signed out. Sign in again to change your password.');
+  const check = await client.auth.signInWithPassword({ email, password: currentPassword });
+  if (check.error) throw new WrongPasswordError(check.error.message);
+  const { error } = await client.auth.updateUser({ password: newPassword });
+  if (error) throw error;
+}
+
+/** Sign out on every device signed in to this account, this one included. Needs a connection. */
+export async function signOutEverywhere(): Promise<void> {
+  const { error } = await getClient().auth.signOut({ scope: 'global' });
+  if (error) throw error;
+}
+
 export function subscribeToAuthChanges(onSignedIn: (signedIn: boolean) => void): () => void {
   if (!supabase) return () => undefined;
   const { data } = supabase.auth.onAuthStateChange((_event, session) => {
