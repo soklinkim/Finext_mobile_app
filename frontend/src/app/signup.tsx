@@ -9,6 +9,7 @@ import { ScreenShell } from '@/components/ScreenShell';
 import { Text } from '@/components/Text';
 import { TextField } from '@/components/TextField';
 import { useI18n, type TKey } from '@/i18n';
+import { isOnline } from '@/services/network';
 import { signUp } from '@/services/auth';
 import { updateSettings } from '@/services/bookkeeping';
 import { colors } from '@/theme';
@@ -136,7 +137,8 @@ export default function Signup() {
       router.replace('/onboarding/language');
         } catch (e) {
       console.error('signup confirm failed', e);
-      const message = e instanceof Error ? e.message : 'Unable to create your account. Please try again.';
+      // Offline, Supabase only says "Failed to fetch": say what is wrong instead.
+      const message = !(await isOnline()) ? t('security.needsConnection') : e instanceof Error ? e.message : 'Unable to create your account. Please try again.';
       if (/security purposes|after \d+ seconds|rate limit/i.test(message)) {
         try {
           await updateSettings({
@@ -177,19 +179,20 @@ export default function Signup() {
         <Text variant="title" weight={700} tone="primary-900">{t(titleKey)}</Text>
         {step === 0 && (
           <>
-            <TextField variant="form" label={t('auth.fullName')} value={form.name} onChangeText={set('name')} autoComplete="name"
+            <TextField variant="form" label={t('auth.fullName')} value={form.name} onChangeText={set('name')} placeholder={t('auth.namePlaceholder')} autoComplete="name"
               left={<Icon name="user" size={18} color={iconColor} />} error={submitted ? personalErrors.name : undefined} />
-            <TextField variant="form" label={t('auth.email')} value={form.email} onChangeText={set('email')} autoCapitalize="none" keyboardType="email-address" autoComplete="email"
+            <TextField variant="form" label={t('auth.email')} value={form.email} onChangeText={set('email')} placeholder="example@example.com" autoCapitalize="none" keyboardType="email-address" autoComplete="email"
               left={<Icon name="mail" size={18} color={iconColor} />} error={submitted ? personalErrors.email : undefined} />
-            <TextField variant="form" label={t('auth.mobile')} value={form.phone} onChangeText={set('phone')} keyboardType="phone-pad" autoComplete="tel"
+            <TextField variant="form" label={t('auth.mobile')} value={form.phone} onChangeText={set('phone')} placeholder="012 345 678" keyboardType="phone-pad" autoComplete="tel"
               left={<Icon name="phone" size={18} color={iconColor} />} error={submitted ? personalErrors.phone : undefined} />
-            <TextField variant="form" label={t('auth.password')} value={form.password} onChangeText={set('password')} secureTextEntry autoComplete="new-password"
+            <TextField variant="form" label={t('auth.password')} value={form.password} onChangeText={set('password')} placeholder="••••••••" secureTextEntry autoComplete="new-password"
               left={<Icon name="lock" size={18} color={iconColor} />} error={submitted ? personalErrors.password : undefined} />
             <TextField
               variant="form"
               label={t('auth.confirmPassword')}
               value={form.confirm}
               onChangeText={set('confirm')}
+              placeholder="••••••••"
               secureTextEntry
               autoComplete="new-password"
               left={<Icon name="lock" size={18} color={iconColor} />}

@@ -1,8 +1,16 @@
 import { db, newRowMeta, schema } from './client';
 
 /** Add an empty settings row plus standard account and category choices for a new install. */
+/**
+ * Starting rows are marked never edited (updatedAt 0). Any copy of the account's own data is newer and wins, so a new
+ * device (a second phone, a reinstall, a cleared browser) cannot sync its blank profile over the real one; and its
+ * starting accounts and categories are dropped if the account already has its own (see dropUnusedStartingRows in
+ * services/sync). Editing a starting row gives it a real time, and from then on it syncs like any other row.
+ */
+export const STARTING_ROW_UPDATED_AT = 0;
+
 export function seedInitialData(now: number): void {
-  const row = () => newRowMeta(now);
+  const row = () => ({ ...newRowMeta(now), updatedAt: STARTING_ROW_UPDATED_AT });
   db.insert(schema.settings).values({ ...row(), id: 'app' }).run();
 
   const banks = [

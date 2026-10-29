@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Button } from '@/components/Button';
 import { Icon, type IconName } from '@/components/Icon';
 import { KpiTile } from '@/components/KpiTile';
@@ -103,10 +103,15 @@ function ToolRow({ icon, title, body, onPress, first }: { icon: IconName; title:
  */
 export default function Bookkeeping() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ month?: string }>();
   const dark = useAppTheme();
   const { t, locale } = useI18n();
   const now = new Date();
   const [cursor, setCursor] = useState({ year: now.getFullYear(), month: now.getMonth() });
+  useEffect(() => {
+    const m = /^(\d{4})-(\d{2})$/.exec(params.month ?? '');
+    if (m) setCursor({ year: Number(m[1]), month: Number(m[2]) - 1 });
+  }, [params.month]);
   const [picker, setPicker] = useState(false);
   const { data, loading } = useLocalQuery(() => getMonthOverview(cursor.year, cursor.month), [cursor.year, cursor.month]);
   const currency = data?.currency ?? 'USD';

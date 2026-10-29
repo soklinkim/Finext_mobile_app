@@ -44,8 +44,8 @@ ROWS = [  # date, description, debit, credit, balance
 ]
 
 
-def sample_statement(rows=ROWS, closing="1,350.00") -> bytes:
-    lines = [(40, 800, "ACLEDA BANK PLC."), (40, 785, "Account Number : 0001-12345678"), (40, 770, "Currency : USD"),
+def sample_statement(rows=ROWS, closing="1,350.00", bank="ACLEDA BANK PLC.") -> bytes:
+    lines = [(40, 800, bank), (40, 785, "Account Number : 0001-12345678"), (40, 770, "Currency : USD"),
              (40, 755, f"Closing Balance : {closing}"),
              (40, 720, "Date"), (120, 720, "Description"), (330, 720, "Debit"), (410, 720, "Credit"), (490, 720, "Balance")]
     for i, (date, description, debit, credit, balance) in enumerate(rows):
@@ -65,6 +65,20 @@ def test_rows_come_back_as_money_in_or_out_with_the_statement_details():
     assert result["rows"][1]["description"] == "Shop rent March" and result["rows"][1]["currency"] == "USD"
     checks = {c["name"]: c["passed"] for c in result["checks"]}
     assert checks["Running balance adds up"] and checks["Final balance matches statement"]
+
+
+def test_kb_prasac_statements_are_named_without_changing_the_reader():
+    from app import statement_reader
+    result = read_statement(sample_statement(bank="KB PRASAC Bank Plc."))
+    assert result["bank"] == "KB PRASAC Bank" and len(result["rows"]) == 4
+    assert sum(bank == "KB PRASAC Bank" for bank, _ in statement_reader.BANK_SIGNATURES) == 1  # added once
+
+
+def test_a_statement_that_does_not_name_its_bank_is_not_given_one():
+    # The reader guesses a bank from the file name as a last resort; random temporary names once read as banks
+    # ("tmpj3kx8q.pdf" -> J Trust Royal) for about one upload in five.
+    for _ in range(20):
+        assert read_statement(sample_statement(bank="SAMPLE BANK PLC."))["bank"] is None
 
 
 def test_a_statement_that_does_not_add_up_says_so():

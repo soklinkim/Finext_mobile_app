@@ -120,6 +120,8 @@ export interface ReviewRow extends StatementRow {
   loan: boolean;
   /** the type was taken from an earlier import of the same description */
   learned: boolean;
+  /** nothing in the description suggested a type: the owner should choose one */
+  unsure: boolean;
   keep: boolean;
 }
 
@@ -157,9 +159,12 @@ export async function prepareRows(read: StatementRead, fallbackCurrency: Currenc
     const allowed: readonly string[] = IMPORT_TYPES[row.direction];
     const guess = KEYWORDS.find((k) => (!k.direction || k.direction === row.direction) && k.words.some((word) => mentions(text, word)))?.type;
     const typeId = remembered && allowed.includes(remembered) ? remembered : guess ?? (row.direction === 'in' ? 'product_sale' : 'other_cost');
-    return { ...row, currency, typeId, duplicate: Boolean(match), loan, learned: Boolean(remembered), keep: !match && !loan };
+    return { ...row, currency, typeId, duplicate: Boolean(match), loan, learned: Boolean(remembered), unsure: !remembered && !guess, keep: !match && !loan };
   });
 }
+
+/** Rows the owner should look at before saving: possible duplicates, loans and types that are only a guess. */
+export const needsCheck = (row: ReviewRow) => row.duplicate || row.loan || row.unsure;
 
 /** Create one entry per kept row, into `bank` (transfers go between `bank` and `cash`). Returns how many were added. */
 export async function importRows(rows: ReviewRow[], bank: Bank, cash: Bank | null): Promise<number> {

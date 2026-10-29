@@ -24,6 +24,7 @@ const colors = {
   danger: '#FF4267',
   warning: '#FFAF2A',
   success: '#52D5BA',
+  successText: '#0F7A64', // success as text on white: #52D5BA is too light to read there
   alert: '#FB6B18',
   white: '#FFFFFF',
   progress: { fill: '#000000' },

@@ -7,26 +7,29 @@
   <link rel="icon" type="image/png" href="assets/favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" />
-  <link rel="stylesheet" href="styles.css?v=25" />
+  <link rel="stylesheet" href="styles.css?v=38" />
 </head>
 <body class="signed-out">
   <div class="shell">
-    <!-- Signed in: the bank's workspace menu. Hidden on the sign-in pages. -->
-    <aside class="sidebar" aria-label="Lender portal">
-      <a class="brand" href="#/" aria-label="FINEXT Lender Portal home">
-        <span class="brand-mark"><img src="assets/feather.png" alt="" /></span>
-        <span class="brand-text"><span class="wordmark"><b>Fi</b><span>next</span></span><small>Lender Portal</small></span>
-      </a>
-      <div id="partner"></div>
-      <nav id="nav" class="nav"></nav>
-      <div id="account" class="account"></div>
-    </aside>
+    <!-- Signed in: FINEXT on the left, the bank and the signed-in staff member on the right. Hidden on the sign-in pages. -->
+    <header class="topbar" aria-label="Lender portal">
+      <div class="topbar-inner">
+        <a class="brand" href="#/" aria-label="FINEXT Lender Portal home">
+          <span class="brand-mark"><img src="assets/feather.png" alt="" /></span>
+          <span class="wordmark"><b>Fi</b><span>next</span></span><span class="product">Lender Portal</span>
+        </a>
+        <div id="partner"></div>
+        <div id="account" class="account"></div>
+      </div>
+    </header>
     <div class="workspace">
-      <main id="app" class="container" aria-live="polite"></main>
-      <footer class="site">FINEXT · Bookkeeping and AI risk insight for Cambodian MSMEs · Decision support, not a credit decision</footer>
+      <main id="app" class="container" aria-live="polite">
+        <!-- Shown until the portal has started: replaced by the sign-in page or the applicants. -->
+        <div class="splash" aria-label="Loading"><img src="assets/feather.png" alt="" /></div>
+      </main>
     </div>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-  <script type="module" src="app.js?v=24"></script>
+  <script type="module" src="app.js?v=39"></script>
 </body>
 </html>

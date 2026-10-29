@@ -9,7 +9,6 @@ from the statement is stored: the app turns the rows the owner confirms into ord
 """
 from __future__ import annotations
 
-import os
 import tempfile
 from pathlib import Path
 
@@ -17,6 +16,16 @@ from app import statement_reader as reader
 
 MAX_BYTES = 10 * 1024 * 1024
 CURRENCIES = {"USD", "KHR"}  # what FINEXT books in
+
+# Banks FINEXT names that the reader's own list does not (yet). Added here rather than in statement_reader.py, which
+# stays exactly as its author wrote it so a new version can be dropped in; the reader looks the list up on every read.
+# Naming a bank only labels the statement for the owner; how it is read does not depend on it.
+EXTRA_BANKS = (
+    # Official names: "KB PRASAC Bank Plc." and "ធនាគារ ខេប៊ីប្រាសាក់ ម.ក" (the head office sign).
+    ("KB PRASAC Bank", ("kb prasac", "prasac", "ខេប៊ីប្រាសាក់", "ប្រាសាក់")),
+)
+_known = {bank for bank, _ in reader.BANK_SIGNATURES}
+reader.BANK_SIGNATURES = (*reader.BANK_SIGNATURES, *(entry for entry in EXTRA_BANKS if entry[0] not in _known))
 
 
 class StatementError(ValueError):
@@ -44,11 +53,11 @@ def read_statement(content: bytes, password: str | None = None) -> dict:
     if not content.startswith(b"%PDF"):
         raise StatementError("not_pdf", "This file is not a PDF.")
 
-    handle, name = tempfile.mkstemp(suffix=".pdf")
-    try:
-        with os.fdopen(handle, "wb") as f:
-            f.write(content)
-        path = Path(name)
+    # A fixed, neutral file name in a private folder: when a statement does not name its bank, the reader guesses it
+    # from the file name, and random temporary names ("tmpj3kx8q.pdf") read as banks ("j" → J Trust Royal).
+    with tempfile.TemporaryDirectory() as folder:
+        path = Path(folder) / "statement.pdf"
+        path.write_bytes(content)
         try:
             # OCR needs Tesseract on the server, which is not installed: scans are reported instead.
             result = reader.extract_pdf(path, dayfirst=True, ocr_mode="off", password=password or None)
@@ -56,8 +65,6 @@ def read_statement(content: bytes, password: str | None = None) -> dict:
             if reader.is_encrypted(path):
                 raise StatementError("wrong_password" if password else "password", "This PDF is password protected.") from exc
             raise StatementError("unreadable", "This PDF could not be read.") from exc
-    finally:
-        os.unlink(name)
 
     if not result.rows:
         raise StatementError("no_table", "No transaction table was found. If this is a scanned statement, "

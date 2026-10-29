@@ -125,10 +125,13 @@ export function runMigrations(sqlite: SQLiteDatabase): void {
   const row = sqlite.getFirstSync<{ user_version: number }>('PRAGMA user_version');
   let version = row?.user_version ?? 0;
   while (version < MIGRATIONS.length) {
+    // The version is recorded in the same transaction as the migration: if the app stops between the two (a reload
+    // during first launch), a migration that ran but was not recorded would run again and fail ("table banks already
+    // exists"), and the app could not start.
     sqlite.withTransactionSync(() => {
       sqlite.execSync(MIGRATIONS[version]);
+      sqlite.execSync(`PRAGMA user_version = ${version + 1}`);
     });
     version += 1;
-    sqlite.execSync(`PRAGMA user_version = ${version}`);
   }
 }

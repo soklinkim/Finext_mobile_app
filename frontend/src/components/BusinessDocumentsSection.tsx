@@ -3,6 +3,7 @@ import { ActionSheetIOS, ActivityIndicator, Alert, Platform, Pressable, View } f
 import * as DocumentPicker from 'expo-document-picker';
 import { Icon, type IconName } from './Icon';
 import { Text } from './Text';
+import { useErrorText } from './StateViews';
 import { useI18n, type TKey } from '@/i18n';
 import { confirmAction } from '@/lib/confirm';
 import {
@@ -59,6 +60,7 @@ export function BusinessDocumentsSection() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [busy, setBusy] = useState<BusinessDocumentKind | null>(null);
+  const errorText = useErrorText();
   const [errors, setErrors] = useState<Partial<Record<BusinessDocumentKind, string>>>({});
 
   const load = useCallback(() => {
@@ -106,7 +108,7 @@ export function BusinessDocumentsSection() {
       const saved = await uploadDocument(kind, asset);
       setDocuments((current) => ({ ...current, [kind]: saved }));
     } catch (error) {
-      setError(kind, error instanceof Error ? error.message : t('state.error'));
+      setError(kind, errorText(error));
     } finally {
       setBusy(null);
     }
@@ -138,7 +140,7 @@ export function BusinessDocumentsSection() {
       await deleteDocument(kind);
       setDocuments(({ [kind]: _removed, ...rest }) => rest);
     } catch (error) {
-      setError(kind, error instanceof Error ? error.message : t('state.error'));
+      setError(kind, errorText(error));
     } finally {
       setBusy(null);
     }
@@ -149,7 +151,7 @@ export function BusinessDocumentsSection() {
     try {
       await openDocument(kind);
     } catch (error) {
-      setError(kind, error instanceof Error ? error.message : t('state.error'));
+      setError(kind, errorText(error));
     }
   };
 

@@ -3,9 +3,11 @@ import { and, eq } from 'drizzle-orm';
 import { db, schema } from '@/db/client';
 import { API_BASE_URL, LONG_REQUEST_TIMEOUT_MS, REQUEST_TIMEOUT_MS, fetchWithTimeout } from '@/services/apiBase';
 import { SYNCED_TABLES, type SyncedTable } from '@/db/schema';
+import { STARTING_ROW_UPDATED_AT } from '@/db/seed';
 import { emitChange } from '@/services/bookkeeping/events';
+import { isOnline, isSimulatedOffline } from '@/services/network';
 import { getSession, refreshSession } from '@/services/auth';
-import { AccountingDataError, ApiRequestError, type AnalysisPeriod, type AnalysisResult, type AppNotification, type CategorySlice, type FutureRisk, type IncomeExpenseForecast, type HealthHistoryMonth, type LoanReadiness, type ProposedLoan, type RatioSnapshot, type StatementPeriod, type Statements, type Summary, type UnusualEntry, type WhatIf, type WhatIfChanges } from '@/services/analysis/types';
+import { AccountingDataError, ApiRequestError, OnlineRequiredError, ServerUnreachableError, type AnalysisPeriod, type AnalysisResult, type AppNotification, type CategorySlice, type FutureRisk, type IncomeExpenseForecast, type HealthHistoryMonth, type LoanReadiness, type ProposedLoan, type RatioSnapshot, type StatementPeriod, type Statements, type Summary, type UnusualEntry, type WhatIf, type WhatIfChanges } from '@/services/analysis/types';
 
 export type SyncRow = Record<string, unknown> & {
   id: string;
@@ -138,6 +140,9 @@ export async function authorizedFetch(path: string, init?: RequestInit): Promise
   if (!session) throw new ApiRequestError(401, 'Please sign in to view your financial reports.');
   // Uploads, file downloads and sync carry more data; everything else should answer quickly.
   const long = init?.body instanceof FormData || path.startsWith('/sync') || path.endsWith('/file');
+  // No connection: a typed error each screen can explain in the owner's language (never a raw message with the API
+  // address). "Simulate offline" in Settings counts too, so offline behaviour can be tried without airplane mode.
+  if (isSimulatedOffline()) throw new OnlineRequiredError('No internet connection.');
   const send = async (accessToken: string): Promise<Response> => {
     try {
       return await fetchWithTimeout(`${API_BASE_URL}${path}`, {
@@ -148,8 +153,8 @@ export async function authorizedFetch(path: string, init?: RequestInit): Promise
         },
       }, long ? LONG_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS);
     } catch (error) {
-      const detail = error instanceof Error ? `: ${error.message}` : '';
-      throw new Error(`Could not reach FINEXT API at ${API_BASE_URL}${detail}`);
+      if (__DEV__) console.warn(`[api] ${path} could not reach ${API_BASE_URL}:`, error);
+      throw (await isOnline()) ? new ServerUnreachableError() : new OnlineRequiredError('No internet connection.');
     }
   };
 
@@ -319,9 +324,43 @@ let inFlightSync: Promise<SyncResult> | null = null;
 const MISSING_REFERENCE = /does not exist/i;
 let repairedMissingRows = false;
 
+/**
+ * After a device's first download for an account: drop the device's own starting cash accounts and categories when the
+ * account already has its own, unless an entry here already uses them. Without this, every new phone, reinstall or
+ * cleared browser added another full set to the account.
+ */
+function dropUnusedStartingRows(): void {
+  const usedBanks = new Set<string>();
+  const usedCategories = new Set<string>();
+  for (const t of db.select({ bankId: schema.transactions.bankId, toBankId: schema.transactions.toBankId, categoryId: schema.transactions.categoryId }).from(schema.transactions).all()) {
+    if (t.bankId) usedBanks.add(t.bankId);
+    if (t.toBankId) usedBanks.add(t.toBankId);
+    if (t.categoryId) usedCategories.add(t.categoryId);
+  }
+  for (const a of db.select({ bankId: schema.businessAssets.bankId }).from(schema.businessAssets).all()) {
+    if (a.bankId) usedBanks.add(a.bankId);
+  }
+  for (const [table, used] of [[schema.banks, usedBanks], [schema.categories, usedCategories]] as const) {
+    const accountHasOwn = db.select({ id: table.id }).from(table).where(eq(table.syncStatus, 'synced')).limit(1).get();
+    if (!accountHasOwn) continue;
+    const starting = db.select({ id: table.id }).from(table)
+      .where(and(eq(table.syncStatus, 'pending'), eq(table.updatedAt, STARTING_ROW_UPDATED_AT))).all();
+    for (const row of starting) {
+      if (!used.has(row.id)) db.delete(table).where(eq(table.id, row.id)).run();
+    }
+  }
+}
+
 function sync(): Promise<SyncResult> {
   if (!inFlightSync) {
     inFlightSync = (async () => {
+      // A device that has never downloaded this account (new phone, reinstall, cleared browser) downloads first, so its
+      // starting data does not go up over the account's own profile, cash accounts and categories.
+      const session = await getSession();
+      if (session && !(await AsyncStorage.getItem(CURSOR_KEY + ':' + session.user.id))) {
+        await pullChanges();
+        dropUnusedStartingRows();
+      }
       let push = await pushPending();
       if (!repairedMissingRows && push.rejected.some((row) => MISSING_REFERENCE.test(row.reason))) {
         // The server is missing rows this device already marked as synced (its data was reset

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import Svg, { Line, Path } from 'react-native-svg';
 import { AnalysisLoading } from './AnalysisLoading';
@@ -8,9 +8,10 @@ import { Icon } from './Icon';
 import { OfflineBanner } from './OfflineBanner';
 import { Chip, ChipRow } from './Chip';
 import { SelectField } from './SelectField';
-import { EmptyState, ErrorState } from './StateViews';
+import { EmptyState, ErrorState, useErrorText } from './StateViews';
 import { Text } from './Text';
 import { useAnalysisQuery } from '@/hooks/useAnalysisQuery';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useI18n, type TKey } from '@/i18n';
 import { confirmAction } from '@/lib/confirm';
 import { type LoanReadiness, type ReadinessLevel } from '@/services/analysis';
@@ -18,8 +19,7 @@ import {
   SHARE_DAYS,
   SHARE_SCOPES,
   getLoanReadiness,
-  listLenders,
-  listShares,
+  getSharing,
   revokeShare,
   shareWithLender,
   type Lender,
@@ -282,6 +282,7 @@ function Checkbox({ label, checked, onToggle }: { label: string; checked: boolea
 
 function ShareForm({ lenders, onDone, onCancel }: { lenders: Lender[]; onDone: (share: LoanShare) => void; onCancel: () => void }) {
   const { t, locale } = useI18n();
+  const errorText = useErrorText();
   const { card } = useCard();
   const [lenderId, setLenderId] = useState<string | null>(lenders.length === 1 ? lenders[0].id : null);
   const [scopes, setScopes] = useState<ShareScope[]>(SHARE_SCOPES);
@@ -303,7 +304,7 @@ function ShareForm({ lenders, onDone, onCancel }: { lenders: Lender[]; onDone: (
     try {
       onDone(await shareWithLender({ lenderId, scopes, days: Number(days) as (typeof SHARE_DAYS)[number] }));
     } catch (e) {
-      setError(e instanceof Error ? e.message : t('state.error'));
+      setError(errorText(e));
     } finally {
       setSaving(false);
     }
@@ -407,13 +408,19 @@ function ShareCard({ share, onRevoke }: { share: LoanShare; onRevoke: () => void
     : share.revokedAt
       ? t('loan.revokedOn', { date: date(share.revokedAt) })
       : t('loan.expiredOn', { date: date(share.expiresAt) });
+  // Once sharing has ended, "Sent" or "Under review" would read as still going on: say it ended instead, unless the
+  // bank had already decided (that answer still matters). The progress line is for live shares only.
+  const decided = share.decision === 'approved' || share.decision === 'declined';
+  const pill = share.active || decided
+    ? { label: t(`loan.decision.${share.decision}` as TKey), color: DECISION_COLOR[share.decision] }
+    : { label: t(share.revokedAt ? 'loan.stopped' : 'loan.expired'), color: colors.neutral[500] };
   return (
     <View style={[card, !share.active && { opacity: 0.7 }]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <Text variant="body" weight={700} tone="primary-900" style={{ flex: 1 }} numberOfLines={1}>{share.lenderName}</Text>
-        <Pill label={t(`loan.decision.${share.decision}` as TKey)} color={DECISION_COLOR[share.decision]} />
+        <Pill label={pill.label} color={pill.color} />
       </View>
-      <ShareProgress share={share} date={date} />
+      {share.active || decided ? <ShareProgress share={share} date={date} /> : null}
       {share.decisionNote ? (
         <View style={{ borderLeftWidth: 3, borderLeftColor: DECISION_COLOR[share.decision], paddingLeft: 10 }}>
           <Text variant="body-sm" tone="neutral-900">“{share.decisionNote}”</Text>
@@ -431,30 +438,15 @@ function ShareCard({ share, onRevoke }: { share: LoanShare; onRevoke: () => void
 
 function BankSharing() {
   const { t } = useI18n();
-  const [lenders, setLenders] = useState<Lender[] | null>(null);
-  const [shares, setShares] = useState<LoanShare[]>([]);
+  const errorText = useErrorText();
+  const { isOffline } = useNetworkStatus();
+  // Saved for offline reading: the shares and any bank decision stay visible without signal.
+  const sharing = useAnalysisQuery(getSharing);
+  const lenders = sharing.data?.lenders ?? null;
+  const shares = sharing.data?.shares ?? [];
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
-
-  const load = useCallback(() => {
-    setError(null);
-    Promise.all([listLenders(), listShares()])
-      .then(([l, s]) => {
-        setLenders(l);
-        setShares(s);
-      })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : t('state.error')));
-  }, [t]);
-
-  useEffect(() => {
-    let active = true;
-    Promise.resolve().then(() => {
-      if (active) load();
-    });
-    return () => {
-      active = false;
-    };
-  }, [load]);
+  const reload = () => { setError(null); sharing.reload(); };
 
   const revoke = (share: LoanShare) => confirmAction(
     t('loan.stopTitle', { bank: share.lenderName }),
@@ -464,9 +456,9 @@ function BankSharing() {
     async () => {
       try {
         await revokeShare(share.id);
-        load();
+        reload();
       } catch (e) {
-        setError(e instanceof Error ? e.message : t('state.error'));
+        setError(errorText(e));
       }
     },
   );
@@ -477,17 +469,22 @@ function BankSharing() {
         <Text variant="title" weight={700} tone="primary-900">{t('loan.banksTitle')}</Text>
         <Text variant="body-sm" tone="neutral-600">{t('loan.banksBody')}</Text>
       </View>
-      {error ? <ErrorState message={error} onRetry={load} /> : null}
-      {!error && lenders === null ? <ActivityIndicator color={colors.primary[500]} style={{ paddingVertical: 16 }} /> : null}
+      {sharing.source === 'cache' && <OfflineBanner fetchedAt={sharing.fetchedAt} />}
+      {error ? <Text variant="caption" tone="danger" accessibilityLiveRegion="polite">{error}</Text> : null}
+      {sharing.error ? <ErrorState onRetry={reload} error={sharing.error} /> : null}
+      {sharing.noCache ? <EmptyState titleKey="offline.noCache" bodyKey="offline.noCacheBody" icon="wifiOff" /> : null}
+      {sharing.loading && !sharing.data ? <ActivityIndicator color={colors.primary[500]} style={{ paddingVertical: 16 }} /> : null}
       {lenders !== null && shares.map((share) => <ShareCard key={share.id} share={share} onRevoke={() => revoke(share)} />)}
       {lenders !== null && lenders.length === 0 && shares.length === 0 ? <EmptyState titleKey="loan.noBanksTitle" bodyKey="loan.noBanksBody" /> : null}
-      {lenders !== null && lenders.length > 0 && (formOpen ? (
+      {lenders !== null && lenders.length > 0 && (isOffline ? (
+        <Text variant="caption" tone="neutral-600" style={{ textAlign: 'center' }}>{t('loan.shareNeedsInternet')}</Text>
+      ) : formOpen ? (
         <ShareForm
           lenders={lenders}
           onCancel={() => setFormOpen(false)}
           onDone={() => {
             setFormOpen(false);
-            load();
+            reload();
           }}
         />
       ) : (

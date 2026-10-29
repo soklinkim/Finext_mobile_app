@@ -7,6 +7,7 @@ export const colors: {
   danger: string;
   warning: string;
   success: string;
+  successText: string;
   alert: string;
   white: string;
   progress: { fill: string };

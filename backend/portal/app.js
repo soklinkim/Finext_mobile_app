@@ -4,7 +4,6 @@
 const app = document.getElementById('app');
 const account = document.getElementById('account');
 const partner = document.getElementById('partner');
-const nav = document.getElementById('nav');
 
 // An invite or password-reset email opens the portal with what it is for in the address (#...&type=invite), or
 // with why the link failed (#error_description=...). Read it before Supabase signs in from it and tidies the address.
@@ -18,8 +17,11 @@ if (!config.supabasePublishableKey) {
   app.innerHTML = '<div class="card login"><h2>Portal not configured</h2><p class="muted">Set SUPABASE_PUBLISHABLE_KEY in backend/.env and restart the API.</p></div>';
   throw new Error('missing SUPABASE_PUBLISHABLE_KEY');
 }
+// Supabase reads (and then clears) the address only when it is one of those email links. Otherwise the address is
+// a portal page (#/applicant/..., #/policy/...), and a refresh must stay on it.
+const isEmailLink = linkParams.has('access_token') || linkParams.has('error_description') || Boolean(linkType);
 const supabase = window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey, {
-  auth: { persistSession: true, autoRefreshToken: true, storageKey: 'finext-lender-portal' },
+  auth: { persistSession: true, autoRefreshToken: true, storageKey: 'finext-lender-portal', detectSessionInUrl: isEmailLink },
 });
 
 let lender = null;
@@ -31,10 +33,10 @@ const PARTNER_BRANDS = {
 };
 const brandOf = (name) => PARTNER_BRANDS[name] || null;
 
-// Signed out: the sign-in pages fill the window. Signed in: the sidebar workspace.
+// Signed out: the sign-in pages fill the window. Signed in: the top bar and workspace.
 function setSignedIn(signedIn) {
   document.body.classList.toggle('signed-out', !signedIn);
-  if (!signedIn) { account.innerHTML = ''; partner.innerHTML = ''; nav.innerHTML = ''; }
+  if (!signedIn) { account.innerHTML = ''; partner.innerHTML = ''; }
 }
 
 function applyPartnerTheme(brand) {
@@ -60,7 +62,7 @@ function formatValue(value, format) {
   if (format === 'percent') return `${(value * 100).toFixed(1)}%`;
   if (format === 'times') return `${value.toFixed(2)}×`;
   if (format === 'months') return `${value} mo`;
-  if (format === 'days') return `${value} d`;
+  if (format === 'days') return `${Math.round(value)} d`;
   return String(value);
 }
 
@@ -115,6 +117,9 @@ const ICON_PATHS = {
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   x: '<path d="M18 6L6 18M6 6l12 12"/>',
   logout: '<path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>',
+  key: '<circle cx="8" cy="15" r="4"/><path d="M10.8 12.2L20 3M16 7l3 3M14 9l2 2"/>',
+  down: '<path d="M6 9l6 6 6-6"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
 };
 const icon = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[name]}</svg>`;
 const sectionTitle = (name, title) => `<h2><span class="icon">${icon(name)}</span>${esc(title)}</h2>`;
@@ -162,7 +167,31 @@ async function api(path, init = {}) {
   return response;
 }
 
-const loading = () => { app.innerHTML = '<p class="muted">Loading…</p>'; };
+// While a page loads: grey shapes where its content will be, so the layout does not jump when the data arrives.
+const bone = (style = '') => `<span class="bone" style="${style}"></span>`;
+const SKELETONS = {
+  list: () => `
+    <div class="stack">
+      <div>${bone('width:180px;height:28px')}${bone('width:min(420px,80%);height:14px;margin-top:10px')}</div>
+      <section class="panel">
+        <div class="panel-bar">${bone('width:min(420px,60%);height:18px')}${bone('width:240px;max-width:35%;height:36px;border-radius:8px;margin-left:auto')}</div>
+        <div style="padding:6px 20px">${Array.from({ length: 4 }, () => `<div class="bone-row">${bone('width:32px;height:32px;border-radius:50%')}<div style="flex:1">${bone('width:40%;height:13px')}${bone('width:60%;height:11px;margin-top:7px')}</div>${bone('width:90px;height:22px;border-radius:999px')}</div>`).join('')}</div>
+      </section>
+    </div>`,
+  applicant: () => `
+    <div class="stack">
+      ${bone('width:110px;height:14px')}
+      <div class="card"><div class="bone-row" style="border:0">${bone('width:58px;height:58px;border-radius:50%')}<div style="flex:1">${bone('width:240px;height:24px')}${bone('width:320px;max-width:90%;height:13px;margin-top:9px')}</div></div></div>
+      <div class="review">
+        <div class="stack">${Array.from({ length: 2 }, () => `<div class="card">${bone('width:160px;height:18px')}${Array.from({ length: 5 }, () => bone('width:100%;height:13px;margin-top:16px')).join('')}</div>`).join('')}</div>
+        <div class="card">${bone('width:120px;height:18px')}${bone('width:100%;height:42px;margin-top:18px;border-radius:12px')}${bone('width:100%;height:80px;margin-top:12px;border-radius:12px')}${bone('width:100%;height:42px;margin-top:12px;border-radius:12px')}</div>
+      </div>
+    </div>`,
+};
+SKELETONS.policy = () => `
+  <div class="policy-layout"><div>${bone('width:120px;height:14px')}${Array.from({ length: 5 }, () => bone('width:80%;height:13px;margin-top:16px')).join('')}</div>
+    <div class="card">${bone('width:60%;height:26px')}${bone('width:80%;height:14px;margin-top:12px')}${Array.from({ length: 8 }, () => bone('width:100%;height:13px;margin-top:16px')).join('')}</div></div>`;
+const loading = (kind) => { app.innerHTML = `<div aria-busy="true" aria-label="Loading">${SKELETONS[kind]()}</div>`; };
 
 // ------------------------------------------------------------------ auth
 function renderLogin(message = '') {
@@ -184,15 +213,18 @@ function renderLogin(message = '') {
   document.getElementById('forgot').addEventListener('click', () => renderForgot(document.getElementById('email').value.trim()));
   document.getElementById('login').addEventListener('submit', async (event) => {
     event.preventDefault();
-    const button = event.target.querySelector('button');
+    const button = event.target.querySelector('button[type=submit]');
     button.disabled = true;
+    button.textContent = 'Signing in…';
     const { error } = await supabase.auth.signInWithPassword({
       email: document.getElementById('email').value.trim(),
       password: document.getElementById('password').value,
     });
-    button.disabled = false;
-    if (error) document.getElementById('login-error').textContent = error.message;
-    else start();
+    if (error) {
+      button.disabled = false;
+      button.textContent = 'Sign in';
+      document.getElementById('login-error').textContent = error.message;
+    } else start();
   });
 }
 
@@ -231,7 +263,7 @@ function renderForgot(email = '') {
 }
 
 // After opening an invite or reset link: choose a password, then straight into the portal.
-function renderSetPassword(email) {
+function renderSetPassword(email, { fromMenu = false } = {}) {
   setSignedIn(false);
   const invited = linkType === 'invite';
   app.innerHTML = authLayout(`
@@ -242,7 +274,9 @@ function renderSetPassword(email) {
       <div><label for="confirm-password">Type it again</label><input id="confirm-password" type="password" autocomplete="new-password" minlength="8" required /></div>
       <p class="error" id="set-error"></p>
       <button type="submit">${invited ? 'Set password and continue' : 'Save password and continue'}</button>
+      ${fromMenu ? '<button type="button" class="link center" id="cancel-password">Cancel</button>' : ''}
     </form>`);
+  document.getElementById('cancel-password')?.addEventListener('click', () => start());
   document.getElementById('set-password').addEventListener('submit', async (event) => {
     event.preventDefault();
     const password = document.getElementById('new-password').value;
@@ -267,6 +301,90 @@ async function signOut() {
   renderLogin();
 }
 
+// ------------------------------------------------------------------ account menu
+// The signed-in staff member's initials open a menu: who they are and for which bank, their password, FINEXT's
+// policies, what the scores are (and are not), and Sign out.
+let closeMenuOnOutsideClick = null;
+function renderAccountMenu(email, brand) {
+  const mark = esc(initials(email.split('@')[0].replace(/[._-]+/g, ' ')));
+  const item = (href, iconName, label) => `<a role="menuitem" href="${href}">${icon(iconName)}<span>${esc(label)}</span></a>`;
+  account.innerHTML = `
+    <button type="button" class="account-button" id="account-button" aria-haspopup="menu" aria-expanded="false" aria-controls="account-menu">
+      <span class="avatar soft" aria-hidden="true">${mark}</span><span class="who-email">${esc(email)}</span>${icon('down')}
+    </button>
+    <div class="menu" id="account-menu" role="menu" hidden>
+      <div class="menu-head">
+        <span class="avatar big" aria-hidden="true">${mark}</span>
+        <strong>${esc(email)}</strong>
+        <span class="menu-bank">${brand ? `<img src="${esc(brand.logo)}" alt="" />` : ''}${esc(lender.name)} · Partner bank</span>
+      </div>
+      <div class="menu-group">
+        <button type="button" role="menuitem" id="change-password">${icon('key')}<span>Change password</span></button>
+      </div>
+      <div class="menu-group">
+        <span class="menu-label">Policies</span>
+        ${POLICY_LINKS.map(([id, title]) => item(`#/policy/${id}`, 'file', title)).join('')}
+      </div>
+      <div class="menu-group menu-about">
+        ${icon('info')}<p><strong>About these scores</strong>Scores come from each business's own records in Finext. They support, and do not replace, your bank's credit assessment.</p>
+      </div>
+      <div class="menu-group">
+        <button type="button" role="menuitem" id="signout">${icon('logout')}<span>Sign out</span></button>
+      </div>
+    </div>`;
+  const button = document.getElementById('account-button');
+  const menu = document.getElementById('account-menu');
+  const setOpen = (open) => { menu.hidden = !open; button.setAttribute('aria-expanded', String(open)); };
+  button.addEventListener('click', (event) => { event.stopPropagation(); setOpen(menu.hidden); });
+  menu.addEventListener('click', (event) => { if (event.target.closest('[role=menuitem]')) setOpen(false); });
+  menu.addEventListener('keydown', (event) => { if (event.key === 'Escape') { setOpen(false); button.focus(); } });
+  // One document listener at a time, however often the menu is drawn (each sign-in draws it again).
+  if (closeMenuOnOutsideClick) document.removeEventListener('click', closeMenuOnOutsideClick);
+  closeMenuOnOutsideClick = (event) => { if (!account.contains(event.target)) setOpen(false); };
+  document.addEventListener('click', closeMenuOnOutsideClick);
+  document.getElementById('change-password').addEventListener('click', () => renderSetPassword(email, { fromMenu: true }));
+  document.getElementById('signout').addEventListener('click', signOut);
+}
+
+// ------------------------------------------------------------------ policies
+// The same texts as the app (Settings > Policies), copied to policies.json by backend/scripts/export_policies.mjs.
+const POLICY_LINKS = [
+  ['policy', 'Data and AI Policy'], ['privacy', 'Privacy and data'], ['ai', 'How FINEXT uses AI'],
+  ['terms', 'Terms of use'], ['governance', 'Data and AI governance'],
+];
+let policies = null;
+
+async function renderPolicy(id) {
+  loading('policy');
+  try {
+    policies ??= await fetch('policies.json').then((r) => { if (!r.ok) throw new Error('Policies could not be loaded.'); return r.json(); });
+  } catch (error) {
+    app.innerHTML = `<div class="card"><p class="error">${esc(error.message)}</p></div>`;
+    return;
+  }
+  const policy = policies.find((p) => p.id === id);
+  if (!policy) { location.hash = '#/'; return; }
+  window.scrollTo(0, 0);
+  app.innerHTML = `
+    <div class="policy-layout">
+      <nav class="policy-nav" aria-label="Policies">
+        <a class="back" href="#/">${icon('back').replace('<svg ', '<svg width="16" height="16" ')}All applicants</a>
+        <span class="menu-label">Policies</span>
+        ${policies.map((p) => `<a href="#/policy/${p.id}" class="${p.id === id ? 'active' : ''}" ${p.id === id ? 'aria-current="page"' : ''}>${esc(p.title)}</a>`).join('')}
+      </nav>
+      <article class="card policy">
+        <h1>${esc(policy.title)}</h1>
+        <p class="muted lead">${esc(policy.summary)}</p>
+        ${policy.sections.map((section) => `
+          <section>
+            <h2>${esc(section.heading)}</h2>
+            ${(section.body || []).map((text) => `<p>${esc(text)}</p>`).join('')}
+            ${section.bullets ? `<ul>${section.bullets.map((text) => `<li>${esc(text)}</li>`).join('')}</ul>` : ''}
+          </section>`).join('')}
+      </article>
+    </div>`;
+}
+
 async function start() {
   const { data } = await supabase.auth.getSession();
   if (!data.session) {
@@ -283,42 +401,18 @@ async function start() {
   applyPartnerTheme(brand);
   setSignedIn(true);
   partner.innerHTML = `
-    <div class="partner-card">
+    <div class="partner-card" title="Partner bank">
       ${brand ? `<img src="${esc(brand.logo)}" alt="" />` : `<span class="avatar" aria-hidden="true">${esc(initials(lender.name))}</span>`}
-      <div><small>Partner bank</small><strong>${esc(lender.name)}</strong></div>
+      <strong>${esc(lender.name)}</strong>
     </div>`;
   const email = data.session.user.email;
-  account.innerHTML = `
-    <span class="avatar soft" aria-hidden="true">${esc(initials(email.split('@')[0].replace(/[._-]+/g, ' ')))}</span>
-    <span class="who-text"><strong>Signed in</strong><span class="who-email" title="${esc(email)}">${esc(email)}</span></span>
-    <button class="icon-button" id="signout" aria-label="Sign out" title="Sign out">${icon('logout')}</button>`;
-  document.getElementById('signout').addEventListener('click', signOut);
-  renderNav();
+  renderAccountMenu(email, brand);
   route();
 }
 
 // ------------------------------------------------------------------ applicant list
-// Sidebar menu: all applicants, then one entry per decision with its count (filled in once the list has loaded).
-let counts = null;
-function renderNav(active = location.hash) {
-  const items = [
-    { href: '#/', label: 'All applicants', icon: 'users', count: counts?.all },
-    { href: '#/filter/new', label: 'New', icon: 'spark', count: counts?.new },
-    { href: '#/filter/reviewing', label: 'Reviewing', icon: 'clock', count: counts?.reviewing },
-    { href: '#/filter/approved', label: 'Approved', icon: 'check', count: counts?.approved },
-    { href: '#/filter/declined', label: 'Declined', icon: 'x', count: counts?.declined },
-  ];
-  const current = active.startsWith('#/filter/') ? active : '#/';
-  nav.innerHTML = `<span class="nav-label">Applications</span>${items.map((item) => `
-    <a href="${item.href}" class="${item.href === current ? 'active' : ''}" ${item.href === current ? 'aria-current="page"' : ''}>
-      ${icon(item.icon)}<span>${esc(item.label)}</span>${item.count != null ? `<b>${item.count}</b>` : ''}
-    </a>`).join('')}`;
-}
-
-const today = () => new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-
 async function renderList(initialDecision = '') {
-  loading();
+  loading('list');
   let applicants;
   try {
     applicants = (await (await api('/lender/applicants')).json()).applicants;
@@ -326,45 +420,43 @@ async function renderList(initialDecision = '') {
     app.innerHTML = `<div class="card"><p class="error">${esc(error.message)}</p></div>`;
     return;
   }
+  // One panel: tabs with counts (the filter), search beside them, the table below.
   const count = (decision) => applicants.filter((a) => a.decision === decision).length;
-  counts = { all: applicants.length, new: count('new'), reviewing: count('reviewing'), approved: count('approved'), declined: count('declined') };
-  renderNav();
-  const stats = [
-    { label: 'All applicants', value: applicants.length, icon: 'users', tone: 'blue' },
-    { label: 'New', value: count('new'), icon: 'spark', tone: 'partner' },
-    { label: 'Reviewing', value: count('reviewing'), icon: 'clock', tone: 'amber' },
-    { label: 'Approved', value: count('approved'), icon: 'check', tone: 'green' },
+  const tabs = [
+    { label: 'All', value: applicants.length, href: '#/', decision: '' },
+    { label: 'New', value: count('new'), href: '#/filter/new', decision: 'new' },
+    { label: 'Reviewing', value: count('reviewing'), href: '#/filter/reviewing', decision: 'reviewing' },
+    { label: 'Approved', value: count('approved'), href: '#/filter/approved', decision: 'approved' },
+    { label: 'Declined', value: count('declined'), href: '#/filter/declined', decision: 'declined' },
   ];
-  const brand = brandOf(lender.name);
   app.innerHTML = `
     <div class="stack">
-      <div class="page-head hero">
-        <div><span class="eyebrow">${esc(today())}</span><h1>${initialDecision ? esc(DECISIONS[initialDecision] || 'Applicants') : 'Applicants'}</h1>
-          <p class="muted" style="margin:0">Businesses that chose to share their Finext data with ${esc(lender.name)}.</p></div>
-        ${brand ? `<span class="cobrand"><img src="assets/feather.png" alt="" />Finext <i>×</i> <img src="${esc(brand.logo)}" alt="" />${esc(brand.short)}</span>` : ''}
+      <div class="page-head">
+        <div><h1>Applicants</h1>
+          <p class="muted" style="margin:4px 0 0">Businesses that chose to share their Finext data with ${esc(lender.name)}.</p></div>
       </div>
-      <div class="stats">${stats.map((s) => `<div class="stat ${s.tone}"><span class="stat-icon">${icon(s.icon)}</span><div><div class="label">${esc(s.label)}</div><div class="value">${s.value}</div></div></div>`).join('')}</div>
-      <div class="toolbar">
-        <div class="search">${icon('search')}<input id="search" type="search" placeholder="Search business" aria-label="Search business" /></div>
-        <select id="filter" aria-label="Filter by decision">
-          <option value="">All decisions</option>
-          ${Object.entries(DECISIONS).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}
-        </select>
-      </div>
-      <div class="card table-wrap" id="list"></div>
-      <p class="muted small">Readiness scores are calculated from each business's own bookkeeping records. They support, and do not replace, your bank's credit assessment.</p>
+      <section class="panel">
+        <div class="panel-bar">
+          <nav class="tabs" aria-label="Filter by decision">${tabs.map((t) => {
+            const on = t.decision === initialDecision;
+            return `<a href="${t.href}" class="${on ? 'active' : ''}" ${on ? 'aria-current="page"' : ''}>${esc(t.label)}<span class="count">${t.value}</span></a>`;
+          }).join('')}</nav>
+          <div class="search">${icon('search')}<input id="search" type="search" placeholder="Search business" aria-label="Search business" /></div>
+        </div>
+        <div class="table-wrap" id="list"></div>
+      </section>
     </div>`;
 
   const draw = () => {
     const q = document.getElementById('search').value.trim().toLowerCase();
-    const decision = document.getElementById('filter').value;
+    const decision = initialDecision;
     const rows = applicants
       .filter((a) => (!q || (a.businessName || '').toLowerCase().includes(q)) && (!decision || a.decision === decision))
       .sort((a, b) => (b.readinessScore ?? -1) - (a.readinessScore ?? -1));
     document.getElementById('list').innerHTML = rows.length === 0
       ? `<div class="empty"><div class="avatar soft">${icon('inbox')}</div>
-          <h3>${applicants.length ? 'No applicants match' : 'No applicants yet'}</h3>
-          <p class="muted" style="margin:4px 0 0">${applicants.length ? 'Try another search or decision.' : 'When a business shares its Finext data with your bank, it appears here.'}</p></div>`
+          <h3>${q ? 'No businesses match your search' : decision ? `No ${esc((DECISIONS[decision] || '').toLowerCase())} applicants` : 'No applicants yet'}</h3>
+          <p class="muted" style="margin:4px 0 0">${q ? 'Check the spelling, or search in All.' : decision ? 'Applicants appear here when their status changes.' : 'When a business shares its Finext data with your bank, it appears here.'}</p></div>`
       : `<table>
           <thead><tr><th>Business</th><th>Readiness</th><th>Decision</th><th class="hide-sm">Shared</th><th class="hide-sm">Access until</th><th aria-hidden="true"></th></tr></thead>
           <tbody>${rows.map((a) => `
@@ -387,8 +479,6 @@ async function renderList(initialDecision = '') {
     });
   };
   document.getElementById('search').addEventListener('input', draw);
-  document.getElementById('filter').addEventListener('change', draw);
-  document.getElementById('filter').value = initialDecision;
   draw();
 }
 
@@ -541,7 +631,7 @@ function decisionPanel(share) {
 }
 
 async function renderApplicant(shareId) {
-  loading();
+  loading('applicant');
   let data;
   try {
     data = await (await api(`/lender/applicants/${encodeURIComponent(shareId)}`)).json();
@@ -608,8 +698,9 @@ function route() {
   if (!lender) return;
   const match = location.hash.match(/^#\/applicant\/([0-9a-f-]{36})$/i);
   const filter = location.hash.match(/^#\/filter\/(new|reviewing|approved|declined)$/);
-  renderNav();
+  const policy = location.hash.match(/^#\/policy\/([a-z]+)$/);
   if (match) renderApplicant(match[1]);
+  else if (policy) renderPolicy(policy[1]);
   else renderList(filter ? filter[1] : '');
 }
 
