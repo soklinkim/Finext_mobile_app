@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
+import { useScrollToError } from './FieldFocus';
+import { FieldLabel } from './FieldLabel';
 import { Icon } from './Icon';
 import { PickerModal, type PickerOption } from './PickerModal';
 import { Text } from './Text';
@@ -20,22 +22,27 @@ interface Props<T extends string | number> {
   fieldBackgroundColor?: string;
   /** 'box' = filled field (default); 'row' = a borderless row inside a card, like TextField's row */
   appearance?: 'box' | 'row';
+  /** Adds a search box to the picker sheet. */
+  searchable?: boolean;
+  /** shows a red * after the label */
+  required?: boolean;
 }
 
 /** Dropdown that opens a PickerModal. */
-export function SelectField<T extends string | number>({ label, placeholder, options, value, onChange, variant = 'field', error, size = 'entry', fieldBackgroundColor, appearance = 'box' }: Props<T>) {
+export function SelectField<T extends string | number>({ label, placeholder, options, value, onChange, variant = 'field', error, size = 'entry', fieldBackgroundColor, appearance = 'box', searchable, required }: Props<T>) {
   const [open, setOpen] = useState(false);
+  const outerRef = useScrollToError(error);
   const dark = useAppTheme();
   const selected = options.find((o) => o.value === value);
   const title = label ?? placeholder ?? '';
 
   if (appearance === 'row') {
     return (
-      <View>
+      <View ref={outerRef}>
         <Pressable accessibilityRole="button" accessibilityLabel={`${title}: ${selected?.label ?? ''}`} onPress={() => setOpen(true)}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12 }}>
           <View style={{ flex: 1, gap: 2 }}>
-            {label ? <Text variant="caption" weight={500} style={{ color: error ? colors.danger : dark ? colors.dark.muted : colors.neutral[600] }}>{label}</Text> : null}
+            {label ? <Text variant="caption" weight={500} style={{ color: error ? colors.danger : dark ? colors.dark.muted : colors.neutral[600] }}>{label}{required ? ' *' : ''}</Text> : null}
             <Text variant="body" weight={500} style={{ color: selected ? (dark ? colors.dark.text : colors.neutral[900]) : colors.neutral[500] }}>
               {selected?.label ?? placeholder}
             </Text>
@@ -43,7 +50,7 @@ export function SelectField<T extends string | number>({ label, placeholder, opt
           <Icon name="chevronDown" size={16} color={dark ? colors.dark.primary : colors.primary[500]} />
         </Pressable>
         {error ? <Text variant="caption" tone="danger" style={{ paddingBottom: 8 }}>{error}</Text> : null}
-        <PickerModal visible={open} title={title} options={options} value={value} onSelect={onChange} onClose={() => setOpen(false)} />
+        <PickerModal visible={open} title={title} options={options} value={value} onSelect={onChange} onClose={() => setOpen(false)} searchable={searchable} />
       </View>
     );
   }
@@ -67,8 +74,8 @@ export function SelectField<T extends string | number>({ label, placeholder, opt
         accessibilityRole="button"
         accessibilityLabel={`${title}: ${selected?.label ?? ''}`}
         onPress={() => setOpen(true)}
-        className={`flex-row items-center justify-between bg-primary-50 ${size === 'form' ? 'rounded-lg' : 'rounded-field'} ${error ? 'border-2 border-danger' : ''}`}
-        style={{ minHeight: size === 'form' ? 40 : 36, paddingHorizontal: size === 'form' ? 20 : 12, paddingVertical: 8, backgroundColor: dark ? colors.dark.field : fieldBackgroundColor ?? colors.primary[50] }}
+        className={`flex-row items-center justify-between bg-primary-50 ${size === 'form' ? 'rounded-lg' : 'rounded-field'}`}
+        style={{ borderWidth: 2, borderColor: error ? colors.danger : 'transparent', minHeight: size === 'form' ? 40 : 36, paddingHorizontal: size === 'form' ? 20 : 12, paddingVertical: 8, backgroundColor: dark ? colors.dark.field : fieldBackgroundColor ?? colors.primary[50] }}
       >
         <Text variant={size === 'form' ? 'body' : 'caption'} tone={selected ? 'primary-900' : 'neutral-500'} weight={selected ? 500 : 300} style={{ flexShrink: 1 }}>
           {selected?.label ?? placeholder}
@@ -78,12 +85,10 @@ export function SelectField<T extends string | number>({ label, placeholder, opt
     );
 
   return (
-    <View style={{ gap: 4 }}>
+    <View ref={outerRef} style={{ gap: 4 }}>
       {label && variant === 'field' ? (
         // Form size matches TextField's form label, so text boxes and drop-downs in one form look alike.
-        <Text variant={size === 'form' ? 'body' : 'micro'} weight={size === 'form' ? 500 : 300} tone={size === 'form' ? 'primary-900' : 'neutral-600'}>
-          {label}
-        </Text>
+        <FieldLabel label={label} required={required} variant={size === 'form' ? 'body' : 'micro'} weight={size === 'form' ? 500 : 300} tone={size === 'form' ? 'primary-900' : 'neutral-600'} />
       ) : null}
       {trigger}
       {error ? (
@@ -91,7 +96,7 @@ export function SelectField<T extends string | number>({ label, placeholder, opt
           {error}
         </Text>
       ) : null}
-      <PickerModal visible={open} title={title} options={options} value={value} onSelect={onChange} onClose={() => setOpen(false)} />
+      <PickerModal visible={open} title={title} options={options} value={value} onSelect={onChange} onClose={() => setOpen(false)} searchable={searchable} />
     </View>
   );
 }

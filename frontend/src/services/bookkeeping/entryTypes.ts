@@ -9,7 +9,7 @@ export type Party = 'customer' | 'supplier';
 
 export type ExtraField =
   | 'cost' // product sale: cost of goods (optional)
-  | 'customerRequired' // deposit
+  | 'customer' // deposit: the customer's name, optional
   | 'lender'
   | 'lenderType'
   | 'term'
@@ -45,7 +45,7 @@ export const ENTRY_TYPES: EntryType[] = [
   // Money in → Sales
   t({ id: 'product_sale', direction: 'in', groupId: 'sales', allowsPayLater: true, party: 'customer', extraFields: ['cost'] }),
   t({ id: 'service_income', direction: 'in', groupId: 'sales', allowsPayLater: true, party: 'customer' }),
-  t({ id: 'customer_deposit', direction: 'in', groupId: 'sales', extraFields: ['customerRequired'] }),
+  t({ id: 'customer_deposit', direction: 'in', groupId: 'sales', extraFields: ['customer'] }),
   // Money in → Other money in
   t({ id: 'loan_received', direction: 'in', groupId: 'otherin', extraFields: ['lender', 'lenderType', 'term', 'repaymentSchedule'] }),
   t({ id: 'owner_capital', direction: 'in', groupId: 'otherin' }),

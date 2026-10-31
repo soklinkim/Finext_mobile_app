@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Button } from '@/components/Button';
 import { Chip, ChipRow } from '@/components/Chip';
 import { ScreenShell } from '@/components/ScreenShell';
+import { SavedEvidenceSection } from '@/components/EvidenceSection';
 import { SelectField } from '@/components/SelectField';
 import { EmptyState, LoadingState } from '@/components/StateViews';
 import { Text } from '@/components/Text';
@@ -157,7 +158,7 @@ export default function EntryScreen() {
 
   const { entry, payments, reversal, linked } = detail;
   const reversed = entry.status === 'reversed';
-  const party = entry.direction === 'in' ? t('entry.customerLabel') : t('entry.supplierLabel');
+  const party = entry.direction === 'in' ? t('entry.customerLabel') : entry.typeId === 'wages' ? t('entry.oweTo') : t('entry.supplierLabel');
   const amountText = entry.direction === 'move' ? formatMoney(entry.amount, entry.currency) : formatMoney(entry.signed, entry.currency);
   const writtenOff = entry.writtenOff ?? 0;
   const paid = entry.openBalance === null ? 0 : entry.amount - entry.openBalance - writtenOff;
@@ -239,6 +240,10 @@ export default function EntryScreen() {
             ))}
           </View>
         )}
+
+        <View style={card}>
+          <SavedEvidenceSection transactionId={entry.id} />
+        </View>
 
         {!reversed && entry.status !== 'reversal' && (
           <View style={{ gap: 8 }}>

@@ -9,11 +9,13 @@ import { seedInitialData } from '@/db/seed';
 import { formatInputDate } from '@/lib/format';
 import type { Bank, BusinessAsset, Category, Settings, Transaction } from '@/db/schema';
 import { emitChange } from './events';
+import { evidenceCounts } from './evidence';
 import { getEntryType, type Direction, type GroupId } from './entryTypes';
 import { convertMinor, type Currency } from './money';
 
 export * from './entryTypes';
 export * from './money';
+export * from './evidence';
 export { subscribeToChanges } from './events';
 export type { Bank, BusinessAsset, Category, Settings, Transaction };
 
@@ -104,6 +106,39 @@ export async function completeOnboarding(input: OnboardingInput): Promise<void> 
 
 export async function listBanks(): Promise<Bank[]> {
   return db.select().from(schema.banks).where(isNull(schema.banks.deletedAt)).all();
+}
+
+export interface LoanOption {
+  /** exactly the name the loan was recorded under; a repayment must carry it to match the loan */
+  name: string;
+  /** still to repay, in the display currency (minor units) */
+  remaining: number;
+  currency: Currency;
+}
+
+/** Loans received so far (not reversed), with what is still to repay, for the "Which loan?" list on a repayment. */
+export async function listLoans(): Promise<LoanOption[]> {
+  const s = await getSettings();
+  const rows = allLive();
+  const { reversed } = relations(rows);
+  const loans = new Map<string, LoanOption>();
+  const inDisplay = (r: Transaction, amount: number) => convertMinor(amount, r.currency, s.displayCurrency, r.exchangeRate);
+  for (const r of rows) {
+    if (r.typeId !== 'loan_received' || reversed.has(r.id)) continue;
+    const meta = metaOf(r);
+    const name = String(meta.lender ?? r.counterparty ?? '').trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    const loan = loans.get(key) ?? { name, remaining: 0, currency: s.displayCurrency };
+    loan.remaining += inDisplay(r, r.amount);
+    loans.set(key, loan);
+  }
+  for (const r of rows) {
+    if (r.typeId !== 'loan_repayment' || reversed.has(r.id)) continue;
+    const loan = loans.get(String(metaOf(r).loanName ?? '').trim().toLowerCase());
+    if (loan) loan.remaining -= inDisplay(r, r.amount - Number(metaOf(r).interest ?? 0));
+  }
+  return [...loans.values()];
 }
 
 export async function addBank(name: string, kind: Bank['kind'] = 'bank'): Promise<Bank> {
@@ -277,6 +312,8 @@ export interface TransactionView {
   openBalance: number | null;
   /** pay-later entries only: amount written off because the customer will not pay */
   writtenOff: number | null;
+  /** how many evidence photos are attached */
+  evidenceCount: number;
 }
 
 /** "Mark as paid" and "Reverse" (spec: Actions) are recorded as their own entries linked to the original. */
@@ -309,7 +346,7 @@ function relations(rows: Transaction[]) {
     paid.set(settles, (paid.get(settles) ?? 0) + r.amount);
     if (r.typeId === WRITE_OFF_TYPE) writtenOff.set(settles, (writtenOff.get(settles) ?? 0) + r.amount);
   }
-  return { reversed, paid, writtenOff };
+  return { reversed, paid, writtenOff, evidence: evidenceCounts() };
 }
 type Relations = ReturnType<typeof relations>;
 
@@ -345,6 +382,7 @@ function toView(
     status: reversed ? 'reversed' : t.typeId === REVERSAL_TYPE ? 'reversal' : isPayment(t) ? 'payment' : t.typeId === WRITE_OFF_TYPE ? 'writeOff' : null,
     openBalance: owedOn ? Math.max(0, t.amount - (rel?.paid.get(t.id) ?? 0)) : null,
     writtenOff: owedOn ? (rel?.writtenOff.get(t.id) ?? 0) : null,
+    evidenceCount: rel?.evidence.get(t.id) ?? 0,
   };
 }
 
@@ -398,6 +436,8 @@ export async function listActiveDays(year: number, month: number): Promise<numbe
 export interface SearchQuery {
   text?: string;
   categoryId?: string | null;
+  /** one entry type, e.g. 'product_sale' or 'rent' */
+  typeId?: string | null;
   /** inclusive day */
   date?: Date | null;
   direction?: 'in' | 'out';
@@ -407,6 +447,7 @@ export async function searchTransactions(q: SearchQuery): Promise<TransactionVie
   const conds = [live()];
   if (q.direction) conds.push(eq(schema.transactions.direction, q.direction));
   if (q.categoryId) conds.push(eq(schema.transactions.categoryId, q.categoryId));
+  if (q.typeId) conds.push(eq(schema.transactions.typeId, q.typeId));
   if (q.text?.trim()) {
     const like$ = `%${q.text.trim()}%`;
     conds.push(or(like(schema.transactions.title, like$), like(schema.transactions.note, like$), like(schema.transactions.counterparty, like$))!);
@@ -496,22 +537,6 @@ export async function getPeriodTotals(period: RollingPeriod): Promise<{ moneyIn:
   return { moneyIn, moneyOut, currency: s.displayCurrency };
 }
 
-/** Food & groceries spend over the last 7 days (Quick Analysis "Food Last Week"), display currency, positive. */
-export async function getFoodSpendLastWeek(): Promise<{ amount: number; currency: Currency }> {
-  const s = await getSettings();
-  const from = Date.now() - 7 * DAY;
-  const cats = new Map(db.select().from(schema.categories).all().map((c) => [c.id, c]));
-  let amount = 0;
-  const rows = allLive();
-  const rel = relations(rows);
-  for (const t of rows) {
-    if (t.direction !== 'out' || t.occurredAt < from || !t.categoryId || !countsAsIncomeOrSpend(t, rel)) continue;
-    const name = cats.get(t.categoryId)?.name;
-    if (name === 'Food' || name === 'Groceries') amount += convertMinor(t.amount, t.currency, s.displayCurrency, t.exchangeRate);
-  }
-  return { amount, currency: s.displayCurrency };
-}
-
 // ---------------------------------------------------------------- bookkeeping overview (grouped list for a month)
 
 export interface OverviewGroup {
@@ -521,9 +546,17 @@ export interface OverviewGroup {
 }
 
 export async function getMonthOverview(year: number, month: number): Promise<{ currency: Currency; groups: OverviewGroup[] }> {
+  return getMonthsOverview([year * 12 + month]);
+}
+
+/** The overview for one or several months (keys are year * 12 + month; they need not be next to each other). Totals add up across all of them. */
+export async function getMonthsOverview(monthKeys: number[]): Promise<{ currency: Currency; groups: OverviewGroup[] }> {
   const s = await getSettings();
-  const start = new Date(year, month, 1).getTime();
-  const end = new Date(year, month + 1, 1).getTime() - 1;
+  const keys = new Set(monthKeys);
+  const first = Math.min(...monthKeys);
+  const last = Math.max(...monthKeys);
+  const start = new Date(Math.floor(first / 12), first % 12, 1).getTime();
+  const end = new Date(Math.floor(last / 12), (last % 12) + 1, 1).getTime() - 1;
   const { cats, banks, rel } = lookups();
   const rows = db
     .select()
@@ -533,6 +566,8 @@ export async function getMonthOverview(year: number, month: number): Promise<{ c
     .all();
   const groups = new Map<GroupId, OverviewGroup>();
   for (const r of rows) {
+    const when = new Date(r.occurredAt);
+    if (!keys.has(when.getFullYear() * 12 + when.getMonth())) continue; // a month between the chosen ones that was not chosen
     if (r.direction === 'move') continue; // transfers are not counted
     if (!countsAsIncomeOrSpend(r, rel)) continue; // payments, reversals and reversed entries
     const gid = (getEntryType(r.typeId)?.groupId ?? (r.direction === 'in' ? 'sales' : 'monthly')) as GroupId;
@@ -749,7 +784,7 @@ export interface AddTransactionInput {
   };
 }
 
-export type ValidationErrors = Partial<Record<'amount' | 'bank' | 'toBank' | 'counterparty' | 'note' | 'payMethod' | 'assetName' | 'usefulLife' | 'lender' | 'interest' | 'date' | 'term' | 'rate' | 'rateType' | 'firstDue', string>>;
+export type ValidationErrors = Partial<Record<'amount' | 'bank' | 'toBank' | 'counterparty' | 'note' | 'payMethod' | 'assetName' | 'usefulLife' | 'lender' | 'loanName' | 'interest' | 'date' | 'term' | 'rate' | 'rateType' | 'firstDue', string>>;
 
 export type AddResult = { ok: true; id: string } | { ok: false; errors: ValidationErrors };
 
@@ -761,11 +796,11 @@ export function validateTransaction(input: AddTransactionInput): ValidationError
   if (!(input.amount > 0)) e.amount = 'error.amountPositive';
   if (input.payMethod === 'later' && !type.allowsPayLater) e.payMethod = 'error.payLaterNotAllowed';
   if (input.payMethod === 'later' && !input.counterparty?.trim()) e.counterparty = 'error.partyRequired';
-  if (type.extraFields.includes('customerRequired') && !input.counterparty?.trim()) e.counterparty = 'error.partyRequired';
   if (type.extraFields.includes('noteRequired') && !input.note?.trim()) e.note = 'error.noteRequired';
   if (type.extraFields.includes('assetName') && !input.meta?.assetName?.trim()) e.assetName = 'error.required';
   if (type.extraFields.includes('usefulLife') && !(input.meta?.usefulLifeYears && input.meta.usefulLifeYears > 0)) e.usefulLife = 'error.required';
   if (type.extraFields.includes('lender') && !input.meta?.lender?.trim()) e.lender = 'error.required';
+  if (type.extraFields.includes('loanName') && !input.meta?.loanName?.trim()) e.loanName = 'error.required';
   if (input.typeId === 'loan_repayment' && (input.meta?.interest ?? 0) > input.amount) e.interest = 'error.interestTooHigh';
   if (type.extraFields.includes('term')) {
     const term = input.meta?.termMonths ?? 0;
@@ -824,6 +859,34 @@ export async function addTransaction(input: AddTransactionInput): Promise<AddRes
 function defaultTitle(typeId: string): string {
   const s = typeId.replace(/_/g, ' ');
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/**
+ * Erase everything on this device (entries, accounts, photos, settings) and set up a fresh, empty ledger.
+ * Used when a different account takes over a device that still holds another account's data.
+ */
+export async function resetLocalData(): Promise<void> {
+  db.delete(schema.entryAttachments).run();
+  db.delete(schema.transactions).run();
+  db.delete(schema.businessAssets).run();
+  db.delete(schema.budgets).run();
+  db.delete(schema.onboardingFinancialEntries).run();
+  db.delete(schema.categories).run();
+  db.delete(schema.banks).run();
+  db.delete(schema.settings).run();
+  seedInitialData(Date.now());
+  emitChange();
+}
+
+/** The business currency can be switched only while nothing is recorded in it: no entries, opening balances, budgets or figures. */
+export async function canChangeCurrency(): Promise<boolean> {
+  const t = schema;
+  return (
+    db.select({ id: t.transactions.id }).from(t.transactions).where(isNull(t.transactions.deletedAt)).limit(1).all().length === 0 &&
+    db.select({ id: t.businessAssets.id }).from(t.businessAssets).where(isNull(t.businessAssets.deletedAt)).limit(1).all().length === 0 &&
+    db.select({ id: t.budgets.id }).from(t.budgets).where(isNull(t.budgets.deletedAt)).limit(1).all().length === 0 &&
+    db.select({ id: t.onboardingFinancialEntries.id }).from(t.onboardingFinancialEntries).where(isNull(t.onboardingFinancialEntries.deletedAt)).limit(1).all().length === 0
+  );
 }
 
 // ---------------------------------------------------------------- dev helpers

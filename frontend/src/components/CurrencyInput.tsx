@@ -1,5 +1,7 @@
 import { useRef, useState, type ComponentRef } from 'react';
 import { Platform, Pressable, TextInput, View } from 'react-native';
+import { useScrollToError } from './FieldFocus';
+import { FieldLabel } from './FieldLabel';
 import { Text } from './Text';
 import { colors, fontFamily, shadow } from '@/theme';
 import { useI18n } from '@/i18n';
@@ -38,7 +40,8 @@ interface Props {
   text: string;
   currency: Currency;
   onChangeText: (t: string) => void;
-  onChangeCurrency: (c: Currency) => void;
+  /** Omit when the business uses a single currency: the KHR | USD switch is then not shown. */
+  onChangeCurrency?: (c: Currency) => void;
   rate: number;
   error?: string;
 }
@@ -53,18 +56,19 @@ export function CurrencyInput({ label, text, currency, onChangeText, onChangeCur
   const dark = useAppTheme();
   const input = useRef<ComponentRef<typeof TextInput>>(null);
   const [focused, setFocused] = useState(false);
+  const outerRef = useScrollToError(error, { focus: () => input.current?.focus(), skip: focused });
   const minor = parseAmountInput(text, currency);
   const symbol = currency === 'USD' ? '$' : '៛';
   const khrSymbolFont = fontFamily(500, 'km'); // Poppins has no ៛ glyph (§6.20)
   const borderColor = error ? colors.danger : focused ? colors.primary[500] : dark ? colors.dark.border : colors.primary[200];
   const amountColor = dark ? colors.dark.text : colors.primary[900];
   return (
-    <View style={{ gap: 8 }}>
+    <View ref={outerRef} style={{ gap: 8 }}>
       <View className="flex-row items-center justify-between" style={{ gap: 12 }}>
-        <Text variant="body" tone="primary-900" weight={500} style={{ fontSize: 14 }}>
-          {label}
-        </Text>
-        <CurrencySwitch value={currency} onChange={onChangeCurrency} />
+        <View style={{ flexShrink: 1 }}>
+          <FieldLabel label={label} variant="body" tone="primary-900" weight={500} style={{ fontSize: 14 }} />
+        </View>
+        {onChangeCurrency ? <CurrencySwitch value={currency} onChange={onChangeCurrency} /> : null}
       </View>
       <Pressable
         accessible={false}

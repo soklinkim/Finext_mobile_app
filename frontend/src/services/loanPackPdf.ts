@@ -8,6 +8,7 @@ import type { FutureRisk, RatioSnapshot, Statements } from '@/services/analysis'
 import { formatMoneyWhole } from '@/services/bookkeeping';
 import { formatBenchmark, formatRatio } from '@/services/ratioFormat';
 import { adviceText, driverValue, percent, reasonText } from '@/services/riskText';
+import { WATERMARK_CSS, WATERMARK_HTML } from '@/services/finextMark';
 import { STATEMENT_CSS, esc, statementSection } from '@/services/statementPdf';
 
 type Translate = (key: TKey, params?: Record<string, string | number>) => string;
@@ -25,7 +26,7 @@ const STATUS_COLOR = { green: '#16a34a', yellow: '#d97706', red: '#dc2626', not_
 
 const PACK_CSS = `
     .page { page-break-after: always; }
-    .page:last-child { page-break-after: auto; }
+    .page:last-of-type { page-break-after: auto; }
     h1 { font-size: 16pt; margin: 0 0 4px; letter-spacing: 0.5px; }
     h2 { font-size: 12pt; margin: 22px 0 8px; }
     .muted { color: #555; font-size: 9pt; }
@@ -114,5 +115,5 @@ export function loanPackHtml(input: LoanPackInput): string {
     ...[statements.income, statements.balance, statements.cashflow].map((s) => `<section class="page">${statementSection(s, statements.business)}</section>`),
   ].filter(Boolean);
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(input.t('pack.pdfTitle'))} — ${esc(statements.business)}</title>
-    <style>${STATEMENT_CSS}${PACK_CSS}</style></head><body>${pages.join('')}</body></html>`;
+    <style>${STATEMENT_CSS}${PACK_CSS}${WATERMARK_CSS}</style></head><body>${pages.join('')}${WATERMARK_HTML}</body></html>`;
 }

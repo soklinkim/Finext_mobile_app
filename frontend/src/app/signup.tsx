@@ -10,12 +10,13 @@ import { Text } from '@/components/Text';
 import { TextField } from '@/components/TextField';
 import { useI18n, type TKey } from '@/i18n';
 import { isOnline } from '@/services/network';
-import { signUp } from '@/services/auth';
+import { LedgerConflictNotice } from '@/components/LedgerConflictNotice';
+import { LocalLedgerOwnedError, signUp } from '@/services/auth';
 import { updateSettings } from '@/services/bookkeeping';
 import { colors } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
 
-type SignupStep = 0 | 1 | 2;
+type SignupStep = 0 | 1;
 type SummaryRow = { label: string; value: string };
 
 function SummarySection({ title, rows, onEdit, editLabel }: { title: string; rows: SummaryRow[]; onEdit: () => void; editLabel: string }) {
@@ -35,14 +36,14 @@ function SummarySection({ title, rows, onEdit, editLabel }: { title: string; row
   );
 }
 
-const STEPS: TKey[] = ['auth.stepYou', 'auth.stepBusiness', 'auth.stepReview'];
+const STEPS: TKey[] = ['auth.stepBusiness', 'auth.stepReview'];
 
-/** Where the owner is in sign-up: three labelled segments, done and current ones filled. */
+/** Where the owner is in sign-up: two labelled segments, done and current ones filled. */
 function StepBar({ step }: { step: SignupStep }) {
   const { t } = useI18n();
   const dark = useAppTheme();
   return (
-    <View accessibilityRole="progressbar" accessibilityLabel={t('auth.stepProgress', { current: step + 1, total: 3 })} className="flex-row" style={{ gap: 8 }}>
+    <View accessibilityRole="progressbar" accessibilityLabel={t('auth.stepProgress', { current: step + 1, total: 2 })} className="flex-row" style={{ gap: 8 }}>
       {STEPS.map((label, index) => (
         <View key={label} style={{ flex: 1, gap: 6 }}>
           <View style={{ height: 6, borderRadius: 99, backgroundColor: index <= step ? colors.primary[500] : dark ? colors.dark.field : colors.neutral[200] }} />
@@ -55,7 +56,7 @@ function StepBar({ step }: { step: SignupStep }) {
   );
 }
 
-/** Multi-step signup: personal details, business details, then a review before continuing. */
+/** Sign-up in two steps: the owner and business details together, then a review before continuing. */
 export default function Signup() {
   const router = useRouter();
   const { t } = useI18n();
@@ -65,9 +66,13 @@ export default function Signup() {
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirm: '' });
   const [business, setBusiness] = useState<BusinessProfileValues>(EMPTY_PROFILE);
   const [agree, setAgree] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [authError, setAuthError] = useState<string>();
+  const [emailTaken, setEmailTaken] = useState(false);
+  // This device still holds another account's offline data: the account is not created until the owner chooses.
+  const [deviceOwned, setDeviceOwned] = useState(false);
   const [authNotice, setAuthNotice] = useState<string>();
   const [confirmationPending, setConfirmationPending] = useState(false);
   const set = (key: keyof typeof form) => (value: string) => setForm((current) => ({ ...current, [key]: value }));
@@ -88,20 +93,19 @@ export default function Signup() {
   const personalValid = Object.values(personalErrors).every((error) => !error);
   const businessValid = Object.values(businessErrors).every((error) => !error);
   const optional = (value: string) => value.trim() || '—';
+  // Open eye = the password is showing; crossed eye = hidden. One switch shows or hides both password fields.
+  const eye = (
+    <Pressable accessibilityRole="button" accessibilityLabel={t('auth.togglePassword')} accessibilityState={{ checked: showPassword }} onPress={() => setShowPassword((v) => !v)} hitSlop={10}>
+      <Icon name={showPassword ? 'eye' : 'eyeOff'} size={20} />
+    </Pressable>
+  );
   const passwordsMatch = form.password.length > 0 && form.confirm.length > 0 && form.password === form.confirm;
 
-  const nextFromPersonal = () => {
+  const next = () => {
     setSubmitted(true);
-    if (!personalValid) return;
+    if (!personalValid || !businessValid) return;
     setSubmitted(false);
     setStep(1);
-  };
-
-  const nextFromBusiness = () => {
-    setSubmitted(true);
-    if (!businessValid) return;
-    setSubmitted(false);
-    setStep(2);
   };
 
   const confirm = async () => {
@@ -110,6 +114,8 @@ export default function Signup() {
       return;
     }
     setAuthError(undefined);
+    setEmailTaken(false);
+    setDeviceOwned(false);
     setAuthNotice(undefined);
     setSaving(true);
     try {
@@ -123,6 +129,7 @@ export default function Signup() {
           ownerName: form.name.trim(),
           ownerEmail: form.email.trim(),
           ownerPhone: form.phone.trim(),
+          contact: form.phone.trim(),
         });
         setConfirmationPending(true);
         setAuthNotice('Your account was created. Check your email to confirm it, then log in.');
@@ -133,9 +140,15 @@ export default function Signup() {
         ownerName: form.name.trim(),
         ownerEmail: form.email.trim(),
         ownerPhone: form.phone.trim(),
+          contact: form.phone.trim(),
       });
       router.replace('/onboarding/language');
         } catch (e) {
+      // An expected case with its own notice below: not an error worth a red console message.
+      if (e instanceof LocalLedgerOwnedError) {
+        setDeviceOwned(true);
+        return;
+      }
       console.error('signup confirm failed', e);
       // Offline, Supabase only says "Failed to fetch": say what is wrong instead.
       const message = !(await isOnline()) ? t('security.needsConnection') : e instanceof Error ? e.message : 'Unable to create your account. Please try again.';
@@ -146,6 +159,7 @@ export default function Signup() {
             ownerName: form.name.trim(),
             ownerEmail: form.email.trim(),
             ownerPhone: form.phone.trim(),
+          contact: form.phone.trim(),
           });
           setConfirmationPending(true);
           setAuthNotice('A confirmation email was recently requested. Check your inbox and spam folder; wait before requesting another.');
@@ -155,14 +169,24 @@ export default function Signup() {
           return;
         }
       }
-      setAuthError(message);
+      // Supabase says "User already registered" when this EMAIL already has a Finext account. It has nothing to do with
+      // whether the business is registered with the government (that answer is not sent when signing up).
+      if (/already (been )?registered|already exists/i.test(message)) {
+        setEmailTaken(true);
+        setAuthError(t('auth.emailTaken'));
+      } else {
+        setAuthError(message);
+      }
     } finally {
       setSaving(false);
     }
   };
 
-  const titleKey: TKey = step === 0 ? 'auth.personalDetails' : step === 1 ? 'auth.businessDetails' : 'auth.reviewDetails';
-  const businessRows: SummaryRow[] = [
+  const titleKey: TKey = step === 0 ? 'auth.businessDetails' : 'auth.reviewDetails';
+  const detailRows: SummaryRow[] = [
+    { label: t('auth.ownerName'), value: optional(form.name) },
+    { label: t('auth.email'), value: optional(form.email) },
+    { label: t('auth.businessContact'), value: optional(form.phone) },
     { label: t('profile.businessName'), value: optional(business.businessName) },
     { label: t('profile.industry'), value: business.businessIndustry ? t(`industry.${business.businessIndustry}` as TKey) : '—' },
     { label: t('profile.registration'), value: business.registrationStatus === 'registered' ? t('profile.registered') : business.registrationStatus === 'unregistered' ? t('profile.unregistered') : '—' },
@@ -179,24 +203,38 @@ export default function Signup() {
         <Text variant="title" weight={700} tone="primary-900">{t(titleKey)}</Text>
         {step === 0 && (
           <>
-            <TextField variant="form" label={t('auth.fullName')} value={form.name} onChangeText={set('name')} placeholder={t('auth.namePlaceholder')} autoComplete="name"
+            <TextField variant="form" label={t('auth.ownerName')} required value={form.name} onChangeText={set('name')} placeholder={t('auth.namePlaceholder')} autoComplete="name"
               left={<Icon name="user" size={18} color={iconColor} />} error={submitted ? personalErrors.name : undefined} />
-            <TextField variant="form" label={t('auth.email')} value={form.email} onChangeText={set('email')} placeholder="example@example.com" autoCapitalize="none" keyboardType="email-address" autoComplete="email"
+            <TextField variant="form" label={t('auth.email')} required value={form.email} onChangeText={set('email')} placeholder="example@example.com" autoCapitalize="none" keyboardType="email-address" autoComplete="email"
               left={<Icon name="mail" size={18} color={iconColor} />} error={submitted ? personalErrors.email : undefined} />
-            <TextField variant="form" label={t('auth.mobile')} value={form.phone} onChangeText={set('phone')} placeholder="012 345 678" keyboardType="phone-pad" autoComplete="tel"
+            <TextField variant="form" label={t('auth.businessContact')} required value={form.phone} onChangeText={set('phone')} placeholder="012 345 678" keyboardType="phone-pad" autoComplete="tel"
               left={<Icon name="phone" size={18} color={iconColor} />} error={submitted ? personalErrors.phone : undefined} />
-            <TextField variant="form" label={t('auth.password')} value={form.password} onChangeText={set('password')} placeholder="••••••••" secureTextEntry autoComplete="new-password"
-              left={<Icon name="lock" size={18} color={iconColor} />} error={submitted ? personalErrors.password : undefined} />
+            <BusinessProfileForm
+              values={business}
+              onChange={(patch) => setBusiness((current) => ({ ...current, ...patch }))}
+              showStartDate={false}
+              showContact={false}
+              showOwner={false}
+              errors={submitted ? businessErrors : {}}
+            />
+            <TextField variant="form" label={t('auth.password')} required value={form.password} onChangeText={set('password')} placeholder={t('auth.enterPassword')} secureTextEntry={!showPassword} autoComplete="new-password"
+              left={<Icon name="lock" size={18} color={iconColor} />} right={eye} error={submitted ? personalErrors.password : undefined} />
             <TextField
               variant="form"
               label={t('auth.confirmPassword')}
+              required
               value={form.confirm}
               onChangeText={set('confirm')}
-              placeholder="••••••••"
-              secureTextEntry
+              placeholder={t('auth.enterPasswordAgain')}
+              secureTextEntry={!showPassword}
               autoComplete="new-password"
               left={<Icon name="lock" size={18} color={iconColor} />}
-              right={passwordsMatch ? <Icon name="check" size={18} color={colors.success} /> : undefined}
+              right={(
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  {passwordsMatch ? <Icon name="check" size={18} color={colors.success} /> : null}
+                  {eye}
+                </View>
+              )}
               error={submitted || form.confirm.length > 0 ? personalErrors.confirm : undefined}
             />
             {passwordsMatch ? <Text variant="caption" style={{ color: colors.success }}>{t('auth.passwordsMatch')}</Text> : null}
@@ -212,7 +250,7 @@ export default function Signup() {
               </Pressable>
               {submitted && personalErrors.terms ? <Text variant="caption" tone="danger">{personalErrors.terms}</Text> : null}
             </View>
-            <Button label={t('common.next')} trailingIcon="chevronRight" onPress={nextFromPersonal} />
+            <Button label={t('common.next')} trailingIcon="chevronRight" onPress={next} />
             <Text variant="body-sm" tone="neutral-600" style={{ textAlign: 'center' }}>
               {t('auth.haveAccountPrompt')}{' '}
               <Text variant="body-sm" weight={700} tone="primary-500" onPress={() => router.push('/login')} accessibilityRole="link">{t('auth.loginLink')}</Text>
@@ -222,44 +260,24 @@ export default function Signup() {
 
         {step === 1 && (
           <>
-            <BusinessProfileForm
-              values={business}
-              onChange={(patch) => setBusiness((current) => ({ ...current, ...patch }))}
-              showStartDate={false}
-              showContact={false}
-              showOwner={false}
-              errors={submitted ? businessErrors : {}}
-            />
-            <View className="flex-row items-center justify-between" style={{ gap: 16, paddingTop: 8 }}>
-              <Button variant="soft" label={t('common.back')} onPress={() => { setSubmitted(false); setStep(0); }} />
-              <Button label={t('common.next')} onPress={nextFromBusiness} />
-            </View>
-          </>
-        )}
-
-        {step === 2 && (
-          <>
             <Text variant="body-sm" tone="neutral-600">{t('auth.reviewHint')}</Text>
             {authError ? <Text variant="caption" tone="danger">{authError}</Text> : null}
+            {emailTaken ? (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
+                <Text variant="caption" weight={600} tone="primary-500" accessibilityRole="link" onPress={() => router.replace('/login')}>{t('auth.goToLogin')}</Text>
+                <Text variant="caption" weight={600} tone="primary-500" accessibilityRole="link" onPress={() => setStep(0)}>{t('auth.changeEmail')}</Text>
+              </View>
+            ) : null}
+            {deviceOwned ? <LedgerConflictNotice onErased={() => { setDeviceOwned(false); void confirm(); }} /> : null}
             {authNotice ? <Text variant="caption" tone="neutral-600">{authNotice}</Text> : null}
-            <SummarySection
-              title={t('auth.personalDetails')}
-              editLabel={t('auth.editDetails')}
-              onEdit={() => setStep(0)}
-              rows={[
-                { label: t('auth.fullName'), value: optional(form.name) },
-                { label: t('auth.email'), value: optional(form.email) },
-                { label: t('auth.mobile'), value: optional(form.phone) },
-              ]}
-            />
             <SummarySection
               title={t('auth.businessDetails')}
               editLabel={t('auth.editDetails')}
-              onEdit={() => setStep(1)}
-              rows={businessRows}
+              onEdit={() => setStep(0)}
+              rows={detailRows}
             />
             <View className="flex-row items-center justify-between" style={{ gap: 12, paddingTop: 8 }}>
-              {!confirmationPending ? <Button variant="soft" label={t('common.back')} onPress={() => setStep(1)} /> : null}
+              {!confirmationPending ? <Button variant="soft" label={t('common.back')} onPress={() => setStep(0)} /> : null}
               <Button
                 label={confirmationPending ? t('auth.backToLogin') : t('auth.confirmAndContinue')}
                 loading={saving}

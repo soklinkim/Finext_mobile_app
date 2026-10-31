@@ -10,7 +10,7 @@ import { PaperStatement } from '@/components/PaperStatement';
 import { PdfPreview } from '@/components/PdfPreview';
 import { Text } from '@/components/Text';
 import { useAnalysisQuery } from '@/hooks/useAnalysisQuery';
-import { useI18n, type TKey } from '@/i18n';
+import { StandardTerms, useI18n, type TKey } from '@/i18n';
 import { getStatements, type Statement, type StatementKind, type StatementPeriod } from '@/services/analysis';
 import { formatMoneyWhole } from '@/services/bookkeeping';
 import { statementHtml } from '@/services/statementPdf';
@@ -25,6 +25,15 @@ const REPORT_NAME: Record<StatementPeriod, TKey> = { weekly: 'stmt.weekly', mont
 
 /** Income Statement / Balance Sheet / Cash Flow (§6.29). Data comes from the analysis service and is cached for offline use. */
 export default function StatementScreen() {
+  // Statements are formal documents: standard accounting terms even when the app is set to plain language.
+  return (
+    <StandardTerms>
+      <StatementContent />
+    </StandardTerms>
+  );
+}
+
+function StatementContent() {
   const { t, term } = useI18n();
   const { kind: kindParam, period: periodParam } = useLocalSearchParams<{ kind?: string; period?: string }>();
   const kind: StatementKind = kindParam === 'balance' || kindParam === 'cashflow' ? kindParam : 'income';

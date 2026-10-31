@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Button } from '@/components/Button';
 import { Chip, ChipRow } from '@/components/Chip';
 import { CurrencyInput } from '@/components/CurrencyInput';
+import { DraftEvidenceSection, type DraftEvidence } from '@/components/EvidenceSection';
 import { DateInput } from '@/components/DateInput';
 import { GroupCard } from '@/components/GroupCard';
 import { Icon } from '@/components/Icon';
@@ -15,6 +16,7 @@ import { SelectField } from '@/components/SelectField';
 import { Text } from '@/components/Text';
 import { TextField } from '@/components/TextField';
 import { useLocalQuery } from '@/hooks/useLocalQuery';
+import { formatInputDate } from '@/lib/format';
 import { useI18n, type TKey } from '@/i18n';
 import { colors } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
@@ -31,7 +33,8 @@ import {
   groupsFor,
   GROUPS,
   listBanks,
-  listCategories,
+  listLoans,
+  addEvidence,
   parseAmountInput,
   validateTransaction,
   type AddTransactionInput,
@@ -43,13 +46,15 @@ import {
 type Pay = 'cash' | 'bank' | 'later';
 
 /** Add an entry — Money in | Money out | Move money (FINEXT_APP_MODULES §3.8). Writes to the local DB only; works offline. */
+const OTHER_LENDER = '__other__';
+
 export default function AddEntry() {
   const router = useRouter();
   const { t } = useI18n();
   const dark = useAppTheme();
   const { data: settings } = useLocalQuery(getSettings, []);
   const { data: banks } = useLocalQuery(listBanks, []);
-  const { data: categories } = useLocalQuery(() => listCategories(), []);
+  const { data: loans } = useLocalQuery(listLoans, []);
   const { data: balances } = useLocalQuery(getAccountBalances, []);
 
   const [direction, setDirection] = useState<Direction>('in');
@@ -60,12 +65,16 @@ export default function AddEntry() {
   const [pay, setPay] = useState<Pay>('cash');
   const [bankId, setBankId] = useState<string | null>(null);
   const [toBankId, setToBankId] = useState<string | null>(null);
-  const [categoryId, setCategoryId] = useState<string | null>(null);
+  // Entries are classified by their type (Product sale, Rent...); the old free-form categories are no longer picked here.
+  const categoryId: string | null = null;
   const [party, setParty] = useState('');
   const [note, setNote] = useState('');
   const [costText, setCostText] = useState('');
   const [lender, setLender] = useState('');
   const [lenderType, setLenderType] = useState<'bank_mfi' | 'informal'>('bank_mfi');
+  // A bank / MFI loan picks the lender from the bank list, or "Other" to type a name that is not listed.
+  const [lenderBank, setLenderBank] = useState<string | null>(null);
+  const [otherLender, setOtherLender] = useState('');
   const [termText, setTermText] = useState('12');
   const [rateText, setRateText] = useState('');
   const [rateType, setRateType] = useState<'flat' | 'declining' | null>(null);
@@ -76,6 +85,7 @@ export default function AddEntry() {
   const [assetName, setAssetName] = useState('');
   const [usefulLife, setUsefulLife] = useState('');
   const [loanName, setLoanName] = useState('');
+  const [evidence, setEvidence] = useState<DraftEvidence[]>([]);
   const [interestText, setInterestText] = useState('');
   const [attempted, setAttempted] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -115,6 +125,12 @@ export default function AddEntry() {
     setAttempted(false);
   };
 
+  // The books track each loan by a name: the typed lender for informal loans, or the chosen bank plus the date, so two loans
+  // from the same bank on different days stay apart.
+  const hasLenderType = !!type?.extraFields.includes('lenderType');
+  const bankLenderBase = lenderBank === OTHER_LENDER ? otherLender.trim() : (lenderBank ?? '');
+  const lenderName = hasLenderType && lenderType === 'bank_mfi' ? (bankLenderBase ? `${bankLenderBase} · ${formatInputDate(dateMs ?? Date.now())}` : '') : lender;
+
   // The entry exactly as it would be saved; used for the live preview, validation and saving.
   const input: AddTransactionInput | null = type
     ? {
@@ -126,12 +142,12 @@ export default function AddEntry() {
         toBankId: type.direction === 'move' ? toBankId : null,
         categoryId,
         title: t(`type.${type.id}` as TKey),
-        counterparty: party || lender,
+        counterparty: party || lenderName,
         note,
         occurredAt: dateMs ?? undefined, // addTransaction uses "now" when no date is picked
         meta: {
           cost: costText ? parseAmountInput(costText, currency) : undefined,
-          lender: lender || undefined,
+          lender: lenderName || undefined,
           lenderType: type.extraFields.includes('lenderType') ? lenderType : undefined,
           termMonths: type.extraFields.includes('term') ? (termText ? Number(termText) : 0) : undefined,
           // Loan fields from the AI pipeline spec; the lender's instalment is optional (estimated if blank).
@@ -154,6 +170,7 @@ export default function AddEntry() {
   const errors: ValidationErrors & { type?: string } = !attempted ? {} : input ? validateTransaction(input) : { type: 'error.chooseType' };
   const err = (k: keyof ValidationErrors) => (errors[k] ? t(errors[k] as TKey) : undefined);
 
+  const lenderBankOptions = (banks ?? []).filter((b) => b.kind === 'bank').map((b) => ({ value: b.name, label: b.name }));
   const accountOptions = (banks ?? []).map((b) => ({ value: b.id, label: b.name }));
 
   // Only preview a complete entry: e.g. "Pay later" before the customer is typed would be rejected by the server.
@@ -180,7 +197,10 @@ export default function AddEntry() {
     const result = await addTransaction(input);
     setSaving(false);
     // Close this page and land on the Bookkeeping tab already open underneath (replace would stack a second set of tabs).
-    if (result.ok) router.dismissTo('/bookkeeping');
+    if (result.ok) {
+      if (evidence.length > 0) await addEvidence(result.id, evidence);
+      router.dismissTo('/bookkeeping');
+    }
   };
 
   // ------------------------------------------------------------------ pieces
@@ -252,7 +272,7 @@ export default function AddEntry() {
       {pay === 'bank' && <SelectField label={t('entry.account')} options={accountOptions.filter((o) => nonCash.some((b) => b.id === o.value))} value={bankId} onChange={setBankId} error={err('bank')} />}
       {pay === 'later' && (
         <View style={{ gap: 8 }}>
-          <TextField label={type.party === 'supplier' ? t('entry.supplier') : t('entry.customer')} value={party} onChangeText={setParty} error={err('counterparty')} />
+          <TextField label={type.id === 'wages' ? t('entry.oweTo') : type.party === 'supplier' ? t('entry.supplier') : t('entry.customer')} value={party} onChangeText={setParty} error={err('counterparty')} />
           <Text variant="micro" weight={300} tone="neutral-600">{t('entry.paymentTerms')}</Text>
           <ChipRow>
             {[7, 15, 30, 60].map((days) => (
@@ -269,14 +289,13 @@ export default function AddEntry() {
 
   const extras = type && (
     <View style={{ gap: 12 }}>
-      {type.extraFields.includes('customerRequired') && <TextField label={t('entry.customer')} value={party} onChangeText={setParty} error={err('counterparty')} />}
+      {type.extraFields.includes('customer') && <TextField label={t('entry.customerOptional')} value={party} onChangeText={setParty} error={err('counterparty')} />}
       {type.extraFields.includes('cost') && (
         <View style={{ gap: 4 }}>
           <TextField label={t('entry.cost')} value={costText} onChangeText={(v) => setCostText(v.replace(/[^0-9.,]/g, ''))} keyboardType="decimal-pad" placeholder={t('entry.costHint')} />
           <Text variant="micro" weight={300} tone="neutral-600">{t('entry.costHelp')}</Text>
         </View>
       )}
-      {type.extraFields.includes('lender') && <TextField label={t('entry.lender')} value={lender} onChangeText={setLender} error={err('lender')} />}
       {type.extraFields.includes('lenderType') && (
         <View style={{ gap: 6 }}>
           <Text variant="body" weight={500} tone="primary-900" style={{ fontSize: 14 }}>
@@ -287,6 +306,23 @@ export default function AddEntry() {
             <Chip label={t('entry.informal')} selected={lenderType === 'informal'} onPress={() => setLenderType('informal')} />
           </ChipRow>
         </View>
+      )}
+      {type.extraFields.includes('lender') && hasLenderType && lenderType === 'bank_mfi' && (
+        <>
+          <SelectField
+            label={t('entry.lenderBank')}
+            placeholder={t('profile.select')}
+            searchable
+            options={[...lenderBankOptions, { value: OTHER_LENDER, label: t('entry.otherLender') }]}
+            value={lenderBank}
+            onChange={setLenderBank}
+            error={lenderBank === OTHER_LENDER ? undefined : err('lender')}
+          />
+          {lenderBank === OTHER_LENDER && <TextField label={t('entry.otherLenderName')} value={otherLender} onChangeText={setOtherLender} error={err('lender')} />}
+        </>
+      )}
+      {type.extraFields.includes('lender') && (!hasLenderType || lenderType === 'informal') && (
+        <TextField label={t('entry.lender')} value={lender} onChangeText={setLender} error={err('lender')} />
       )}
       {type.extraFields.includes('term') && (
         <TextField label={t('entry.termMonths')} value={termText} onChangeText={(v) => setTermText(v.replace(/\D/g, ''))} keyboardType="number-pad" error={err('term')} />
@@ -321,7 +357,21 @@ export default function AddEntry() {
       )}
       {type.extraFields.includes('assetName') && <TextField label={t('entry.assetName')} value={assetName} onChangeText={setAssetName} error={err('assetName')} />}
       {type.extraFields.includes('usefulLife') && <TextField label={t('entry.usefulLife')} value={usefulLife} onChangeText={(v) => setUsefulLife(v.replace(/\D/g, ''))} keyboardType="number-pad" error={err('usefulLife')} />}
-      {type.extraFields.includes('loanName') && <TextField label={t('entry.whichLoan')} value={loanName} onChangeText={setLoanName} />}
+      {type.extraFields.includes('loanName') && (
+        loans && loans.length > 0 ? (
+          <SelectField
+            label={t('entry.whichLoan')}
+            placeholder={t('profile.select')}
+            searchable
+            options={loans.map((l) => ({ value: l.name, label: `${l.name} · ${t('entry.loanLeft', { amount: formatMoneyWhole(Math.max(0, l.remaining), l.currency) })}` }))}
+            value={loanName || null}
+            onChange={setLoanName}
+            error={err('loanName')}
+          />
+        ) : (
+          <Text variant="caption" tone="neutral-600">{t('entry.noLoans')}</Text>
+        )
+      )}
       {type.extraFields.includes('interestPart') && <TextField label={t('entry.interestPart')} value={interestText} onChangeText={(v) => setInterestText(v.replace(/[^0-9.,]/g, ''))} keyboardType="decimal-pad" error={err('interest')} />}
     </View>
   );
@@ -398,12 +448,6 @@ export default function AddEntry() {
             text={amountText}
             currency={currency}
             onChangeText={setAmountText}
-            onChangeCurrency={(c) => {
-              setCurrency(c);
-              setAmountText('');
-              setCostText('');
-              setInterestText('');
-            }}
             rate={rate}
             error={err('amount')}
           />
@@ -413,26 +457,16 @@ export default function AddEntry() {
         {extras}
         {/* A required note is part of the main form; otherwise category and note are optional extras. */}
         {noteRequired && <TextField label={t('entry.noteRequired')} value={note} onChangeText={setNote} multiline error={err('note')} />}
-        {type && (detailsOpen || categoryId || (!noteRequired && note) ? (
-          <View style={{ gap: 12 }}>
-            {direction !== 'move' && (
-              <SelectField
-                label={t('entry.category')}
-                placeholder={t('entry.categoryNone')}
-                options={(categories ?? []).filter((c) => (direction === 'in' ? c.kind === 'income' : c.kind === 'expense')).map((c) => ({ value: c.id, label: c.name }))}
-                value={categoryId}
-                onChange={setCategoryId}
-              />
-            )}
-            {!noteRequired && <TextField label={t('entry.note')} value={note} onChangeText={setNote} multiline />}
-          </View>
+        {type && <DraftEvidenceSection items={evidence} onChange={setEvidence} />}
+        {type && (detailsOpen || (!noteRequired && note) ? (
+          !noteRequired && <TextField label={t('entry.note')} value={note} onChangeText={setNote} multiline />
         ) : (
-          <Pressable accessibilityRole="button" onPress={() => setDetailsOpen(true)} className="flex-row items-center" style={{ gap: 6, minHeight: 44 }}>
-            <Icon name="plus" size={16} color={colors.primary[500]} />
-            <Text variant="caption" weight={600} tone="primary-500">
-              {t(direction === 'move' ? 'entry.addNote' : 'entry.addDetails')}
-            </Text>
-          </Pressable>
+          !noteRequired && (
+            <Pressable accessibilityRole="button" onPress={() => setDetailsOpen(true)} className="flex-row items-center" style={{ gap: 6, minHeight: 44 }}>
+              <Icon name="plus" size={16} color={colors.primary[500]} />
+              <Text variant="caption" weight={600} tone="primary-500">{t('entry.addNote')}</Text>
+            </Pressable>
+          )
         ))}
       </View>
     </ScreenShell>

@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Button } from '@/components/Button';
 import { Icon, type IconName } from '@/components/Icon';
 import { KpiTile } from '@/components/KpiTile';
-import { PickerModal } from '@/components/PickerModal';
+import { MonthPickerModal, describeMonths, monthKey } from '@/components/MonthPickerModal';
 import { ScreenShell } from '@/components/ScreenShell';
 import { EmptyState, LoadingState } from '@/components/StateViews';
 import { SummaryHero } from '@/components/SummaryHero';
@@ -15,7 +15,7 @@ import { useLocalQuery } from '@/hooks/useLocalQuery';
 import { useI18n, type TKey } from '@/i18n';
 import { formatInputDate, MONTHS } from '@/lib/format';
 import { colors } from '@/theme';
-import { formatMoney, getMonthOverview, GROUPS, type OverviewGroup } from '@/services/bookkeeping';
+import { formatMoney, getMonthsOverview, GROUPS, type OverviewGroup } from '@/services/bookkeeping';
 import { useAppTheme } from '@/theme/AppTheme';
 
 function GroupRow({ group, currency, locale }: { group: OverviewGroup; currency: 'KHR' | 'USD'; locale: 'en-GB' | 'km' }) {
@@ -107,25 +107,21 @@ export default function Bookkeeping() {
   const dark = useAppTheme();
   const { t, locale } = useI18n();
   const now = new Date();
-  const [cursor, setCursor] = useState({ year: now.getFullYear(), month: now.getMonth() });
+  // One or more months, as keys (year * 12 + month); the totals and the entry list cover all of them.
+  const [months, setMonths] = useState<number[]>([monthKey(now.getFullYear(), now.getMonth())]);
   useEffect(() => {
     const m = /^(\d{4})-(\d{2})$/.exec(params.month ?? '');
-    if (m) setCursor({ year: Number(m[1]), month: Number(m[2]) - 1 });
+    if (m) setMonths([monthKey(Number(m[1]), Number(m[2]) - 1)]);
   }, [params.month]);
   const [picker, setPicker] = useState(false);
-  const { data, loading } = useLocalQuery(() => getMonthOverview(cursor.year, cursor.month), [cursor.year, cursor.month]);
+  const monthsId = months.join(',');
+  const { data, loading } = useLocalQuery(() => getMonthsOverview(months), [monthsId]);
   const currency = data?.currency ?? 'USD';
-  const monthLabel = `${MONTHS[locale][cursor.month]} ${cursor.year}`;
+  const monthLabel = describeMonths(months, locale, (count) => t('overview.monthsCount', { count }));
   // Group totals are signed in the display currency; transfers are already excluded.
   const isIn = (g: OverviewGroup) => GROUPS[g.groupId as keyof typeof GROUPS]?.direction === 'in';
   const moneyIn = (data?.groups ?? []).filter(isIn).reduce((sum, g) => sum + g.total, 0);
   const moneyOut = (data?.groups ?? []).filter((g) => !isIn(g)).reduce((sum, g) => sum - g.total, 0);
-
-  // last 12 months for the month picker
-  const options = Array.from({ length: 12 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    return { value: d.getFullYear() * 12 + d.getMonth(), label: `${MONTHS[locale][d.getMonth()]} ${d.getFullYear()}` };
-  });
 
   return (
     <ScreenShell title={t('screen.bookkeeping')} nav="bookkeeping" hero={<SummaryHero />} padding={24}>
@@ -169,7 +165,7 @@ export default function Bookkeeping() {
       <UnusualEntriesCard />
       {/* 3. This month's entries */}
       <View style={{ marginTop: 28 }}>
-        <SectionHeader title={t('overview.entriesTitle', { month: monthLabel })} action={t('overview.seeAll')} onAction={() => router.push('/transactions')} />
+        <SectionHeader title={t('overview.entriesTitle')} action={t('overview.seeAll')} onAction={() => router.push('/transactions')} />
         <View className="bg-white border border-neutral-200 rounded-xl" style={{ paddingHorizontal: 16, paddingVertical: 4, ...(dark ? { backgroundColor: colors.dark.surface } : {}), ...(dark ? { borderColor: colors.dark.border } : {}) }}>
           {loading && !data ? <LoadingState /> : null}
           {data && data.groups.length === 0 ? <EmptyState titleKey="overview.empty" bodyKey="overview.emptyBody" /> : null}
@@ -185,20 +181,11 @@ export default function Bookkeeping() {
       <View style={{ marginTop: 28 }}>
         <SectionHeader title={t('overview.toolsTitle')} />
         <View className="bg-white border border-neutral-200 rounded-xl" style={{ paddingHorizontal: 16, ...(dark ? { backgroundColor: colors.dark.surface } : {}), ...(dark ? { borderColor: colors.dark.border } : {}) }}>
-          <ToolRow first icon="tag" title={t('screen.categories')} body={t('overview.categoriesBody')} onPress={() => router.push('/categories')} />
-          <ToolRow icon="savings" title={t('screen.savings')} body={t('overview.savingsBody')} onPress={() => router.push('/savings')} />
-          <ToolRow icon="book" title={t('bookkeeping.journal')} body={t('overview.journalBody')} onPress={() => router.push('/journal')} />
+          <ToolRow first icon="book" title={t('bookkeeping.journal')} body={t('overview.journalBody')} onPress={() => router.push('/journal')} />
         </View>
       </View>
 
-      <PickerModal
-        visible={picker}
-        title={t('overview.month')}
-        options={options}
-        value={cursor.year * 12 + cursor.month}
-        onSelect={(v) => setCursor({ year: Math.floor(v / 12), month: v % 12 })}
-        onClose={() => setPicker(false)}
-      />
+      <MonthPickerModal visible={picker} title={t('overview.month')} value={months} onChange={setMonths} onClose={() => setPicker(false)} />
     </ScreenShell>
   );
 }

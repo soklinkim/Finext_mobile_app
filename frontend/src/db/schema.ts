@@ -74,6 +74,19 @@ export const businessAssets = sqliteTable('business_assets', {
   asOf: integer('as_of').notNull(),
 });
 
+/**
+ * Evidence for an entry: a photo of a receipt, invoice or screenshot, kept on this device (not synced to the server yet).
+ * `data` is the image as base64; lists never read it, only the viewer does.
+ */
+export const entryAttachments = sqliteTable('entry_attachments', {
+  ...base,
+  transactionId: text('transaction_id').notNull().references(() => transactions.id),
+  fileName: text('file_name').notNull(),
+  mimeType: text('mime_type').notNull(),
+  sizeBytes: integer('size_bytes').notNull(),
+  data: text('data').notNull(),
+});
+
 export const budgets = sqliteTable('budgets', {
   ...base,
   name: text('name').notNull(),

@@ -34,12 +34,31 @@ function getClient() {
   return supabase;
 }
 
+/** This device holds another account's offline data. */
+export class LocalLedgerOwnedError extends Error {
+  constructor() {
+    super('This device’s offline bookkeeping data belongs to another account. Sign in with that account to continue.');
+  }
+}
+
+/** Erase this device's offline ledger and the things saved with it, so a different account can use the device. */
+export async function resetLocalLedger(): Promise<void> {
+  await (await import('@/services/bookkeeping')).resetLocalData();
+  const keys = (await AsyncStorage.getAllKeys()).filter((key) =>
+    key === LOCAL_OWNER_KEY ||
+    key.startsWith('@finext.sync.cursor') ||
+    key.startsWith('finext.analysis.') ||
+    key === 'finext:finhealth:v1' ||
+    key === 'finext:pref:unusualDismissed');
+  if (keys.length) await AsyncStorage.multiRemove(keys);
+}
+
 /** This device currently has one local ledger. Refuse to expose it to a different account. */
 async function bindLocalLedger(userId: string) {
   const ownerId = await AsyncStorage.getItem(LOCAL_OWNER_KEY);
   if (ownerId && ownerId !== userId) {
     await getClient().auth.signOut({ scope: 'local' });
-    throw new Error('This device’s offline bookkeeping data belongs to another account. Sign in with that account to continue.');
+    throw new LocalLedgerOwnedError();
   }
   if (!ownerId) await AsyncStorage.setItem(LOCAL_OWNER_KEY, userId);
 }
@@ -72,6 +91,8 @@ export async function signIn(email: string, password: string): Promise<Session> 
 }
 
 export async function signUp(email: string, password: string, metadata: Record<string, string>) {
+  // Check before the account is created: a new account would otherwise exist on the server but be refused on this device.
+  if (await AsyncStorage.getItem(LOCAL_OWNER_KEY)) throw new LocalLedgerOwnedError();
   const { data, error } = await getClient().auth.signUp({
     email: email.trim(),
     password,

@@ -25,9 +25,9 @@ lender evidence instead of collateral.
 
 | Area | What the user gets |
 |---|---|
-| **Bookkeeping** | Simple entries (sales, costs, stock, loans, payments, transfers…) that work offline and sync when online. Each entry is posted to a double-entry ledger by fixed accounting rules. |
+| **Bookkeeping** | Simple entries (sales, costs, stock, loans, payments, transfers…) that work offline and sync when online. Each entry is posted to a double-entry ledger by fixed accounting rules. Any entry can carry optional photo evidence (a receipt or invoice). A business uses **one currency** (USD or KHR), chosen at setup, so there are no exchange rates to confuse. Entry history can be filtered by type, unpaid, evidence and month. |
 | **Bank statement import** | Upload a bank statement PDF (ACLEDA, ABA, Wing, Canadia and others, English or Khmer). Every transaction is read out, given a suggested entry type and checked for duplicates, and the owner reviews it before anything is saved. The PDF is not stored. The reader is by Saron Borak (see [Credits](#credits)). |
-| **Financial statements** | Income statement, statement of financial position and cash flow statement, plus weekly, monthly and annual reports, with prior-period comparison. Each is previewed, then downloaded as a PDF. |
+| **Financial statements** | Statement of comprehensive income, statement of financial position and statement of cash flows, worded after the Cambodian IFRS for SMEs reference (see [`STATEMENT_TERMS_REVIEW.md`](STATEMENT_TERMS_REVIEW.md)), plus weekly and monthly reports, with prior-period comparison. Always in standard accounting terms, in English and Khmer. Each is previewed, then downloaded as a PDF with a small Finext mark in the corner. |
 | **Financial health** | Key ratios (margins, liquidity, debt, receivable and inventory days) against targets, with plain-language alerts, and an optional owner check-in using the FinHealth Score® survey [11]. |
 | **AI: probability of financial stress** | **Next 3 months:** a projection of the business's own cash flow against the stress conditions (cash under two weeks of expenses, operating cash flow negative three months running, or loan repayments not covered). **Next 12 months:** an XGBoost model trained on real company accounts, with the top reasons for each score. |
 | **AI: how to lower the risk** | Concrete changes (break even, collect from customers, cut costs, a longer loan term…), each re-scored with the same AI so the owner sees the effect, e.g. "stress in 3 months 100% → 0%". |
@@ -35,7 +35,8 @@ lender evidence instead of collateral.
 | **Loan application pack** | One PDF for a lender: AI summary, debt capacity, key ratios and the three statements. |
 | **Lender portal** | Bank staff see only the businesses sharing with them, and only what each one consented to; they record a decision the owner sees in the app. |
 | **Data and AI policies** | A formal Data and AI Policy, Privacy Policy, AI Use Statement, Terms of Use and Governance page in the app, aligned with the NIST AI RMF [12], the OECD AI Principles [13] and Cambodian law [14–16]. |
-| **Also** | Spending categories, savings goals, business documents (photo or file), loan readiness score, Khmer and English throughout. |
+| **Language and wording** | At setup the owner picks the language (Khmer or English), the wording of finance terms (**standard** accounting terms or **simple** everyday words) and the currency, on one screen. Every field name that has another wording shows a small (i) explaining it: the simple word when standard terms are on, and the standard term when simple words are on. |
+| **Also** | Business documents (photo or file), loan readiness score, Khmer and English throughout. |
 
 ## How the AI works
 
@@ -101,8 +102,23 @@ ml/         Training pipeline: datasets, preprocessing, four candidate models, e
 FINEXT_FINANCE_RULES.md          Chart of accounts, posting rules and accounting decisions
 FINEXT_APP_MODULES_AND_FLOWS.md  Screens and user flows
 FINEXT_STYLE_GUIDE_MERGED.md     Visual design system
+STATEMENT_TERMS_REVIEW.md        Statement wording (English and Khmer) against the Cambodian IFRS for SMEs reference
 posting_rules.json               Entry types and their journal postings
 ```
+
+## Offline and sync
+
+The app is **hybrid**: every entry is saved on the phone first, so bookkeeping works without a connection, and a
+background sync pushes changes to the server and pulls what is new. It runs a moment after a change, when the
+connection returns, when the app comes back to the foreground and at login. Statements, ratios and risk results are
+calculated on the server and show their last saved copy when offline.
+
+- **One account per device.** The offline ledger is one database per device, so a device holds one account's data. A
+  different account signing in on it is refused, and is offered an explicit "erase this device's data and continue"
+  (with a count of unsynced changes that would be lost). See [`frontend/README.md`](frontend/README.md).
+- **Not synced yet:** evidence photos stay on the phone, as do small preferences (simple-terms switch, check-in
+  answers). Business registration documents upload straight to the server and need a connection.
+- There is no "Sync now" button or last-synced time yet.
 
 ## Run it locally
 
@@ -120,8 +136,8 @@ python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 API docs: http://localhost:8000/docs · lender portal: http://localhost:8000/portal/
 
-**2. App** (from `frontend/`). Create `frontend/.env.local` from [`.env.example`](frontend/.env.example) with the
-Supabase URL and publishable key, then:
+**2. App** (from `frontend/`). Create `frontend/.env.local` with `EXPO_PUBLIC_SUPABASE_URL` and
+`EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (the public key, the same one as `SUPABASE_PUBLISHABLE_KEY` in `backend/.env`), then:
 
 ```powershell
 npm install --legacy-peer-deps
@@ -139,10 +155,12 @@ the trained model is already in `backend/app/risk_model_files/`.
 ## Tests
 
 ```powershell
-cd backend; .\venv\Scripts\python -m pytest tests     # 209 tests: posting rules, statements, ratios, AI risk, statement import, lender kit
+cd backend; .\venv\Scripts\python -m pytest tests     # 211 tests: posting rules, statements, ratios, AI risk, statement import, lender kit
 cd ml; .venv\Scripts\python -m pytest tests           # 19 tests: datasets, training checks, export, backend bridge
 cd frontend; npx tsc --noEmit                         # type check
 ```
+
+At the time of writing `tests/test_settlement.py::test_balance_sheet_equity_follows_the_statement_map` fails. It also failed before the latest round of changes; the cause has not been investigated (it builds its entries from the current date).
 
 ## Documentation
 
@@ -150,6 +168,9 @@ cd frontend; npx tsc --noEmit                         # type check
 - [`backend/README.md`](backend/README.md): API, sync, AI risk endpoints, loan readiness and the lender portal
 - [`ml/README.md`](ml/README.md): data, training, model selection, overfitting checks, benchmarks, limitations
 - [`FINEXT_FINANCE_RULES.md`](FINEXT_FINANCE_RULES.md): accounting rules and decisions
+- [`FINEXT_APP_MODULES_AND_FLOWS.md`](FINEXT_APP_MODULES_AND_FLOWS.md): screens, flows and build decisions
+- [`FINEXT_STYLE_GUIDE_MERGED.md`](FINEXT_STYLE_GUIDE_MERGED.md): visual design system
+- [`STATEMENT_TERMS_REVIEW.md`](STATEMENT_TERMS_REVIEW.md): statement wording against the Cambodian IFRS for SMEs reference
 
 ## Credits
 

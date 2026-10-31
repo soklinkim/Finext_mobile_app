@@ -1,16 +1,14 @@
-import { useEffect, useState } from 'react';
 import { Alert, Pressable, Switch, View } from 'react-native';
 import { Icon, type IconName } from '@/components/Icon';
 import { ScreenShell } from '@/components/ScreenShell';
 import { Text } from '@/components/Text';
-import { TextField } from '@/components/TextField';
 import { useLocalQuery } from '@/hooks/useLocalQuery';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useI18n } from '@/i18n';
 import { colors, radius } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
 import { clearAnalysisCache } from '@/services/analysis';
-import { countPendingSync, getSettings, updateSettings } from '@/services/bookkeeping';
+import { canChangeCurrency, countPendingSync, getSettings, updateSettings } from '@/services/bookkeeping';
 import { setSimulatedOffline } from '@/services/network';
 
 /** Setting — language, display currency, exchange rate, plus offline-testing tools. */
@@ -19,13 +17,8 @@ export default function SettingsScreen() {
   const net = useNetworkStatus();
   const { data: settings } = useLocalQuery(getSettings, []);
   const { data: pending } = useLocalQuery(countPendingSync, []);
+  const { data: currencyOpen } = useLocalQuery(canChangeCurrency, []);
   const dark = useAppTheme();
-  const [rate, setRate] = useState('');
-
-  useEffect(() => {
-    if (settings) setRate(String(settings.rateKhrPerUsd));
-  }, [settings?.rateKhrPerUsd]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const line = dark ? colors.dark.border : colors.neutral[200];
   const card = { borderRadius: radius.card, borderWidth: 1, borderColor: line, backgroundColor: dark ? colors.dark.surface : colors.white, paddingHorizontal: 16, paddingVertical: 2 } as const;
   const divider = (first?: boolean) => ({ borderTopWidth: first ? 0 : 1, borderTopColor: line });
@@ -66,19 +59,17 @@ export default function SettingsScreen() {
           {option('English (UK)', settings?.language === 'en-GB', () => updateSettings({ language: 'en-GB' }))}
         </>)}
 
-        {section(t('settings.displayCurrency'), 'dollar', <>
+        {/* One currency for the whole business, no exchange rate. It can be switched only while nothing is recorded yet. */}
+        {section(t('settings.currency'), 'dollar', currencyOpen ? <>
           {option('USD ($)', settings?.displayCurrency === 'USD', () => updateSettings({ displayCurrency: 'USD' }), true)}
           {option('KHR (៛)', settings?.displayCurrency === 'KHR', () => updateSettings({ displayCurrency: 'KHR' }))}
-          <View style={divider()}>
-            <TextField
-              appearance="row"
-              label={t('settings.rate')}
-              value={rate}
-              onChangeText={(v) => setRate(v.replace(/\D/g, ''))}
-              keyboardType="number-pad"
-              onEndEditing={() => Number(rate) > 0 && updateSettings({ rateKhrPerUsd: Number(rate) })}
-              right={<Text variant="body" weight={500} tone="neutral-600">KHR = $1</Text>}
-            />
+          <View style={{ paddingVertical: 10, ...divider() }}>
+            <Text variant="caption" tone="neutral-600">{t('settings.currencyOpen')}</Text>
+          </View>
+        </> : <>
+          <View style={{ minHeight: 52, justifyContent: 'center', gap: 2 }}>
+            <Text variant="body" weight={600} tone="primary-900">{settings?.displayCurrency === 'KHR' ? 'KHR (៛)' : 'USD ($)'}</Text>
+            <Text variant="caption" tone="neutral-600">{t('settings.currencyLocked')}</Text>
           </View>
         </>)}
 

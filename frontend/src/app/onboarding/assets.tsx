@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button } from '@/components/Button';
 import { DateInput } from '@/components/DateInput';
+import { FieldLabel } from '@/components/FieldLabel';
 import { OnboardingShell } from '@/components/OnboardingShell';
 import { SelectField } from '@/components/SelectField';
 import { Text } from '@/components/Text';
@@ -14,6 +15,7 @@ import { useAppTheme } from '@/theme/AppTheme';
 import {
   completeOnboarding,
   convertMinor,
+  amountToInput,
   formatAmountTyping,
   formatMoney,
   getSettings,
@@ -24,9 +26,14 @@ import {
   type OnboardingFinancialEntry,
 } from '@/services/bookkeeping';
 
+/** Picker value for "Other bank / MFI": the name is typed instead of chosen. */
+const OTHER_BANK = '__other__';
+
 interface BankRow {
   key: number;
   bankName: string;
+  /** the bank is not in the list; bankName holds the typed name */
+  custom?: boolean;
   currency: Currency;
   amount: string;
 }
@@ -37,14 +44,36 @@ const ASSET_FIELDS: { key: string; label: TKey; kind: OnboardingAsset['kind'] }[
   { key: 'receivable', label: 'assets.receivable', kind: 'receivable' },
   { key: 'inventory', label: 'assets.inventory', kind: 'inventory' },
   { key: 'prepaid', label: 'assets.prepaid', kind: 'prepaid' },
-  { key: 'equipment', label: 'assets.equipment', kind: 'equipment' },
-  { key: 'other_long_term', label: 'assets.otherLongTerm', kind: 'other_long_term' },
+  // Property, equipment and vehicles are entered apart but all count as property, plant & equipment (kind 'equipment').
+  { key: 'property', label: 'assets.property', kind: 'equipment' },
+  { key: 'equipment', label: 'assets.equipmentOnly', kind: 'equipment' },
+  { key: 'vehicles', label: 'assets.vehicles', kind: 'equipment' },
 ];
+
+/** An extra long-term thing the owner adds by name (a patent, a deposit, livestock...). */
+interface OtherAsset {
+  key: number;
+  name: string;
+  amount: string;
+}
+
+/** One loan from one lender; a business can borrow from several banks / MFIs at once. */
+interface LoanRow {
+  key: number;
+  /** the chosen bank / MFI, or OTHER_BANK when the name is typed into `lender` */
+  bank: string | null;
+  lender: string;
+  amount: string;
+}
+type LoanKey = 'short_term_loans' | 'long_term_loans';
+const LOAN_KEYS: LoanKey[] = ['short_term_loans', 'long_term_loans'];
 
 const BALANCE_FIELDS: { key: string; label: TKey; section: 'balance_sheet' }[] = [
   { key: 'accounts_payable', label: 'assets.accountsPayable', section: 'balance_sheet' },
   { key: 'customer_deposits', label: 'assets.customerDeposits', section: 'balance_sheet' },
   { key: 'accrued_expenses', label: 'assets.accrued', section: 'balance_sheet' },
+  // Entered apart from bills, but the ledger holds one figure for both (accrued_expenses); see finish().
+  { key: 'taxes_payable', label: 'assets.taxesPayable', section: 'balance_sheet' },
   { key: 'short_term_loans', label: 'assets.shortLoans', section: 'balance_sheet' },
   { key: 'other_short_borrowings', label: 'assets.otherBorrowings', section: 'balance_sheet' },
   { key: 'long_term_loans', label: 'assets.longLoans', section: 'balance_sheet' },
@@ -102,11 +131,23 @@ export default function Assets() {
   const [sectionIndex, setSectionIndex] = useState(0);
   const [rows, setRows] = useState<BankRow[]>([{ key: 1, bankName: '', currency, amount: '' }]);
   const [assets, setAssets] = useState<Record<string, { currency: Currency; amount: string }>>({});
+  const [loans, setLoans] = useState<Record<LoanKey, LoanRow[]>>({
+    short_term_loans: [{ key: 1, bank: null, lender: '', amount: '' }],
+    long_term_loans: [{ key: 1, bank: null, lender: '', amount: '' }],
+  });
+  const [otherAssets, setOtherAssets] = useState<OtherAsset[]>([]);
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
 
+  // One currency for the whole business (chosen at setup); keep every row in it once settings have loaded.
+  useEffect(() => {
+    setRows((old) => old.map((r) => ({ ...r, currency })));
+    setAssets((old) => Object.fromEntries(Object.entries(old).map(([k, v]) => [k, { currency, amount: formatAmountTyping(v.amount, currency) }])));
+  }, [currency]);
+
   const bankOptions = (banks ?? []).map((bank) => ({ value: bank.name, label: bank.name }));
+  const lenderBankOptions = (banks ?? []).filter((bank) => bank.kind === 'bank').map((bank) => ({ value: bank.name, label: bank.name }));
   const panelStyle = { ...entryPanelStyle, backgroundColor: dark ? colors.dark.surface : entryPanelStyle.backgroundColor };
   const setAssetAmount = (key: string, value: string) =>
     setAssets((old) => ({
@@ -134,8 +175,8 @@ export default function Assets() {
   };
   const hasCashBalance = rows.some((row) => row.amount.trim());
   const hasEveryAssetCategory = ASSET_FIELDS.every((field) => assets[field.key]?.amount.trim());
-  const hasEveryLiability = BALANCE_FIELDS.slice(0, 7).every((field) => amounts[field.key]?.trim());
-  const hasEveryEquity = BALANCE_FIELDS.slice(7).every((field) => amounts[field.key]?.trim());
+  const hasEveryLiability = BALANCE_FIELDS.slice(0, 8).every((field) => amounts[field.key]?.trim());
+  const hasEveryEquity = BALANCE_FIELDS.slice(8).every((field) => amounts[field.key]?.trim());
   const incomeNet = INCOME_FIELDS.reduce((total, field) => {
     const value = parseAmountInput(amounts[field.key] ?? '', currency);
     if (field.key === 'sales_revenue' || field.key === 'other_income') return total + value;
@@ -152,12 +193,13 @@ export default function Assets() {
       const asset = assets[field.key];
       const assetCurrency = asset?.currency ?? currency;
       return sum + convertMinor(parseAmountInput(asset?.amount ?? '', assetCurrency), assetCurrency, currency, rate);
-    }, 0);
-  const totalLiabilities = BALANCE_FIELDS.slice(0, 7).reduce((sum, field) => sum + amountOf(field.key), 0);
+    }, 0) +
+    otherAssets.reduce((sum, other) => sum + parseAmountInput(other.amount, currency), 0);
+  const totalLiabilities = BALANCE_FIELDS.slice(0, 8).reduce((sum, field) => sum + amountOf(field.key), 0);
   const totalEquity = amountOf('owner_capital') + amountOf('retained_earnings') + incomeNet - amountOf('owner_drawings');
   const balanceDifference = totalAssets - totalLiabilities - totalEquity;
   // Allow for rounding when KHR amounts are converted (the server allows one minor unit per line).
-  const isBalanced = Math.abs(balanceDifference) <= rows.length + BALANCE_FIELDS.length + ASSET_FIELDS.length + 2;
+  const isBalanced = Math.abs(balanceDifference) <= rows.length + BALANCE_FIELDS.length + ASSET_FIELDS.length + otherAssets.length + 2;
   const balancingCapital = amountOf('owner_capital') + balanceDifference;
 
   const finish = async () => {
@@ -185,6 +227,9 @@ export default function Assets() {
         const asset = assets[field.key];
         addAsset(field.kind, t(field.label), asset?.amount ?? '', asset?.currency ?? currency);
       }
+      for (const other of otherAssets) {
+        if (other.amount.trim()) addAsset('other_long_term', other.name.trim() || t('assets.otherLongTerm'), other.amount, currency);
+      }
 
       const financialEntries: OnboardingFinancialEntry[] = [];
       const addFinancial = (section: OnboardingFinancialEntry['section'], key: string, amount: number, cur: Currency) => {
@@ -203,14 +248,20 @@ export default function Assets() {
       }
       addFinancial('balance_sheet', 'cash_bank', cashByCurrency.KHR, 'KHR');
       addFinancial('balance_sheet', 'cash_bank', cashByCurrency.USD, 'USD');
+      // The ledger holds one figure each for receivables, inventory, prepaid, property/equipment/vehicles and other long-term assets.
+      const assetTotals: Record<string, number> = { receivable: 0, inventory: 0, prepaid: 0, equipment: 0, other_long_term: 0 };
       for (const field of ASSET_FIELDS) {
         const asset = assets[field.key];
-        const assetCurrency = asset?.currency ?? currency;
-        addFinancial('balance_sheet', field.key, parseAmountInput(asset?.amount ?? '', assetCurrency), assetCurrency);
+        assetTotals[field.kind] += parseAmountInput(asset?.amount ?? '', asset?.currency ?? currency);
       }
+      for (const other of otherAssets) assetTotals.other_long_term += parseAmountInput(other.amount, currency);
+      for (const [key, total] of Object.entries(assetTotals)) addFinancial('balance_sheet', key, total, currency);
       for (const field of BALANCE_FIELDS) {
+        if (field.key === 'taxes_payable') continue; // folded into accrued_expenses below
         const value = amounts[field.key];
-        if (value?.trim()) addFinancial('balance_sheet', field.key, parseAmountInput(value, currency), currency);
+        if (!value?.trim()) continue;
+        const extra = field.key === 'accrued_expenses' ? amountOf('taxes_payable') : 0;
+        addFinancial('balance_sheet', field.key, parseAmountInput(value, currency) + extra, currency);
       }
       addFinancial('balance_sheet', 'net_profit_for_period', incomeNet, currency);
       if (existing) {
@@ -253,23 +304,9 @@ export default function Assets() {
 
   const assetCurrencyField = (key: string, label: TKey) => (
     <View key={key} style={{ gap: 8 }}>
-      <Text variant="body" tone="primary-900">{t(label)}</Text>
+      <FieldLabel label={t(label)} variant="body" tone="primary-900" />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <View style={{ width: 112 }}>
-          <SelectField
-            size="form"
-            placeholder={t('assets.currency')}
-            options={[{ value: 'KHR', label: 'KHR' }, { value: 'USD', label: 'USD' }]}
-            value={assets[key]?.currency ?? currency}
-            onChange={(selectedCurrency) => setAssets((old) => ({
-              ...old,
-              [key]: {
-                currency: selectedCurrency,
-                amount: formatAmountTyping(old[key]?.amount ?? '', selectedCurrency),
-              },
-            }))}
-          />
-        </View>
+        <Text variant="body" weight={600} tone="primary-900">{currency}</Text>
         <View style={{ flex: 1 }}>
           <TextField
             variant="form"
@@ -282,6 +319,62 @@ export default function Assets() {
       </View>
     </View>
   );
+
+  /** Edit one lender's row, then keep the loan total (what the checks and the ledger use) in step with the rows. */
+  const updateLoans = (key: LoanKey, change: (rows: LoanRow[]) => LoanRow[]) => {
+    const next = change(loans[key]);
+    setLoans((old) => ({ ...old, [key]: next }));
+    const filled = next.some((r) => r.amount.trim());
+    const total = next.reduce((sum, r) => sum + parseAmountInput(r.amount, currency), 0);
+    setAmounts((old) => ({ ...old, [key]: filled ? (total === 0 ? '0' : amountToInput(total, currency)) : '' }));
+  };
+
+  const loanField = (field: { key: string; label: TKey }) => {
+    const key = field.key as LoanKey;
+    const list = loans[key];
+    return (
+      <View key={key} style={{ gap: 10 }}>
+        <FieldLabel label={t(field.label)} variant="body" tone="primary-900" />
+        {list.map((row) => (
+          <View key={row.key} style={{ gap: 8, padding: 10, borderRadius: radius.md, backgroundColor: dark ? colors.dark.field : colors.white, borderWidth: 1, borderColor: dark ? colors.dark.border : colors.primary[200] }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <SelectField
+                variant="chip"
+                placeholder={t('entry.lenderBank')}
+                searchable
+                options={[...lenderBankOptions, { value: OTHER_BANK, label: t('entry.otherLender') }]}
+                value={row.bank}
+                onChange={(bank) => updateLoans(key, (rows) => rows.map((r) => (r.key === row.key ? { ...r, bank } : r)))}
+              />
+              {list.length > 1 ? (
+                <Text variant="body-sm" weight={600} tone="primary-900" accessibilityRole="button" accessibilityLabel={t('assets.removeLender')} onPress={() => updateLoans(key, (rows) => rows.filter((r) => r.key !== row.key))}>✕</Text>
+              ) : null}
+            </View>
+            {row.bank === OTHER_BANK ? (
+              <TextField
+                variant="form"
+                value={row.lender}
+                onChangeText={(lender) => updateLoans(key, (rows) => rows.map((r) => (r.key === row.key ? { ...r, lender } : r)))}
+                placeholder={t('entry.otherLenderName')}
+                accessibilityLabel={t('entry.otherLenderName')}
+              />
+            ) : null}
+            <TextField
+              variant="form"
+              value={row.amount}
+              onChangeText={(value) => updateLoans(key, (rows) => rows.map((r) => (r.key === row.key ? { ...r, amount: formatAmountTyping(value, currency) } : r)))}
+              keyboardType="decimal-pad"
+              placeholder="0"
+              right={<Text variant="body-sm" weight={500}>{currency}</Text>}
+            />
+          </View>
+        ))}
+        <Text variant="body-sm" weight={500} tone="primary-900" style={{ textAlign: 'center' }} accessibilityRole="button" onPress={() => updateLoans(key, (rows) => [...rows, { key: (rows[rows.length - 1]?.key ?? 0) + 1, bank: null, lender: '', amount: '' }])}>
+          {t('assets.addLender')}
+        </Text>
+      </View>
+    );
+  };
 
   const financialField = (field: { key: string; label: TKey }) => (
     <TextField
@@ -337,7 +430,7 @@ export default function Assets() {
         {existing && <Text variant="caption" tone="neutral-600">{`${t('assets.endDate')}: ${end ? new Date(end).toLocaleDateString() : '—'}`}</Text>}
         <View style={panelStyle}>
         <Text variant="body-lg" weight={700} tone="primary-900">{t('assets.current')}</Text>
-        <Text variant="body" tone="primary-900">{t('assets.cashBank')}</Text>
+        <FieldLabel label={t('assets.cashBank')} variant="body" tone="primary-900" />
         <Text variant="caption" tone="neutral-600">{t('assets.bankBalanceNote')}</Text>
         {rows.map((row) => (
           <View
@@ -351,17 +444,25 @@ export default function Assets() {
               borderColor: dark ? colors.dark.border : colors.primary[200],
             }}
           >
-            <SelectField variant="chip" placeholder={t('assets.selectBank')} options={bankOptions} value={row.bankName || null} onChange={(bankName) => setRows((old) => old.map((r) => r.key === row.key ? { ...r, bankName } : r))} />
+            <SelectField
+              variant="chip"
+              placeholder={t('assets.selectBank')}
+              searchable
+              options={[...bankOptions, { value: OTHER_BANK, label: t('entry.otherLender') }]}
+              value={row.custom ? OTHER_BANK : row.bankName || null}
+              onChange={(picked) => setRows((old) => old.map((r) => r.key === row.key ? (picked === OTHER_BANK ? { ...r, custom: true, bankName: '' } : { ...r, custom: false, bankName: picked }) : r))}
+            />
+            {row.custom ? (
+              <TextField
+                variant="form"
+                value={row.bankName}
+                onChangeText={(bankName) => setRows((old) => old.map((r) => r.key === row.key ? { ...r, bankName } : r))}
+                placeholder={t('entry.otherLenderName')}
+                accessibilityLabel={t('entry.otherLenderName')}
+              />
+            ) : null}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <View style={{ width: 112 }}>
-                <SelectField
-                  size="form"
-                  placeholder={t('assets.currency')}
-                  options={[{ value: 'KHR', label: 'KHR' }, { value: 'USD', label: 'USD' }]}
-                  value={row.currency}
-                  onChange={(selectedCurrency) => setRows((old) => old.map((r) => r.key === row.key ? { ...r, currency: selectedCurrency } : r))}
-                />
-              </View>
+              <Text variant="body" weight={600} tone="primary-900">{currency}</Text>
               <View style={{ flex: 1 }}>
                 <TextField
                   variant="form"
@@ -381,6 +482,37 @@ export default function Assets() {
         <View style={panelStyle}>
         <Text variant="body-lg" weight={700} tone="primary-900">{t('assets.nonCurrent')}</Text>
         {ASSET_FIELDS.slice(3).map((field) => assetCurrencyField(field.key, field.label))}
+        {otherAssets.map((other) => (
+          <View key={`other-${other.key}`} style={{ gap: 8 }}>
+            <TextField
+              variant="form"
+              label={t('assets.otherAssetName')}
+              value={other.name}
+              onChangeText={(name) => setOtherAssets((old) => old.map((o) => (o.key === other.key ? { ...o, name } : o)))}
+              placeholder={t('assets.otherAssetPlaceholder')}
+              right={
+                <Text variant="body-sm" weight={600} tone="primary-900" accessibilityRole="button" accessibilityLabel={t('assets.removeOther')} onPress={() => setOtherAssets((old) => old.filter((o) => o.key !== other.key))}>
+                  ✕
+                </Text>
+              }
+            />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Text variant="body" weight={600} tone="primary-900">{currency}</Text>
+              <View style={{ flex: 1 }}>
+                <TextField
+                  variant="form"
+                  value={other.amount}
+                  onChangeText={(value) => setOtherAssets((old) => old.map((o) => (o.key === other.key ? { ...o, amount: formatAmountTyping(value, currency) } : o)))}
+                  keyboardType="decimal-pad"
+                  placeholder="0"
+                />
+              </View>
+            </View>
+          </View>
+        ))}
+        <Text variant="body-sm" weight={500} tone="primary-900" style={{ textAlign: 'center' }} accessibilityRole="button" onPress={() => setOtherAssets((old) => [...old, { key: (old[old.length - 1]?.key ?? 0) + 1, name: '', amount: '' }])}>
+          {t('assets.addOtherAsset')}
+        </Text>
         </View>
           </View>
         )}
@@ -390,11 +522,11 @@ export default function Assets() {
             <Text variant="caption" tone="neutral-600">{t('assets.zeroIfNone')}</Text>
             <View style={panelStyle}>
             <Text variant="body-lg" weight={700} tone="primary-900">{t('assets.currentLiabilities')}</Text>
-            {BALANCE_FIELDS.slice(0, 5).map(financialField)}
+            {BALANCE_FIELDS.slice(0, 6).map((f) => (LOAN_KEYS.includes(f.key as LoanKey) ? loanField(f) : financialField(f)))}
             </View>
             <View style={panelStyle}>
             <Text variant="body-lg" weight={700} tone="primary-900">{t('assets.nonCurrentLiabilities')}</Text>
-            {BALANCE_FIELDS.slice(5, 7).map(financialField)}
+            {BALANCE_FIELDS.slice(6, 8).map((f) => (LOAN_KEYS.includes(f.key as LoanKey) ? loanField(f) : financialField(f)))}
             </View>
           </View>
         )}
@@ -403,7 +535,7 @@ export default function Assets() {
           <View style={{ gap: 16 }}>
             <Text variant="caption" tone="neutral-600">{t('assets.zeroIfNone')}</Text>
             <View style={panelStyle}>
-            {BALANCE_FIELDS.slice(7).map(financialField)}
+            {BALANCE_FIELDS.slice(8).map(financialField)}
             <Text variant="body" tone="primary-900">{t('assets.periodProfit')}: {formatMoney(incomeNet, currency)}</Text>
             </View>
             <View
@@ -442,16 +574,21 @@ export default function Assets() {
         {error ? <Text variant="caption" tone="danger">{error}</Text> : null}
         <View className="flex-row" style={{ gap: 12, marginTop: 8 }}>
           {sectionIndex > 0 && (
-            <Button variant="soft" className="flex-1" label={t('common.back')} onPress={() => { setError(undefined); setSectionIndex((index) => index - 1); }} />
+            // Back keeps its natural width so its label is never squeezed out; Next takes the rest.
+            <View style={{ flexShrink: 0 }}>
+              <Button variant="soft" label={t('common.back')} onPress={() => { setError(undefined); setSectionIndex((index) => index - 1); }} />
+            </View>
           )}
-          <Button
-            variant="primary"
-            className={sectionIndex > 0 ? 'flex-1' : 'w-full'}
-            label={sectionIndex === sections.length - 1 ? t('assets.finish') : t('common.next')}
-            trailingIcon={sectionIndex === sections.length - 1 ? undefined : 'chevronRight'}
-            loading={saving}
-            onPress={continueSection}
-          />
+          <View style={{ flex: 1 }}>
+            <Button
+              variant="primary"
+              className="w-full"
+              label={sectionIndex === sections.length - 1 ? t('assets.finish') : t('common.next')}
+              trailingIcon={sectionIndex === sections.length - 1 ? undefined : 'chevronRight'}
+              loading={saving}
+              onPress={continueSection}
+            />
+          </View>
         </View>
       </View>
     </OnboardingShell>

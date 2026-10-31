@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { CalendarGrid } from './CalendarGrid';
 import { Icon } from './Icon';
@@ -27,6 +27,17 @@ export function DateInput({ label, value, onChange, error, variant = 'form' }: P
   const base = value ? new Date(value) : new Date();
   const [cursor, setCursor] = useState({ year: base.getFullYear(), month: base.getMonth() });
 
+  // The value can change from outside (a form reset, "go to today"): keep the text in step.
+  useEffect(() => {
+    if (value !== parseInputDate(text)) setText(value ? formatInputDate(value) : '');
+  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const openCalendar = () => {
+    const shown = value ? new Date(value) : new Date();
+    setCursor({ year: shown.getFullYear(), month: shown.getMonth() });
+    setOpen(true);
+  };
+
   const commit = (s: string) => {
     setText(s);
     onChange(parseInputDate(s));
@@ -46,7 +57,7 @@ export function DateInput({ label, value, onChange, error, variant = 'form' }: P
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('common.calendar')}
-            onPress={() => setOpen(true)}
+            onPress={openCalendar}
             className="items-center justify-center bg-primary-200"
             style={{ width: 24, height: 24, borderRadius: 6 }}
           >

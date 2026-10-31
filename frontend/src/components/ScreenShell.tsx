@@ -1,9 +1,10 @@
-import { useState, type ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, View, type LayoutChangeEvent } from 'react-native';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Keyboard, KeyboardAvoidingView, Platform, ScrollView, TextInput, View, type LayoutChangeEvent, type ScrollViewInstance } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Href } from 'expo-router';
 import { BottomNav, NAV_HEIGHT, navBottomPad, type NavKey } from './BottomNav';
+import { FieldFocusContext, type FieldClaim } from './FieldFocus';
 import { HeaderBar } from './HeaderBar';
 import { colors, radius, shadow } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
@@ -28,6 +29,27 @@ interface Props {
   children?: ReactNode;
 }
 
+/** Height of the on-screen keyboard (0 when hidden). Web phones expose it only through visualViewport. */
+function useKeyboardHeight() {
+  const [height, setHeight] = useState(0);
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+      if (!vv) return;
+      const update = () => {
+        const covered = window.innerHeight - vv.height - vv.offsetTop;
+        setHeight(covered > 100 ? covered : 0);
+      };
+      vv.addEventListener('resize', update);
+      return () => vv.removeEventListener('resize', update);
+    }
+    const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', (e) => setHeight(e.endCoordinates.height));
+    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setHeight(0));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+  return height;
+}
+
 /** §5 — pale mist hero band on top, white sheet with 72 px top corners sliding over it, optional bottom nav. */
 export function ScreenShell({
   title,
@@ -47,9 +69,50 @@ export function ScreenShell({
   const dark = useAppTheme();
   const [footerH, setFooterH] = useState(0);
   const navSpace = nav ? NAV_HEIGHT + navBottomPad(insets.bottom) : 0;
-  const bottomPad = navSpace + footerH + 24 + (nav ? 0 : insets.bottom);
+  const scrollRef = useRef<ScrollViewInstance>(null);
+  const keyboardH = useKeyboardHeight();
+  // iOS KeyboardAvoidingView already shrinks the screen; elsewhere reserve the keyboard's height so lower fields can scroll above it.
+  const bottomPad = navSpace + footerH + 24 + (nav ? 0 : insets.bottom) + (Platform.OS === 'ios' ? 0 : keyboardH);
+
+  // Fields with an error ask to be shown; after a short moment the topmost one wins: scroll to it and put the cursor in it.
+  const [attempt, setAttempt] = useState(0);
+  const claims = useRef<FieldClaim[]>([]);
+  const claimTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const fieldFocus = useMemo(() => ({
+    tick: attempt,
+    bump: () => setAttempt((n) => n + 1),
+    inner: () => scrollRef.current?.getInnerViewNode?.(),
+    claim: (claim: FieldClaim) => {
+      claims.current.push(claim);
+      clearTimeout(claimTimer.current);
+      claimTimer.current = setTimeout(() => {
+        const best = claims.current.reduce((a, b) => (b.y < a.y ? b : a));
+        claims.current = [];
+        if (Platform.OS === 'web') (best.node as HTMLElement).scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+        else scrollRef.current?.scrollTo({ y: Math.max(0, best.y - 120), animated: true });
+        best.focus?.();
+      }, 120);
+    },
+  }), [attempt]);
+
+  // Bring the focused field into view whenever the keyboard opens.
+  useEffect(() => {
+    if (!keyboardH) return;
+    const timer = setTimeout(() => {
+      if (Platform.OS === 'web') {
+        (document.activeElement as HTMLElement | null)?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+        return;
+      }
+      const input = TextInput.State.currentlyFocusedInput?.();
+      const inner = scrollRef.current?.getInnerViewNode?.();
+      if (!input || !inner) return;
+      input.measureLayout(inner, (_x, y) => scrollRef.current?.scrollTo({ y: Math.max(0, y - 120), animated: true }), () => undefined);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [keyboardH]);
 
   return (
+    <FieldFocusContext.Provider value={fieldFocus}>
     <KeyboardAvoidingView
       className="flex-1"
       style={{ width: '100%', alignSelf: 'stretch' }}
@@ -76,6 +139,7 @@ export function ScreenShell({
       >
         {scroll ? (
           <ScrollView
+            ref={scrollRef}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
@@ -101,5 +165,6 @@ export function ScreenShell({
       {nav && <BottomNav active={nav} />}
     </View>
     </KeyboardAvoidingView>
+    </FieldFocusContext.Provider>
   );
 }

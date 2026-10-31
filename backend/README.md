@@ -23,6 +23,28 @@ Browsers may call the API only from the Expo web dev server (`:8081` on localhos
 
 Bookkeeping writes go to local SQLite first with `syncStatus = 'pending'`. The client pushes pending rows, marks only accepted rows as synced, then pulls server changes using a per-user sequence cursor. Invalid rows stay pending and are reported. If the server has a newer version of a row, it returns that version and the client merges it into SQLite. Soft deletes sync as tombstones.
 
+## Statements and their wording
+
+`GET /accounting/statements?period=weekly|monthly|annual` returns the three statements. Their titles, section headings and
+line labels follow the Cambodian IFRS for SMEs reference where the wording means the same thing (for example
+*Statement of Comprehensive Income*, *Trade receivables*, *Inventories*, *Total equity*; see
+[`../STATEMENT_TERMS_REVIEW.md`](../STATEMENT_TERMS_REVIEW.md)). The app translates these labels by looking up the English
+text in `frontend/src/i18n/standardKm.ts` (Khmer standard terms) and `frontend/src/i18n/plain.ts` (simple words), so **when
+a label here is renamed, add the new text to those two files**; the old text can stay for statements cached on phones.
+
+## Opening balances from onboarding
+
+The app asks for some opening figures apart and sends them as the ledger's existing keys, so no server change was needed:
+Property, Equipment and Vehicles are asked separately and sent as one `equipment` total (account 1500), added long-term
+assets as one `other_long_term` total (1600), Accrued expenses and Taxes payable as one `accrued_expenses` figure (2200), and
+loans from several lenders as one `short_term_loans` / `long_term_loans` total. The lender names are not stored.
+
+## Entry rules worth knowing
+
+- A **Customer deposit** no longer needs a customer name (the field is optional).
+- A **Loan repayment** must carry the exact name of a recorded loan (`loanName`); the app offers a list of recorded loans.
+  A bank or MFI loan is recorded under "<bank> · <date>", and an informal loan under the lender's typed name.
+
 ## Experimental forecast
 
 `GET /accounting/forecast` uses the authenticated user's six most recently completed bookkeeping months to fit separate linear trends for income and expense, then estimates the next three months. It returns no forecast until all six months have activity. Before that, it returns rule-based six-month totals and flags data coverage as low (0–2 active months), moderate (3–5), or high (6). These coverage flags describe available history, not the user's financial health. Forecast ranges are experimental planning aids, not guarantees or accounting advice. Forecasting uses the server's existing Python dependencies and does not send ledger data to a third-party AI service.

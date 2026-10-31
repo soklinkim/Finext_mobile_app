@@ -1,5 +1,6 @@
 import type { Statement } from '@/services/analysis';
 import { formatMoney } from '@/services/bookkeeping';
+import { WATERMARK_CSS, WATERMARK_HTML } from './finextMark';
 
 export const esc = (value: string) =>
   value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -74,9 +75,10 @@ export function statementSection(statement: Statement, business: string): string
 /** A printable page for one statement. */
 export function statementHtml(statement: Statement, business: string): string {
   const heading = statement.heading ?? [business, statement.title];
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(heading[1])}</title><style>${STATEMENT_CSS}
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(heading[1])}</title><style>${STATEMENT_CSS}${WATERMARK_CSS}
   </style></head><body>
     ${statementSection(statement, business)}
+    ${WATERMARK_HTML}
   </body></html>`;
 }
 

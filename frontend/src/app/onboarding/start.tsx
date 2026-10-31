@@ -22,7 +22,7 @@ export default function Start() {
 
   const title = (
     <Text variant="display" tone="primary-900" style={{ textAlign: 'center' }}>
-      {t('onb.startTitle1')} <Text variant="display" tone="primary-50">{t('onb.startTitleBrand')}</Text>
+      {t('onb.startTitle1')} <Text variant="display" style={{ color: colors.primary[900] }}>Fi<Text variant="display" style={{ color: colors.primary[500] }}>next</Text></Text>
       {t('onb.startTitle2')}
     </Text>
   );

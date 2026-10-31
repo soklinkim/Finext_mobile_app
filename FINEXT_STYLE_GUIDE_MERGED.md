@@ -225,6 +225,7 @@ Rules:
 | **Choice – unselected** | Same size, bg `primary-50`, text `primary-900`, `shadow-button` |
 | **Choice with flag** | 60px circular flag image inset 14px left; label centered in the remaining space |
 | **Choice with info** | 14px filled info icon to the right of the label (`primary-50` on dark, `primary-900` on light) — tap shows tooltip |
+| **Choice – compact** | Same colours, height 48, text `body`/600. Used when several short choices sit side by side (finance words, currency on the setup screen) |
 | **Text button "Next"** | No background, `title-lg` `neutral-900`, text shadow, centered, min tap area 48 × 48 |
 | **Text link** | `body-sm`/500 `neutral-900`, e.g. "Add More Bank", "See all" (`primary-900`) |
 
@@ -247,13 +248,14 @@ Choice buttons behave as a **single-select radio group**: tapping one selects it
 - Dates: `body`/400 `neutral-900`, 7-column grid, row height 40.
 - Selected date: 36px circle `primary-900`, text `white`. Today: 1px ring `primary-500`.
 - Below: two-tab toggle (Spends / Categories), each half-width pill, height 36. Active `primary-200`, inactive `primary-50`, text `body`/500 `primary-900`.
+- **Go to today:** a small `primary-50` pill (`caption`/600 `primary-900`) at the right of the month / year row, shown whenever the selected date is not today. One tap selects today.
 
 ### 6.14 Financial Statements tile grid
 - 3-column grid, tile 105 × 97, `radius-xl`, gap 22 horizontal / 70 vertical (including label).
 - Default bg `accent-tile`, selected bg `primary-900`.
-- Label below tile: `caption`/500 `primary-900`, centered, max 2 lines.
-- "Add New Template" tile: same size, `white` 2px plus icon 48px centered.
-- Tiles: Income Statement, Balance Sheet, Cash Flow, Weekly Report, Monthly Report, Annual Report.
+- Label below tile: `caption`/500 `primary-900`, centered, max 3 lines (the statement names are long).
+- "Add New Template" tile: same size, `white` 2px plus icon 48px centered (not built).
+- Tiles in the app: Statement of Comprehensive Income, Statement of Financial Position, Statement of Cash Flows, Weekly Report, Monthly Report, Loan application. The first three carry a 16px `white` info icon at the top-right of the tile that opens an explanation. The info icon is a sibling of the tile button, not inside it (on web a button cannot contain a button).
 
 ### 6.15 Bottom navigation
 - Container: `primary-50`, height ~105, top corners radius 60, full width, sits above safe area.
@@ -283,13 +285,13 @@ Choice buttons behave as a **single-select radio group**: tapping one selects it
 ### 6.19 Collapsed step row
 - After a type is chosen, step 1 collapses into a `primary-50` row (`radius-lg`, padding 8 × 14): "1. What is it for?" 11 Light `neutral-600`, type 14 SemiBold, group 11 Light, and "Change ⌄" in `primary-500` on the right.
 
-### 6.20 Amount input with currency switch
+### 6.20 Amount input
 - Row: label "2. How much?" (14 Medium `primary-900`) + input `primary-50`, `radius-lg`, height ≈ 46.
-- Left inside the input: **KHR | USD switch** (6.21). Right: symbol (18 Medium `primary-500`) + number (24 Bold `primary-900`). USD → `$`, KHR → `៛` (use Noto Sans Khmer for the glyph, Poppins has none).
-- When KHR is selected, show under the row: "About $600 at ៛4,000 = $1" (11 Light `neutral-600`). 4,000 KHR = 1 USD is a placeholder, read it from settings.
+- **One currency per business, so no KHR | USD switch** (6.21 is kept only for a screen that offers two currencies; the app does not). Right: symbol (18 Medium `primary-500`) + number (24 Bold `primary-900`). USD → `$`, KHR → `៛` (use Noto Sans Khmer for the glyph, Poppins has none).
+- The "About $600 at ៛4,000 = $1" line only appears for an entry recorded in the other currency before the business settled on one.
 - Always comma thousands: `$1,200`, `៛2,400,000`.
 
-### 6.21 Currency switch
+### 6.21 Currency switch (not used in the app: one currency per business)
 - `white` pill, 1px `primary-200` border, padding 2, two segments `KHR` and `USD` (11px). Selected segment: `primary-900`, `white` SemiBold, `shadow-inner-selected`, `radius-pill`.
 
 ### 6.22 Entry text field
@@ -329,6 +331,27 @@ Choice buttons behave as a **single-select radio group**: tapping one selects it
 
 ---
 
+### 6.31 Field name with an info icon (finance wording)
+- Any field name that has another wording (standard accounting term and everyday words) shows a 14px `primary-500` info icon after it. Hover (web) or tap shows a small `primary-50` note under the label: with standard terms on, "In simple words: …"; with simple terms on, "Standard finance term: …".
+- Required fields show a red `danger` `*` after the name. A required field left empty gets a 2px `danger` border and a message; the screen scrolls to the first such field and puts the cursor in it.
+- Never place the info icon inside a button (a dropdown row label has none).
+
+### 6.32 Month picker (multi-select)
+- Centred card, `radius-lg`: title, year row with previous / next arrows, a 3 × 4 grid of month pills (height 44, `radius` 22). Selected = `primary-900` / `white`; today = 1px `primary-500` ring; future months 35% opacity and disabled. Buttons: "This month" (soft) and "Apply" (primary, disabled with no month chosen).
+- The trigger pill shows "November 2026", "August - November 2026" for months in a row, or "3 months" when they are apart.
+
+### 6.33 Evidence (photos on an entry)
+- Label row: paperclip icon + "Evidence (optional)" (14 Medium `primary-900`), a 11 Light `neutral-600` hint, then 72px square thumbnails (`radius` 12, 1px `primary-200`) with a 22px `primary-900` ✕ at the top-right corner, and a dashed `primary-500` "Add photo" tile. Tapping a thumbnail opens it full screen over a dark scrim. Up to 5 photos. Entries with photos show an 11px paperclip after the date in lists.
+
+### 6.34 Notices that offer a way out
+- `primary-50` card, `radius` 16, padding 16: title 16 SemiBold `primary-900`, a `caption` `neutral-600` explanation and a primary button. Used when the device holds another account's data (erase and continue) and for bank staff signing in to the app.
+
+### 6.35 PDF mark
+- Every printed statement and loan pack page has a small Finext mark (feather 13px + "Finext", `primary-900` / `primary-500`, 55% opacity, 7.5pt) fixed at the bottom-right corner.
+
+### 6.36 Password fields
+- The show / hide eye shows the **state**: open eye = the password is visible, crossed eye = hidden. Placeholders are words ("Enter password"), never dots, so an empty field cannot look filled.
+
 ## 7. Iconography
 
 - Style: **outlined line icons**, 1.5–2px stroke, rounded caps and joins (Lucide or Phosphor "regular" match closely).
@@ -347,7 +370,7 @@ Choice buttons behave as a **single-select radio group**: tapping one selects it
 ## 9. Screen Inventory & Flow
 
 ```
-Onboarding:  Welcome → Select Language → Start Option → (if existing balance) 1. Enter Business Assets → …
+Onboarding:  Welcome → Set up (language, finance words, currency) → Start Option → (if existing balance) 1. Enter Business Assets → …
 Main tabs:   Home (Account Balance) | Analysis | Transactions | Financial Statements | Profile
 Analysis:    Daily / Weekly / Monthly / Year tabs, My Targets, Quickly Analysis, Calendar (Spends / Categories)
 ```
@@ -357,7 +380,7 @@ Analysis:    Daily / Weekly / Monthly / Year tabs, My Targets, Quickly Analysis,
 | Welcome / Language / Start | Centered `display` title | 308 |
 | Enter Business Assets | Title left-aligned `title-lg` | 112 (square top corners) |
 | Account Balance | Balance summary, progress, Income/Expense cards, status | 435 |
-| Quickly Analysis | Savings ring + Revenue/Food last week | 307 |
+| Quickly Analysis | Money in / Money out last week | 307 |
 | Transaction | Total Balance card (`primary-50`, radius 16), summary, progress | 333 |
 | Analysis | Summary + progress | 282 |
 | Calendar | Header only | 181 |
@@ -504,7 +527,7 @@ Mirror the same token names (`AppColors.primary900`, `AppRadius.sheet`, etc.) in
 - [ ] Apply the number/currency formatter and the copy fixes from §10.
 - [ ] Wire i18n for `en-GB` and `km`; verify Khmer layout.
 - [ ] Check every screen at 375, 390 and 430 widths.
-- [ ] Entry screens: amount input has the KHR | USD switch, impact strip is present, and Pay later follows §9.2.
+- [ ] Entry screens: amount input uses the business's single currency (no switch), impact strip is present, and Pay later follows §9.2.
 - [ ] Selected states use `shadow-inner-selected`; primary buttons use `shadow-button`.
 
 ---

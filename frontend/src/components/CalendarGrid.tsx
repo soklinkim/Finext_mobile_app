@@ -29,6 +29,11 @@ export function CalendarGrid({ year, month, onMonthChange, selected, onSelect, a
   const rows = Array.from({ length: cells.length / 7 }, (_, r) => cells.slice(r * 7, r * 7 + 7));
   const today = new Date();
   const thisYear = today.getFullYear();
+  const onToday = selected ? sameDay(selected, today) : false;
+  const goToToday = () => {
+    onMonthChange(thisYear, today.getMonth());
+    onSelect(new Date(thisYear, today.getMonth(), today.getDate()));
+  };
 
   return (
     <View style={{ gap: 12 }}>
@@ -47,6 +52,12 @@ export function CalendarGrid({ year, month, onMonthChange, selected, onSelect, a
           <Icon name="chevronDown" size={16} color={colors.primary[200]} />
         </Pressable>
         </View>
+        {/* Shown whenever another day is selected, so the way back to today is one tap. */}
+        {!onToday && (
+          <Pressable accessibilityRole="button" accessibilityLabel={t('calendar.today')} onPress={goToToday} hitSlop={8} className="items-center justify-center rounded-pill bg-primary-50" style={{ marginLeft: 'auto', paddingHorizontal: 12, minHeight: 32 }}>
+            <Text variant="caption" weight={600} tone="primary-900">{t('calendar.today')}</Text>
+          </Pressable>
+        )}
       </View>
       <View className="flex-row">
         {WEEKDAYS[locale].map((w) => (

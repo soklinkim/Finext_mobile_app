@@ -114,7 +114,7 @@ export default function SecurityScreen() {
     : '—';
   const eye = (
     <Pressable accessibilityRole="button" accessibilityLabel={t('auth.togglePassword')} onPress={() => setShow((v) => !v)} hitSlop={10}>
-      <Icon name={show ? 'eyeOff' : 'eye'} size={20} />
+      <Icon name={show ? 'eye' : 'eyeOff'} size={20} />
     </Pressable>
   );
 
@@ -136,12 +136,12 @@ export default function SecurityScreen() {
 
         {section(t('security.changePassword'), 'lock', (
           <View style={{ gap: 16 }}>
-            <TextField variant="form" label={t('security.currentPassword')} value={form.current} onChangeText={set('current')} placeholder="••••••••"
+            <TextField variant="form" label={t('security.currentPassword')} value={form.current} onChangeText={set('current')} placeholder={t('auth.enterPassword')}
               secureTextEntry={!show} autoComplete="current-password" right={eye} error={submitted ? errors.current : undefined} />
-            <TextField variant="form" label={t('security.newPassword')} value={form.next} onChangeText={set('next')} placeholder="••••••••"
-              secureTextEntry={!show} autoComplete="new-password" error={submitted ? errors.next : undefined} />
-            <TextField variant="form" label={t('auth.confirmPassword')} value={form.confirm} onChangeText={set('confirm')} placeholder="••••••••"
-              secureTextEntry={!show} autoComplete="new-password" error={submitted || form.confirm ? errors.confirm : undefined}
+            <TextField variant="form" label={t('security.newPassword')} value={form.next} onChangeText={set('next')} placeholder={t('auth.enterPassword')}
+              secureTextEntry={!show} autoComplete="new-password" right={eye} error={submitted ? errors.next : undefined} />
+            <TextField variant="form" label={t('auth.confirmPassword')} value={form.confirm} onChangeText={set('confirm')} placeholder={t('auth.enterPasswordAgain')}
+              secureTextEntry={!show} autoComplete="new-password" right={eye} error={submitted || form.confirm ? errors.confirm : undefined}
               onSubmitEditing={() => { void save(); }} />
             <Text variant="micro" tone="neutral-600">{t('security.passwordRule')}</Text>
             {result ? (

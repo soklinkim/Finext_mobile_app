@@ -88,7 +88,7 @@ export function BusinessProfileForm({ values, onChange, errors = {}, showStartDa
   const dark = useAppTheme();
   const look = { fieldBackgroundColor, appearance };
   const fields = [
-    <TextField key="name" variant="form" label={t('profile.businessName')} value={values.businessName} onChangeText={(v) => onChange({ businessName: v })} placeholder={t('profile.businessNamePlaceholder')} error={errors.businessName} {...look} />,
+    <TextField key="name" variant="form" label={t('profile.businessName')} value={values.businessName} onChangeText={(v) => onChange({ businessName: v })} required placeholder={t('profile.businessNamePlaceholder')} error={errors.businessName} {...look} />,
     <SelectField
       key="industry"
       size="form"
@@ -98,6 +98,7 @@ export function BusinessProfileForm({ values, onChange, errors = {}, showStartDa
       value={values.businessIndustry || null}
       onChange={(v) => onChange({ businessIndustry: v })}
       error={errors.businessIndustry}
+      required
       {...look}
     />,
     <SelectField
@@ -115,7 +116,7 @@ export function BusinessProfileForm({ values, onChange, errors = {}, showStartDa
     />,
     values.registrationStatus === 'registered' && (
       <View key="number" style={{ paddingLeft: appearance === 'row' ? 0 : 20 }}>
-        <TextField variant="form" label={t('profile.registrationNumber')} value={values.registrationNumber} onChangeText={(v) => onChange({ registrationNumber: v })} error={errors.registrationNumber} {...look} />
+        <TextField variant="form" label={t('profile.registrationNumber')} value={values.registrationNumber} onChangeText={(v) => onChange({ registrationNumber: v })} error={errors.registrationNumber} required {...look} />
       </View>
     ),
     showStartDate && (
@@ -130,6 +131,7 @@ export function BusinessProfileForm({ values, onChange, errors = {}, showStartDa
     <SelectField
       key="location"
       size="form"
+      searchable
       label={t('profile.location')}
       placeholder={t('profile.select')}
       options={LOCATIONS.map((location) => ({ value: location, label: location }))}

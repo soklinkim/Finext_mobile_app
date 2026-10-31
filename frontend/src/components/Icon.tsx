@@ -49,6 +49,8 @@ import {
   Tag,
   Ticket,
   Upload,
+  Paperclip,
+  Camera,
   User,
   Utensils,
   WifiOff,
@@ -95,6 +97,8 @@ const LIBRARY = {
   logout: LogOut,
   file: FileText,
   upload: Upload,
+  paperclip: Paperclip,
+  camera: Camera,
   book: BookOpen,
   tag: Tag,
   // bottom navigation

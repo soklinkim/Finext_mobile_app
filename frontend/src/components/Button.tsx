@@ -1,4 +1,5 @@
 import { ActivityIndicator, Pressable, View } from 'react-native';
+import { useBumpFieldFocus } from './FieldFocus';
 import { Icon, type IconName } from './Icon';
 import { Text, toneColor, type Tone } from './Text';
 import { colors, shadow, textShadow } from '@/theme';
@@ -30,6 +31,7 @@ export function Button({ label, onPress, variant = 'primary', icon, trailingIcon
   const small = size === 'sm';
   const dark = useAppTheme();
   const isText = variant === 'text';
+  const bumpFieldFocus = useBumpFieldFocus();
   const tone: Tone = variant === 'primary' ? 'white' : isText ? (disabled ? 'neutral-500' : 'neutral-900') : 'primary-900';
   const backgroundColor = dark
     ? variant === 'primary' ? colors.primary[900] : variant === 'soft' ? colors.dark.field : variant === 'tint' ? colors.dark.subtle : undefined
@@ -41,7 +43,8 @@ export function Button({ label, onPress, variant = 'primary', icon, trailingIcon
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: !!disabled || !!loading }}
       disabled={disabled || loading}
-      onPress={onPress}
+      // The main button of a screen is its submit: tell the screen, so it can scroll to the first field that needs filling.
+      onPress={variant === 'primary' ? () => { bumpFieldFocus?.(); onPress?.(); } : onPress}
       className={`items-center justify-center ${isText ? '' : `rounded-pill ${BG[variant]}`} ${disabled && !isText ? 'opacity-50' : ''} ${className ?? ''}`}
       // Only set backgroundColor when there is one: on native an inline `undefined` erases the bg-… class colour.
       style={[{ minHeight: small ? 38 : 48, paddingHorizontal: small ? 16 : 24, ...(backgroundColor ? { backgroundColor } : {}) }, variant === 'primary' && !small && shadow.button]}

@@ -1,4 +1,5 @@
-import { Modal, Pressable, ScrollView, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { Icon } from './Icon';
 import { Text } from './Text';
 import { colors, radius, tint } from '@/theme';
@@ -17,12 +18,18 @@ interface Props<T extends string | number> {
   value?: T | null;
   onSelect: (value: T) => void;
   onClose: () => void;
+  /** Show a search box that filters options by label. */
+  searchable?: boolean;
 }
 
 /** Bottom-sheet list used by dropdowns (industry, bank, month, year…). */
-export function PickerModal<T extends string | number>({ visible, title, options, value, onSelect, onClose }: Props<T>) {
+export function PickerModal<T extends string | number>({ visible, title, options, value, onSelect, onClose, searchable }: Props<T>) {
   const { t } = useI18n();
   const dark = useAppTheme();
+  const [query, setQuery] = useState('');
+  useEffect(() => { if (!visible) setQuery(''); }, [visible]);
+  const needle = query.trim().toLowerCase();
+  const filtered = searchable && needle ? options.filter((o) => o.label.toLowerCase().includes(needle)) : options;
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <Pressable accessibilityLabel={t('common.close')} className="flex-1 justify-end" style={{ backgroundColor: tint(colors.shadow, 0.35) }} onPress={onClose}>
@@ -35,8 +42,21 @@ export function PickerModal<T extends string | number>({ visible, title, options
               <Icon name="close" size={22} />
             </Pressable>
           </View>
-          <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
-            {options.map((o) => {
+          {searchable && (
+            <View className="px-6" style={{ paddingBottom: 8 }}>
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder={t('common.search')}
+                placeholderTextColor={colors.neutral[500]}
+                accessibilityLabel={t('common.search')}
+                autoCorrect={false}
+                style={{ height: 40, paddingHorizontal: 16, borderRadius: 20, backgroundColor: dark ? colors.dark.field : colors.primary[50], color: dark ? colors.dark.text : colors.neutral[900] }}
+              />
+            </View>
+          )}
+          <ScrollView contentContainerStyle={{ paddingBottom: 32 }} keyboardShouldPersistTaps="handled">
+            {filtered.map((o) => {
               const selected = o.value === value;
               return (
                 <Pressable

@@ -173,8 +173,6 @@ def build_journal(transaction: dict[str, Any], bank_kinds: dict[str, str] | None
         terms = meta["termsDays"]
         if not isinstance(terms, int) or isinstance(terms, bool) or not 0 <= terms <= 365:
             raise PostingError("payment terms must be 0 to 365 days")
-    if type_id in {"customer_deposit"} and not (transaction.get("counterparty") or "").strip():
-        raise PostingError("customer is required")
     if type_id in {"other_income", "other_cost"} and not (transaction.get("note") or "").strip():
         raise PostingError("note is required")
     if type_id == "equipment_purchase":

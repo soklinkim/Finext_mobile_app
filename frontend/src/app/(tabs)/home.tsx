@@ -53,7 +53,14 @@ export default function Home() {
         <Image source={FEATHER} style={{ width: 40, height: 40 }} resizeMode="contain" accessibilityLabel="FINEXT" />
         <View style={{ flex: 1, gap: 1 }}>
           <Text variant="caption" tone="primary-900" numberOfLines={1}>{t(greetingKey())}</Text>
-          <Text variant="body-lg" tone="primary-900" weight={700} numberOfLines={1}>{businessName || 'FINEXT'}</Text>
+          {businessName ? (
+            <Text variant="body-lg" tone="primary-900" weight={700} numberOfLines={1}>{businessName}</Text>
+          ) : (
+            // Brand wordmark: "Fi" dark blue, "next" light blue, mixed case.
+            <Text variant="body-lg" weight={700} numberOfLines={1} style={{ color: colors.primary[900] }}>
+              Fi<Text variant="body-lg" weight={700} style={{ color: colors.primary[500] }}>next</Text>
+            </Text>
+          )}
         </View>
         <BellButton />
       </View>

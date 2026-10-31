@@ -119,6 +119,16 @@ const MIGRATIONS: string[] = [
   ALTER TABLE categories ADD COLUMN target_amount INTEGER;
   ALTER TABLE categories ADD COLUMN target_currency TEXT;
   `,
+  `
+  CREATE TABLE entry_attachments (${COMMON},
+    transaction_id TEXT NOT NULL REFERENCES transactions(id),
+    file_name TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    data TEXT NOT NULL
+  );
+  CREATE INDEX idx_entry_attachments_tx ON entry_attachments(transaction_id);
+  `,
 ];
 
 export function runMigrations(sqlite: SQLiteDatabase): void {

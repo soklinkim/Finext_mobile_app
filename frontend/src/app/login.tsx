@@ -9,7 +9,8 @@ import { Text } from '@/components/Text';
 import { TextField } from '@/components/TextField';
 import { useI18n } from '@/i18n';
 import { LENDER_PORTAL_URL } from '@/services/apiBase';
-import { LenderAccountError, signIn } from '@/services/auth';
+import { LedgerConflictNotice } from '@/components/LedgerConflictNotice';
+import { LenderAccountError, LocalLedgerOwnedError, signIn } from '@/services/auth';
 import { getSettings } from '@/services/bookkeeping';
 import { isOnline } from '@/services/network';
 import { colors } from '@/theme';
@@ -27,12 +28,15 @@ export default function Login() {
   const [saving, setSaving] = useState(false);
   // A bank staff login: explained, with the way to the portal, instead of a plain error.
   const [lender, setLender] = useState(false);
+  // This device still holds another account's offline data.
+  const [deviceOwned, setDeviceOwned] = useState(false);
   const openPortal = () => { void Linking.openURL(LENDER_PORTAL_URL); };
   const iconColor = dark ? colors.dark.primary : colors.primary[500];
 
   const submit = async () => {
     setError(undefined);
     setLender(false);
+    setDeviceOwned(false);
     if (!user.trim() || !password) {
       setError(t('error.required'));
       return;
@@ -52,6 +56,10 @@ export default function Login() {
     } catch (e) {
       if (e instanceof LenderAccountError) {
         setLender(true);
+        return;
+      }
+      if (e instanceof LocalLedgerOwnedError) {
+        setDeviceOwned(true);
         return;
       }
       // Offline, Supabase only says "Failed to fetch": say what is wrong instead.
@@ -80,14 +88,14 @@ export default function Login() {
             value={password}
             onChangeText={setPassword}
             secureTextEntry={!show}
-            placeholder="••••••••"
+            placeholder={t('auth.enterPassword')}
             autoComplete="password"
             onSubmitEditing={() => { void submit(); }}
             left={<Icon name="lock" size={18} color={iconColor} />}
             error={error && !password ? error : undefined}
             right={
               <Pressable accessibilityRole="button" accessibilityLabel={t('auth.togglePassword')} onPress={() => setShow((v) => !v)} hitSlop={10}>
-                <Icon name={show ? 'eyeOff' : 'eye'} size={20} />
+                <Icon name={show ? 'eye' : 'eyeOff'} size={20} />
               </Pressable>
             }
           />
@@ -96,6 +104,7 @@ export default function Login() {
           </Text>
         </View>
         {error && user.trim() && password ? <Text variant="caption" tone="danger">{error}</Text> : null}
+        {deviceOwned && <LedgerConflictNotice onErased={() => { setDeviceOwned(false); void submit(); }} />}
         {lender && (
           <View accessibilityLiveRegion="polite" className="bg-primary-50" style={{ borderRadius: 16, padding: 16, gap: 12 }}>
             <Text variant="body" weight={600} tone="primary-900">{t('auth.lenderTitle')}</Text>

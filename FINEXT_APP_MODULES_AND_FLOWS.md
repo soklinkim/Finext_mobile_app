@@ -2,7 +2,8 @@
 
 Build spec for Claude Code. Read this together with `FINEXT_STYLE_GUIDE_MERGED.md` (visual rules). This file says **what to build and how users move through it**. The style guide says how it looks.
 
-- **Product:** Finext, a mobile bookkeeping and financial-health app for small shops (SMEs) in Cambodia. Bilingual Khmer / English (UK). Currencies USD and KHR.
+- **Product:** Finext, a mobile bookkeeping and financial-health app for small shops (SMEs) in Cambodia. Bilingual Khmer / English (UK). One currency per business, USD or KHR, chosen at setup.
+- **Current state:** this file was the original build spec. Where the product has since changed, the section says so in a **Current build** note. Those notes win over the older text beside them.
 - **Figma file:** `iWtJcoDJn6HefdaGOTN8Pe` (Finext - Mobile App). Screens are on the page **App** (`5:4918`). Frame size 430 × 932.
 - **Source note:** the Figma page **User-flow** (`56:2759`) is empty. The flows below are derived from the numbered screens on the App page, the accounting rules (`posting_rules.json`, entry-rule spreadsheet), the ratio framework spreadsheet and the financial statement templates. Items marked **(open)** are not clear in the design and need an owner decision.
 
@@ -13,16 +14,16 @@ Build spec for Claude Code. Read this together with `FINEXT_STYLE_GUIDE_MERGED.m
 | # | Module | Purpose | Figma group (node) | Status in Figma |
 |---|---|---|---|---|
 | 1 | Launch | Splash and entry (Log In / Sign Up / Forgot Password) | `1. Launch` (`5:8876`) | Designed |
-| 2 | Onboarding | Language, start option, business profile, opening balances | `2. On Boarding` (`5:8860`) | Designed |
+| 2 | Onboarding | Language, finance wording, currency, start option, business profile, opening balances | `2. On Boarding` (`5:8860`) | Designed |
 | 3 | Authentication | Sign up, log in, forgot / reset password, PIN, fingerprint | `3. Login / Sign Up` (`5:8822`) | Designed |
 | 4 | Home | Dashboard: balances, goals, money in/out, recent transactions | `4. Home` (`5:8629`) | Designed |
 | 5 | Notifications | Reminders, updates, transaction alerts | `5.1. Notification` (`5:8554`) | Designed |
 | 6 | Account Balance | Balance, income vs expense, transaction list | `6. Account Balance` (`5:8492`) | Designed |
-| 7 | Quick Analysis | Weekly revenue/food, savings on goals, monthly chart | `7. Quickly Analysis` (`5:8412`) | Designed |
+| 7 | Quick Analysis | Weekly money in / money out, monthly chart | `7. Quickly Analysis` (`5:8412`) | Designed |
 | 8 | Bookkeeping | **Add entry**: Money in, Money out, Move money, plus entry list | `8. Transaction` (`5:8329`) + new sections | Designed (entry forms for every type) |
 | 9.2 | Analysis | Daily / Weekly / Monthly / Year charts, Search, Calendar | `9.2. Analysis` (`5:8236`) | Designed |
 | 9.3 | Transactions | Transaction history by month | `9.3 Transactions` (`5:7578`) | Designed |
-| 9.4 | Categories and Savings goals | Spending categories, add category, savings goals (Travel, House, Car, Wedding) | `9.4 Categories` (`5:7366`) | Designed |
+| 9.4 | ~~Categories and Savings goals~~ | **Removed from the app** (see §3.11) | `9.4 Categories` (`5:7366`) | Designed, not built |
 | 9.4.0 | Financial Statements | Template tiles + the 3 statements | `9.4.0 - A` (`6:11809`) + new section | Tiles designed; 3 statements designed |
 | 9.5 | Profile | Edit business profile, Security, Settings, Help, Online support, Logout | `9.5 Profile` (`5:6200`) | Designed |
 | 10 | Financial Health (ratios) | Ratio dashboard with green / yellow / red status | (none) | **Not designed** (spec in §11) |
@@ -37,14 +38,14 @@ Bottom navigation (5 tabs, component `Bottom Navigation - <name>`):
 | Statements | stacked layers | Module 9.4.0 Financial Statements | `statement` |
 | Profile | person | Module 9.5 | `profile` |
 
-**(open)** Where Categories and Savings goals (9.4) are opened from is not shown. Suggested: a "Categories" card on Home and a link in Analysis. The tab labelled "Category" in the Figma nav component is the layers icon and opens Financial Statements.
+The tab labelled "Category" in the Figma nav component is the layers icon and opens Financial Statements. (Categories and Savings goals, once an open question here, were removed from the app; see §3.11.)
 
 ---
 
 ## 2. Global rules (apply to every module)
 
 1. All text goes through i18n (`en-GB`, `km`). Layouts must tolerate Khmer.
-2. Every amount input has the **KHR | USD switch**. Store the amount with its currency and an exchange rate used at entry time. Display currency is a user setting. Reference rate 4,000 KHR = 1 USD is a placeholder from settings.
+2. **One currency per business.** The owner picks USD or KHR once, at setup, and every amount in the app uses it. There is **no KHR | USD switch** on amount inputs and no exchange rate in the UI. The currency can be changed in Settings only until the first entry, opening balance or budget is recorded; after that it is fixed. (Entries recorded earlier in the other currency still convert at the rate saved with them, and a rate is kept in the data for that.)
 3. Users always type positive numbers. The app derives direction (money in / out) from the entry type.
 4. **Posted entries are never edited or deleted.** "Edit" = reverse the original (swap debits and credits, link to original) and post a new entry. Deleting a transaction in the UI means "Reverse".
 5. Never show account codes or "debit / credit" in the UI.
@@ -64,15 +65,15 @@ Each module lists **screens**, **functions** (what the code must do) and **data*
 
 ### 3.2 Onboarding (2)
 Screens, in order:
-1. **Select language**: Khmer, English - UK (single select, Next). Saves locale.
+1. **Set up your Finext** (one screen): **Language** (Khmer, English - UK), **Finance words** (*Standard terms* or *Simple terms*) and **Currency** (USD or KHR). Each choice applies at once; Next goes to the start option. *Current build:* this replaced the separate language screen. Standard terms use accounting words (Liabilities, Revenue); simple terms use everyday words (Owed, Sales). The choice can be changed later in Profile.
 2. **How would you like to start?** Two choices (single select, info icon shows a tooltip):
    - *Start new balance from today* → enter balance sheet info only.
    - *Starting with existing balance* → enter balance sheet info **and** income statement for a date range (start/end dates, **cannot be shorter than one month**).
-3. **Create business profile**: Business Name, Business Industry (dropdown with icon), Registration Status (dropdown; shows Registration Number when Registered), Start Operation Date, Owner Name, Location, Phone or Email, Main Products or Services.
+3. **Create business profile**: Business Name, Business Industry (dropdown with icon), Registration Status (dropdown; shows Registration Number when Registered), Start Operation Date, Owner Name, Location, Phone or Email, Main Products or Services. *Current build:* Location is a searchable list of provinces; required fields carry a red star and turn red with a message when left empty, and the screen scrolls to the first one.
 4. **Enter Business Assets - Current assets**: Cash & bank balances (bank selector, KHR and USD rows, "Add more bank"), Accounts receivable, Inventory, Prepaid & other current assets.
-5. **Enter Business Assets - Non-current**: Property, equipment & vehicles, Other long-term assets.
-6. **Enter Liabilities - Current**: Accounts payable, Customer deposits & deferred revenue, Accrued expenses & taxes payable, Short-term loans (bank / MFI), Other short-term borrowings.
-7. **Enter Liabilities - Non-current**: Long-term loans (bank / MFI, with lender), Lease obligations.
+5. **Enter Business Assets - Non-current**: *Current build:* **Property (land and buildings)**, **Equipment and machinery** and **Vehicles** are separate fields (all saved as Property, equipment & vehicles, account 1500), plus **"+ Add another long-term asset"** for anything else, each with a name (saved as other long-term assets, 1600).
+6. **Enter Liabilities - Current**: Accounts payable, Customer deposits & deferred revenue, Accrued expenses, Taxes payable (*Current build:* asked apart, saved together as account 2200), Short-term loans (bank / MFI), Other short-term borrowings. Loans take **one row per lender**: a bank / MFI dropdown (searchable, with "Other bank / MFI" to type a name) and an amount, with "+ Add another lender". The rows add up to one total; lender names are not stored.
+7. **Enter Liabilities - Non-current**: Long-term loans (bank / MFI, one row per lender as above), Lease obligations.
 8. **Owner's Equity**: Owner's capital, Retained earnings brought forward, Net profit for the period, Less: owner's drawings.
 9. *Only for "existing balance":* **Enter Revenue** (Sales revenue, Cost of goods sold) and **Operating Expenses** (Salaries & wages, Rent, Utilities, Marketing & advertising, Transport & delivery, Depreciation, Other operating expenses, Other income, Interest expense, Income tax). Each with Start Date / End Date.
 - Functions:
@@ -86,7 +87,7 @@ Screens, in order:
 
 ### 3.3 Authentication (3)
 Screens: Create Account, Log In, Forgot Password, Security PIN (6 digits), New Password, Password changed, Security Fingerprint.
-- **Create Account:** Full name, Email, Mobile Number, Date of birth, Password, Confirm Password, Terms of Use and Privacy Policy consent, Sign Up, link to Log In.
+- **Create Account:** *Current build:* two steps, **1. Business** and **2. Review**. Step 1 is one page: Business Owner Name, Email, Business Contact Number, the business profile fields (name, industry, registration, location, main products), Password and Confirm Password (each with a show / hide eye; open eye = visible), and the Terms of Use and Privacy Policy consent. Step 2 shows one summary card with Edit. The contact number is saved as the owner's phone and as the business contact. If the email already has an account, or the device holds another account's data, a clear message with a way forward is shown before anything is created.
 - **Log In:** Username or email, Password, Log In, Forgot Password?, Use fingerprint to access, Sign Up link. Social sign-up row ("or sign up with") is drawn: **(open)** which providers.
 - **Forgot password flow:** enter registered email → Next step → Security PIN (6 digits, Accept, "Send again" with resend timer) → New Password + Confirm → success screen → Log In.
 - **Fingerprint:** "Use touch id" or "Or prefer use pin code?" fallback.
@@ -105,13 +106,15 @@ Screens: Create Account, Log In, Forgot Password, Security PIN (6 digits), New P
 - Functions: balance and period totals, open transaction detail, link to full list.
 
 ### 3.7 Quick Analysis (7)
-- Revenue Last Week, Food Last Week, Savings on goals, April Expenses bar chart (1st–4th week, y-axis 1k–15k), recent transactions.
-- Functions: weekly aggregates, month chart, top spending category.
+- *Current build:* **Money In Last Week** and **Money Out Last Week** (the last 7 days), the month's expenses bar chart (1st–4th week) and recent transactions. The Food tile and the savings ring were removed.
+- Functions: weekly aggregates, month chart.
 
 ### 3.8 Bookkeeping (8): Add an entry  — core module
 This is the heart of the app. Full UI spec is in the style guide (§6.16–6.26, §9). Behaviour:
 
 **Entry point:** bookkeeping tab → list of entries with "Add an entry" button, or the overview (grouped list for the month, tiles Money in / Money out / Left over).
+
+*Current build, applying to every entry:* the old free-form **category picker was removed** (an entry is classified by its type); the form ends with an optional **note** and an optional **Evidence** section (up to 5 photos of a receipt or invoice, from the camera or the gallery, kept on the phone, viewable and removable on the entry's detail page; entries with photos show a paperclip in lists). Required fields turn red when left empty and the screen scrolls to the first one. The date field's calendar has a **Go to today** button when another day is selected. Money fields use the business's single currency.
 
 **Flow of every entry**
 1. Choose direction with the tab switch: **Money in | Money out | Move money**.
@@ -127,12 +130,12 @@ This is the heart of the app. Full UI spec is in the style guide (§6.16–6.26,
 |---|---|---|---|---|
 | In | Product sale | Yes + customer | Cost (optional, estimated if blank) | Dr PAY, Cr Sales revenue 4000; Dr COGS 5000, Cr Inventory 1200 |
 | In | Service income | Yes + customer | none | Dr PAY, Cr Service revenue 4100 |
-| In | Customer deposit | No | Customer | Dr PAY, Cr Customer deposits 2100 |
-| In | Loan received | No | Lender, lender type, term | Dr PAY, Cr Loan 2400 / 2500 / 2600 (bank up to 12 months / informal up to 12 months / longer) ; creates Loan record |
+| In | Customer deposit | No | Customer name (optional) | Dr PAY, Cr Customer deposits 2100 |
+| In | Loan received | No | Lender type, then the lender (a bank / MFI chosen from a searchable list or "Other", or a typed name for family / informal), term, rate, repayment schedule | Dr PAY, Cr Loan 2400 / 2500 / 2600 (bank up to 12 months / informal up to 12 months / longer) ; creates Loan record |
 | In | Money I put in | No | none | Dr PAY, Cr Owner's capital 3000 |
 | In | Other income | No | Note (required) | Dr PAY, Cr Other income 4200 ; review flag |
 | Out | Rent | Yes + supplier | none | Dr Rent 6000, Cr PAY |
-| Out | Salaries & wages | Yes | none | Dr 6100, Cr PAY |
+| Out | Salaries & wages | Yes + "Owe to" (who is owed) | none | Dr 6100, Cr PAY |
 | Out | Utilities | Yes + supplier | none | Dr 6200, Cr PAY |
 | Out | Transport & delivery | Yes + supplier | none | Dr 6400, Cr PAY |
 | Out | Marketing | Yes + supplier | none | Dr 6500, Cr PAY |
@@ -141,7 +144,7 @@ This is the heart of the app. Full UI spec is in the style guide (§6.16–6.26,
 | Out | Other monthly cost (incl. insurance) | Yes | Note (required) | Dr 6990, Cr PAY ; review flag |
 | Out | Stock & materials | Yes + supplier | none | Dr Inventory 1200, Cr PAY |
 | Out | Equipment or vehicle | Yes | Asset name, useful life | Dr Equipment 1500, Cr PAY ; creates Asset record |
-| Out | Loan repayment | No | Loan, interest part | Dr Loan (principal), Dr Interest 7000 (if > 0), Cr PAY |
+| Out | Loan repayment | No | Loan (chosen from the recorded loans, with what is left on each; required), interest part | Dr Loan (principal), Dr Interest 7000 (if > 0), Cr PAY |
 | Out | Income tax | No | none | Dr Income tax expense 7100, Cr PAY |
 | Out | Money I took out | No | none | Dr Owner's drawings 3200, Cr PAY |
 | Move | Move money | No | From account, To account | Dr TO, Cr FROM (no profit effect) |
@@ -167,27 +170,30 @@ Deferred: *sold equipment* (not in v1).
 
 ### 3.9 Analysis (9.2)
 - Header with Total Balance, Total Expense, progress, then tabs **Daily | Weekly | Monthly | Year**, "income & Expenses" bar chart (paired bars, y-axis scale changes per period), Search icon, Calendar icon.
-- **Search (9.2.5):** Search field, Categories (select), Date, Report (Income / Expense toggle), results list.
+- **Search (9.2.5):** *Current build:* **Category** (a searchable list of every entry type, Money in then Money out then Move money), **Date**, then a results list. The text box and the Income / Expense toggle were removed.
 - **Calendar (9.2.6):** month and year pickers, week starts Monday, date selection, tabs Spends / Categories with a half-donut by category.
 - Functions: aggregate by day / week / month / year, chart scale, filter by category, date, type, free text.
 
 ### 3.10 Transactions (9.3)
-- List grouped by month (April, March), row = icon tile, title, date-time, category, amount. Filter and search link to 9.2.5.
+- List grouped by month, row = icon tile, title, date-time, category, amount, and a paperclip when the entry has evidence. *Current build:* **filters** above the list: a month picker (one or several months), and chips for All, Money in, Money out, Move money, Unpaid (pay-later entries with something still owed) and With evidence, with a count and an empty state. Search links to 9.2.5.
 - Functions: pagination, tap to open detail (3.8 follow-up actions), group totals.
 
-### 3.11 Categories and Savings goals (9.4)
+### 3.11 Categories and Savings goals (9.4) — removed
+
+> **Current build:** the Categories and Savings goals screens, and the category picker on entries, were removed from the app. Entries are classified by their type (Product sale, Rent, ...), and Search filters by type. The stored category rows are kept in the database (starting rows take part in the sync) but are no longer shown or chosen. The text below is the original design and is **not built**.
+
 - **Categories:** 8 tiles (Food, Transport, Medicine, Groceries, Rent, Gifts, Savings, Entertainment) + **New Category** dialog (name, Save / cancel). Category detail lists its transactions by month, with "Add Expenses" (Date, Category, Amount, Expense Title, Message, Save).
 - **Savings goals:** Travel, New House, Car, Wedding, "Add More". Goal detail: Goal amount, Amount Saved, % progress ring, deposits by month, "Add Savings" (Date, Category, Amount, Title, Message, Save).
 - Functions: CRUD categories (custom ones can be edited, built-in cannot be deleted), goal progress, link goal deposits to ledger as **Move money** into a savings account **(open: confirm)**, budget on 30% rule.
-- **(open)** These categories are spending categories for personal-style tracking, while Bookkeeping (3.8) uses accounting types. Decide whether each entry also carries a category tag. Suggested: yes, optional tag on every entry.
+- ~~(open) Whether each entry also carries a category tag.~~ Decided: no.
 
 ### 3.12 Financial Statements (9.4.0)
-- **Template tiles:** Income Statement, Balance Sheet, Cash Flow, Weekly Report, Monthly Report, Annual Report, Add new template.
+- **Template tiles:** *Current build:* Statement of Comprehensive Income, Statement of Financial Position, Statement of Cash Flows, Weekly Report, Monthly Report and the Loan application tile. Each of the first three has a small (i) that explains it in everyday words. There is no Annual Report tile and no Add new template. Statement names and line labels follow the Cambodian IFRS for SMEs reference where the wording means the same (see `STATEMENT_TERMS_REVIEW.md`). Statements are **always in standard accounting terms**, even when the owner chose simple terms, and in Khmer they use the reference's Khmer terms.
 - **Three statements** (UI in style guide §6.29): tab switch Income | Balance sheet | Cash flow, period picker, 3 KPI tiles, table, check strip, Download PDF.
   - Income Statement: Revenue, COGS, Gross profit, Operating expenses (Salaries & wages, Rent, Utilities, Marketing & advertising, Transport & delivery, Depreciation, Other operating expenses), Operating profit, Other income, Interest expense, Profit before tax, Income tax, **Net profit**; current and prior period; gross and net margin.
   - Balance Sheet: current and non-current assets, liabilities, owner's equity; **balance check must be 0**; current ratio and debt-to-equity.
   - Cash Flow (calculated, indirect method): operating (net profit, add back depreciation, working-capital changes), investing, financing, net change, cash start, cash end; **check ties to balance sheet cash = 0**.
-- Functions: compute from the ledger for any period; prior period comparison; check strips; export PDF; save a custom template **(open)**; Weekly / Monthly / Annual report presets.
+- Functions: compute from the ledger for any period; prior period comparison; check strips; export PDF (every page carries a small Finext mark in the bottom-right corner); save a custom template **(open)**; Weekly / Monthly report presets (the loan application pack also offers Annual).
 - Rules: expenses, drawings and tax are positive numbers in the data; the sheets apply the signs. Current period and prior period must be the same length.
 
 ### 3.13 Profile (9.5)
@@ -207,7 +213,7 @@ Menu: Edit Profile, Security, Setting, Help, Logout.
 ```mermaid
 flowchart TD
   A[Launch] --> B{Has account?}
-  B -- No --> C[Sign Up] --> D[Select language]
+  B -- No --> C[Sign Up: business details, review] --> D[Set up: language, finance words, currency]
   B -- Yes --> L[Log In]
   D --> F[Start option]
   F -- From today --> G[Business profile] --> H[Assets] --> I[Liabilities] --> J[Equity] --> K[Balance check]
@@ -260,7 +266,7 @@ flowchart LR
   FS[Statements tab] --> IS[Income] & BS[Balance sheet] & CF[Cash flow] --> PDF[Download PDF]
 ```
 
-### 4.6 Savings goal
+### 4.6 Savings goal (removed from the app)
 ```mermaid
 flowchart LR
   CAT[Categories] --> SG[Savings] --> G[Goal: Travel / House / Car / Wedding]
@@ -297,8 +303,9 @@ flowchart TD
 | `Loan` | id, lender, lenderType, account (2400/2500/2600), principalOpen, termMonths |
 | `Asset` | id, name, cost, usefulLifeYears, accumulatedDepreciation |
 | `Bank` | id, name, logo, type (bank / wallet) |
-| `Category` | id, name, icon, builtIn |
-| `Goal` | id, name, target, saved, deposits[] |
+| `Category` | id, name, icon, builtIn (kept in the data, no longer shown or chosen) |
+| `Goal` | id, name, target, saved, deposits[] (not built) |
+| `Attachment` | id, entryId, fileName, mimeType, sizeBytes, image data. Stored on the device only; not synced yet |
 | `Notification` | id, type, title, body, createdAt, read, deepLink |
 | `Period` | start, end, closed |
 
@@ -343,7 +350,7 @@ Statements are **derived** from `JournalLine` for a period. Never store statemen
 4. **Bookkeeping UI** (module 8): entry forms for all 19 types + Move money, impact strip, KHR | USD switch, entry list and detail with follow-up actions.
 5. **Statements** (9.4.0): derive Income, Balance, Cash Flow with check strips, PDF export.
 6. **Home, Account Balance, Analysis, Transactions, Notifications** (4–7, 9.2, 9.3).
-7. **Categories and Savings goals** (9.4).
+7. ~~Categories and Savings goals (9.4)~~ (removed).
 8. **Profile** (9.5).
 9. **Financial Health ratios** (§11).
 10. Accessibility pass, Khmer layout pass, 375 / 390 / 430 width check.
@@ -364,13 +371,13 @@ Statements are **derived** from `JournalLine` for a period. Never store statemen
 
 ## 9. Open questions
 
-1. Where do Categories and Savings goals open from (Home card, Analysis, menu)?
-2. Do bookkeeping entries carry an optional spending category tag?
-3. Do savings deposits post as Move money to a savings account?
+1. ~~Where do Categories and Savings goals open from?~~ Removed from the app.
+2. ~~Do bookkeeping entries carry an optional spending category tag?~~ No.
+3. ~~Do savings deposits post as Move money to a savings account?~~ Not applicable.
 4. Which social sign-in providers are in scope?
 5. "Add new template" on Financial Statements: what can users customise?
 6. Delete account: delete or anonymise ledger data?
-7. Who sets the KHR / USD rate (manual, daily feed)?
+7. ~~Who sets the KHR / USD rate?~~ Not needed: one currency per business.
 8. Is there a web or PDF delivery for statements beyond Download PDF (share sheet, email)?
 
 ---

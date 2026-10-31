@@ -48,9 +48,12 @@ export function TransactionRow({ tx, index = 0, onPress }: { tx: TransactionView
         <Text variant="micro" tone="neutral-600" numberOfLines={1}>
           {category}
         </Text>
-        <Text variant="micro" weight={500} tone="neutral-600" numberOfLines={1}>
-          {formatTxDate(tx.occurredAt, locale)}
-        </Text>
+        <View className="flex-row items-center" style={{ gap: 4 }}>
+          <Text variant="micro" weight={500} tone="neutral-600" numberOfLines={1}>
+            {formatTxDate(tx.occurredAt, locale)}
+          </Text>
+          {tx.evidenceCount > 0 && <Icon name="paperclip" size={11} color={colors.neutral[600]} />}
+        </View>
       </View>
       <View style={{ minWidth: 76 }} className="items-end">
         <Text
