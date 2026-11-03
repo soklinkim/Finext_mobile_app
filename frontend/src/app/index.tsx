@@ -1,16 +1,28 @@
+import { useCallback, useEffect, useState } from 'react';
 import { Redirect } from 'expo-router';
-import { Text } from 'react-native';
-import { useLocalQuery } from '@/hooks/useLocalQuery';
+import { View } from 'react-native';
+import { ErrorState, LoadingState } from '@/components/StateViews';
+import { resolveStartRoute, type StartRoute } from '@/services/accountGate';
 import { getSession } from '@/services/auth';
-import { getSettings } from '@/services/bookkeeping';
 
-/** Entry gate: finished onboarding → Home, otherwise the launch screen. */
+type Gate = { href: '/launch' | StartRoute } | { error: Error };
+
+/**
+ * Entry gate: finished onboarding → Home, otherwise the launch screen. A device that has not yet downloaded the
+ * account never falls through to onboarding on a failed download; it shows a retry instead.
+ */
 export default function Index() {
-  const { data } = useLocalQuery(async () => {
-    const [settings, session] = await Promise.all([getSettings(), getSession()]);
-    return { settings, signedIn: Boolean(session) };
+  const [gate, setGate] = useState<Gate>();
+  const check = useCallback(() => {
+    setGate(undefined);
+    getSession()
+      .then((session) => (session ? resolveStartRoute() : '/launch' as const))
+      .then((href) => setGate({ href }))
+      .catch((e: unknown) => setGate({ error: e instanceof Error ? e : new Error(String(e)) }));
   }, []);
-  if (!data) return <Text>Loading settings…</Text>;
-  if (!data.signedIn) return <Redirect href="/launch" />;
-  return <Redirect href={data.settings.onboardingStatus === 'completed' ? '/home' : '/onboarding/language'} />;
+  useEffect(check, [check]);
+
+  if (!gate) return <LoadingState />;
+  if ('error' in gate) return <View style={{ flex: 1, justifyContent: 'center', padding: 24 }}><ErrorState error={gate.error} onRetry={check} /></View>;
+  return <Redirect href={gate.href} />;
 }

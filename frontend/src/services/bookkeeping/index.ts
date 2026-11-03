@@ -3,10 +3,11 @@
  * authoritative accounting totals and reports are calculated by the backend. UI code
  * must go through this module and never import `@/db` directly.
  */
-import { and, desc, eq, gte, isNull, lte, like, or } from 'drizzle-orm';
+import { and, desc, eq, gt, gte, isNull, lte, like, or } from 'drizzle-orm';
 import { db, initDatabase, newRowMeta, schema } from '@/db/client';
-import { seedInitialData } from '@/db/seed';
+import { seedInitialData, STARTING_ROW_UPDATED_AT } from '@/db/seed';
 import { formatInputDate } from '@/lib/format';
+import { getLanguagePreference } from '@/services/preferences';
 import type { Bank, BusinessAsset, Category, Settings, Transaction } from '@/db/schema';
 import { emitChange } from './events';
 import { evidenceCounts } from './evidence';
@@ -99,7 +100,9 @@ export async function completeOnboarding(input: OnboardingInput): Promise<void> 
   // A business starting fresh in Finext begins today; ratios start "after the first complete month" from here.
   const current = await getSettings();
   const startOperationDate = input.profile.startOperationDate ?? current.startOperationDate ?? (input.startOption === 'new' ? formatInputDate(now) : null);
-  await updateSettings({ ...input.profile, startOperationDate, startOption: input.startOption, onboardingStatus: 'completed' });
+  // The language picked on the launch screen becomes the account's language, so every device that signs in gets it.
+  const language = await getLanguagePreference();
+  await updateSettings({ ...input.profile, language, startOperationDate, startOption: input.startOption, onboardingStatus: 'completed' });
 }
 
 // ---------------------------------------------------------------- reference data
@@ -890,6 +893,16 @@ export async function canChangeCurrency(): Promise<boolean> {
 }
 
 // ---------------------------------------------------------------- dev helpers
+/**
+ * Whether this device holds changes the server has not received. The starting rows every device creates (never edited,
+ * updatedAt 0) do not count: they are placeholders, not the owner's work.
+ */
+export async function hasUnsyncedWork(): Promise<boolean> {
+  const tables = [schema.banks, schema.categories, schema.transactions, schema.businessAssets, schema.budgets, schema.onboardingFinancialEntries, schema.settings];
+  return tables.some((table) =>
+    db.select({ id: table.id }).from(table).where(and(eq(table.syncStatus, 'pending'), gt(table.updatedAt, STARTING_ROW_UPDATED_AT))).limit(1).all().length > 0);
+}
+
 export async function countPendingSync(): Promise<number> {
   return (
     db.select().from(schema.banks).where(eq(schema.banks.syncStatus, 'pending')).all().length +

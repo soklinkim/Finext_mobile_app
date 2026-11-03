@@ -11,7 +11,7 @@ import { useI18n } from '@/i18n';
 import { LENDER_PORTAL_URL } from '@/services/apiBase';
 import { LedgerConflictNotice } from '@/components/LedgerConflictNotice';
 import { LenderAccountError, LocalLedgerOwnedError, signIn } from '@/services/auth';
-import { getSettings } from '@/services/bookkeeping';
+import { enterAfterLogin } from '@/services/accountGate';
 import { isOnline } from '@/services/network';
 import { colors } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
@@ -44,15 +44,8 @@ export default function Login() {
     setSaving(true);
     try {
       await signIn(user, password);
-      // Fetch the account first: on a new device the profile here is still blank, and deciding from it would send an
-      // owner who finished onboarding elsewhere through onboarding again. Offline, decide from this device.
-      try {
-        await (await import('@/services/sync')).syncService.sync();
-      } catch {
-        // offline or the server is down: the background sync catches up later
-      }
-      const s = await getSettings();
-      router.replace(s.onboardingStatus === 'completed' ? '/home' : '/onboarding/language');
+      // Always Home: this device's current data, or the account's last synced data downloaded first on a new device.
+      router.replace(await enterAfterLogin());
     } catch (e) {
       if (e instanceof LenderAccountError) {
         setLender(true);

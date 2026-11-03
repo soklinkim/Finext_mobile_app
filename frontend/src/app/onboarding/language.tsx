@@ -2,7 +2,6 @@ import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button } from '@/components/Button';
 import { ChoiceButton } from '@/components/ChoiceButton';
-import { CambodiaFlag, UkFlag } from '@/components/Flags';
 import { OnboardingShell } from '@/components/OnboardingShell';
 import { Text } from '@/components/Text';
 import { useLocalQuery } from '@/hooks/useLocalQuery';
@@ -13,7 +12,7 @@ import { setPlainLanguage } from '@/services/preferences';
 /** One setup screen: language, finance wording (standard / simple) and the single currency. Each choice applies at once. */
 export default function Setup() {
   const router = useRouter();
-  const { t, locale, plain } = useI18n();
+  const { t, plain } = useI18n();
   const { data: settings } = useLocalQuery(getSettings, []);
   const currency = settings?.displayCurrency ?? 'USD';
 
@@ -30,12 +29,6 @@ export default function Setup() {
   return (
     <OnboardingShell title={t('onb.setupTitle')} step={0} steps={2}>
       <View style={{ gap: 24, paddingTop: 8 }}>
-        <View style={{ gap: 12 }}>
-          {heading('onb.languageHeading')}
-          <ChoiceButton label="Khmer - ខ្មែរ" selected={locale === 'km'} onPress={() => updateSettings({ language: 'km' })} flagFallback={<CambodiaFlag />} />
-          <ChoiceButton label="English - UK" selected={locale === 'en-GB'} onPress={() => updateSettings({ language: 'en-GB' })} flagFallback={<UkFlag />} />
-        </View>
-
         <View style={{ gap: 12 }}>
           {heading('onb.termsHeading')}
           <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>

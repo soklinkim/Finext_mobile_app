@@ -361,7 +361,14 @@ function sync(): Promise<SyncResult> {
         await pullChanges();
         dropUnusedStartingRows();
       }
-      let push = await pushPending();
+      let push: PushResult;
+      try {
+        push = await pushPending();
+      } catch (error) {
+        // A failed upload must not stop this device from receiving the account's data: download, then report it.
+        await pullChanges().catch(() => undefined);
+        throw error;
+      }
       if (!repairedMissingRows && push.rejected.some((row) => MISSING_REFERENCE.test(row.reason))) {
         // The server is missing rows this device already marked as synced (its data was reset
         // or lost), so entries that point at them are rejected. Upload everything again, once.
@@ -379,6 +386,13 @@ function sync(): Promise<SyncResult> {
     });
   }
   return inFlightSync;
+}
+
+/** Forget how far this device has downloaded and fetch the whole account again (e.g. when this device looks incomplete). */
+export async function redownloadAccount(): Promise<SyncResult> {
+  const session = await getSession();
+  if (session) await AsyncStorage.removeItem(CURSOR_KEY + ':' + session.user.id);
+  return sync();
 }
 
 async function getJournal(): Promise<{ entries: JournalEntry[] }> {

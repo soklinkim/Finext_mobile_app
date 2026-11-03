@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { Alert, Pressable, Switch, View } from 'react-native';
+import { Button } from '@/components/Button';
 import { Icon, type IconName } from '@/components/Icon';
 import { ScreenShell } from '@/components/ScreenShell';
 import { Text } from '@/components/Text';
@@ -9,7 +11,7 @@ import { colors, radius } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
 import { clearAnalysisCache } from '@/services/analysis';
 import { canChangeCurrency, countPendingSync, getSettings, updateSettings } from '@/services/bookkeeping';
-import { setSimulatedOffline } from '@/services/network';
+import { isOnline, setSimulatedOffline } from '@/services/network';
 
 /** Setting — language, display currency, exchange rate, plus offline-testing tools. */
 export default function SettingsScreen() {
@@ -19,7 +21,27 @@ export default function SettingsScreen() {
   const { data: pending } = useLocalQuery(countPendingSync, []);
   const { data: currencyOpen } = useLocalQuery(canChangeCurrency, []);
   const dark = useAppTheme();
-  const line = dark ? colors.dark.border : colors.neutral[200];
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string>();
+
+  /** Upload what is waiting and download the account's latest, so another browser or phone sees the same data. */
+  const syncNow = async (fromScratch = false) => {
+    setSyncing(true);
+    setSyncError(undefined);
+    try {
+      const sync = await import('@/services/sync');
+      const { push } = await (fromScratch ? sync.redownloadAccount() : sync.syncService.sync());
+      // Name the first reason the server gave, so an entry (or onboarding) that cannot sync can be fixed.
+      if (push.rejected.length) setSyncError(`${t('settings.cloudRejected', { count: push.rejected.length })} (${push.rejected[0].table}: ${push.rejected[0].reason})`);
+      else Alert.alert(t('settings.cloud'), t('settings.cloudDone'));
+    } catch (e) {
+      // Offline gets its own plain sentence; otherwise show what the server said, so a failure can be traced.
+      setSyncError((await isOnline()) ? (e instanceof Error && e.message ? e.message : t('state.serverUnreachable')) : t('security.needsConnection'));
+    } finally {
+      setSyncing(false);
+    }
+  };
+  const line =dark ? colors.dark.border : colors.neutral[200];
   const card = { borderRadius: radius.card, borderWidth: 1, borderColor: line, backgroundColor: dark ? colors.dark.surface : colors.white, paddingHorizontal: 16, paddingVertical: 2 } as const;
   const divider = (first?: boolean) => ({ borderTopWidth: first ? 0 : 1, borderTopColor: line });
 
@@ -70,6 +92,23 @@ export default function SettingsScreen() {
           <View style={{ minHeight: 52, justifyContent: 'center', gap: 2 }}>
             <Text variant="body" weight={600} tone="primary-900">{settings?.displayCurrency === 'KHR' ? 'KHR (៛)' : 'USD ($)'}</Text>
             <Text variant="caption" tone="neutral-600">{t('settings.currencyLocked')}</Text>
+          </View>
+        </>)}
+
+        {/* Everything is saved on this device first; this copies it to the owner's account so any browser or phone can continue. */}
+        {section(t('settings.cloud'), 'upload', <>
+          <View style={{ paddingVertical: 12, gap: 4 }}>
+            <Text variant="body" weight={500} tone="primary-900">{t('settings.cloudBody')}</Text>
+            <Text variant="caption" weight={400} tone="neutral-600">
+              {syncError ?? (pending ? t('settings.pendingSync', { count: pending }) : t('settings.cloudUpToDate'))}
+            </Text>
+          </View>
+          <View style={{ paddingBottom: 12 }}>
+            <Button label={t('settings.cloudSyncNow')} loading={syncing} loadingLabel={t('settings.cloudSyncing')} onPress={() => void syncNow()} />
+          </View>
+          <View style={{ paddingBottom: 12, gap: 4, ...divider() }}>
+            <Text variant="caption" weight={400} tone="neutral-600" style={{ paddingTop: 10 }}>{t('settings.cloudRedownloadBody')}</Text>
+            <Button variant="soft" label={t('settings.cloudRedownload')} disabled={syncing} onPress={() => void syncNow(true)} />
           </View>
         </>)}
 

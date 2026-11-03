@@ -47,7 +47,7 @@ export async function resetLocalLedger(): Promise<void> {
   const keys = (await AsyncStorage.getAllKeys()).filter((key) =>
     key === LOCAL_OWNER_KEY ||
     key.startsWith('@finext.sync.cursor') ||
-    key.startsWith('finext.analysis.') ||
+    key.startsWith('@finext.auth.entered-home') ||    key.startsWith('finext.analysis.') ||
     key === 'finext:finhealth:v1' ||
     key === 'finext:pref:unusualDismissed');
   if (keys.length) await AsyncStorage.multiRemove(keys);
@@ -55,12 +55,22 @@ export async function resetLocalLedger(): Promise<void> {
 
 /** This device currently has one local ledger. Refuse to expose it to a different account. */
 async function bindLocalLedger(userId: string) {
-  const ownerId = await AsyncStorage.getItem(LOCAL_OWNER_KEY);
+  let ownerId = await AsyncStorage.getItem(LOCAL_OWNER_KEY);
   if (ownerId && ownerId !== userId) {
-    await getClient().auth.signOut({ scope: 'local' });
-    throw new LocalLedgerOwnedError();
+    // Everything the other account did here is already on the server, so clearing this device loses nothing and the
+    // new account downloads its own data. Only unsent changes are worth stopping for.
+    if (await hasUnsyncedWork()) {
+      await getClient().auth.signOut({ scope: 'local' });
+      throw new LocalLedgerOwnedError();
+    }
+    await resetLocalLedger();
+    ownerId = null;
   }
   if (!ownerId) await AsyncStorage.setItem(LOCAL_OWNER_KEY, userId);
+}
+
+async function hasUnsyncedWork(): Promise<boolean> {
+  return (await import('@/services/bookkeeping')).hasUnsyncedWork();
 }
 
 /** A partner-bank login used in the business app; the login screen points it to the lender portal. */
@@ -92,7 +102,10 @@ export async function signIn(email: string, password: string): Promise<Session> 
 
 export async function signUp(email: string, password: string, metadata: Record<string, string>) {
   // Check before the account is created: a new account would otherwise exist on the server but be refused on this device.
-  if (await AsyncStorage.getItem(LOCAL_OWNER_KEY)) throw new LocalLedgerOwnedError();
+  if (await AsyncStorage.getItem(LOCAL_OWNER_KEY)) {
+    if (await hasUnsyncedWork()) throw new LocalLedgerOwnedError();
+    await resetLocalLedger();
+  }
   const { data, error } = await getClient().auth.signUp({
     email: email.trim(),
     password,

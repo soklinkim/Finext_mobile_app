@@ -25,7 +25,7 @@ import { AppThemeProvider, useAppTheme } from '@/theme/AppTheme';
 import { colors } from '@/theme';
 import type { Locale } from '@/theme';
 import { getSession, subscribeToAuthChanges } from '@/services/auth';
-import { getPlainLanguage, subscribeToPlainLanguage } from '@/services/preferences';
+import { getLanguagePreference, getPlainLanguage, subscribeToLanguagePreference, subscribeToPlainLanguage } from '@/services/preferences';
 
 if (process.env.EXPO_OS !== 'web') {
   SplashScreen.preventAutoHideAsync().catch(() => undefined);
@@ -88,17 +88,32 @@ function useDatabase(): { ready: boolean; error: Error | null; bookkeeping: Book
 
 /** Keeps the UI language in sync with the `settings.language` row. */
 function LocaleGate({ children, bookkeeping }: { children: ReactNode; bookkeeping: Bookkeeping }) {
-  const [locale, setLocale] = useState<Locale>('en-GB');
+  const [accountLocale, setAccountLocale] = useState<Locale>();
+  const [deviceLocale, setDeviceLocale] = useState<Locale>('km');
+  const [signedIn, setSignedIn] = useState(false);
   const [darkTheme, setDarkTheme] = useState(false);
   const [plain, setPlain] = useState(true);
   useEffect(() => {
     const load = () => bookkeeping.getSettings().then((s) => {
-      setLocale(s.language);
+      // A profile that has not finished onboarding (a blank one on a new browser, or one mid-setup) has no language of
+      // its own yet: the launch screen's choice stands in until onboarding is completed and saves it.
+      setAccountLocale(s.onboardingStatus === 'completed' ? s.language : undefined);
       setDarkTheme(s.darkTheme);
     }).catch(() => undefined);
     load();
     return bookkeeping.subscribeToChanges(load);
   }, [bookkeeping]);
+  useEffect(() => {
+    void getSession().then((session) => setSignedIn(Boolean(session))).catch(() => undefined);
+    return subscribeToAuthChanges(setSignedIn);
+  }, []);
+  useEffect(() => {
+    void getLanguagePreference().then(setDeviceLocale);
+    return subscribeToLanguagePreference(setDeviceLocale);
+  }, []);
+  // Before sign-in the launch screen's choice rules (Khmer unless the owner picks otherwise). Once signed in, the
+  // account's own language rules. The two are kept apart so signing out never turns the launch screen to English.
+  const locale = signedIn && accountLocale ? accountLocale : deviceLocale;
   useEffect(() => {
     void getPlainLanguage().then(setPlain);
     return subscribeToPlainLanguage(setPlain);
