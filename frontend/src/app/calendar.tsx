@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { CalendarGrid } from '@/components/CalendarGrid';
@@ -14,13 +14,14 @@ import { useLocalQuery } from '@/hooks/useLocalQuery';
 import { useI18n } from '@/i18n';
 import { getCategoryBreakdown } from '@/services/analysis';
 import { listActiveDays, listTransactionsOnDate } from '@/services/bookkeeping';
-import { clearDayAnswer, dayKey, dayStart, getDayAnswers, getDayEstimates, listEstimatedDays, listMissedDays, removeEstimates } from '@/services/missedDays';
+import { clearDayAnswer, dayKey, dayStart, getDayAnswers, getDayEstimates, listEstimatedDays, listMissedDays, listZeroDays, removeEstimates } from '@/services/missedDays';
+import { MONTHS } from '@/lib/format';
 import { colors } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
 
 /** Calendar — Spends (local, per day) | Categories (analysis half-donut, cached offline). Missed days are flagged red. */
 export default function CalendarScreen() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const dark = useAppTheme();
   // Opened from a missed-day reminder: start on that day.
   const params = useLocalSearchParams<{ day?: string }>();
@@ -34,9 +35,13 @@ export default function CalendarScreen() {
   const { data: missed } = useLocalQuery(() => listMissedDays(), []);
   const { data: answers } = useLocalQuery(getDayAnswers, []);
   const { data: estimatedDays } = useLocalQuery(() => listEstimatedDays(cursor.year, cursor.month), [cursor.year, cursor.month]);
+  const { data: zeroDays } = useLocalQuery(() => listZeroDays(cursor.year, cursor.month), [cursor.year, cursor.month, JSON.stringify(answers ?? {})]);
   const { data: dayEstimates } = useLocalQuery(() => getDayEstimates(dayKey(selected)), [selected.getTime()]);
   const [removing, setRemoving] = useState(false);
-  const breakdown = useAnalysisQuery(getCategoryBreakdown);
+  // The categories chart follows the month shown in the calendar.
+  const monthKey = `${cursor.year}-${String(cursor.month + 1).padStart(2, '0')}`;
+  const loadBreakdown = useCallback(() => getCategoryBreakdown(monthKey), [monthKey]);
+  const breakdown = useAnalysisQuery(loadBreakdown);
 
   const inMonth = (day: string) => {
     const d = new Date(dayStart(day));
@@ -71,13 +76,12 @@ export default function CalendarScreen() {
   return (
     <ScreenShell title={t('screen.calendar')} nav="analysis" hero={<View style={{ height: 64 }} />}>
       <CalendarGrid year={cursor.year} month={cursor.month} onMonthChange={(year, month) => setCursor({ year, month })} selected={selected} onSelect={setSelected}
-        activeDays={active ?? []} missedDays={missedDays} estimatedDays={estimatedDays ?? []} />
-      {(missedDays.length > 0 || (estimatedDays?.length ?? 0) > 0) && (
-        <View style={{ flexDirection: 'row', gap: 16, marginTop: 12 }}>
-          {missedDays.length > 0 && legend(colors.danger, t('missed.legendMissed'))}
-          {(estimatedDays?.length ?? 0) > 0 && legend(colors.warning, t('missed.legendEstimate'))}
-        </View>
-      )}
+        activeDays={active ?? []} missedDays={missedDays} estimatedDays={estimatedDays ?? []} zeroDays={zeroDays ?? []} />
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginTop: 12 }}>
+        {legend(colors.success, t('missed.legendRecorded'))}
+        {legend(colors.warning, t('missed.legendZero'))}
+        {legend(colors.danger, t('missed.legendMissed'))}
+      </View>
       <View className="flex-row" style={{ gap: 16, marginTop: 24, marginBottom: 24 }}>
         {pill('spends', t('calendar.spends'))}
         {pill('categories', t('calendar.categories'))}
@@ -98,7 +102,7 @@ export default function CalendarScreen() {
             <View style={{ gap: 8, padding: 12, borderRadius: 10, backgroundColor: dark ? colors.dark.field : '#FFF4E0' }}>
               <Text variant="body-sm" weight={600} tone="neutral-900">{t('missed.bothTitle')}</Text>
               <Text variant="caption" tone="neutral-600">{t('missed.bothBody')}</Text>
-              <Pressable accessibilityRole="button" disabled={removing} hitSlop={8} onPress={() => { setRemoving(true); void removeEstimates(selectedKey, t('missed.removedTitle')).finally(() => setRemoving(false)); }}>
+              <Pressable accessibilityRole="button" disabled={removing} hitSlop={8} onPress={() => { setRemoving(true); void removeEstimates(selectedKey).finally(() => setRemoving(false)); }}>
                 <Text variant="caption" weight={700} style={{ color: dark ? colors.dark.primary : colors.primary[500] }}>{t('missed.removeEstimates')}</Text>
               </Pressable>
             </View>
@@ -108,6 +112,7 @@ export default function CalendarScreen() {
         </View>
       ) : (
         <View>
+          <Text variant="body" weight={600} tone="primary-900" style={{ textAlign: 'center', marginBottom: 12 }}>{t('calendar.categoriesFor', { month: `${MONTHS[locale][cursor.month]} ${cursor.year}` })}</Text>
           {breakdown.source === 'cache' && <OfflineBanner fetchedAt={breakdown.fetchedAt} />}
           {breakdown.loading && !breakdown.data ? <LoadingState /> : null}
           {breakdown.noCache ? <EmptyState titleKey="offline.noCache" bodyKey="offline.noCacheBody" icon="wifiOff" /> : null}

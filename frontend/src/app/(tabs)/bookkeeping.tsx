@@ -1,3 +1,4 @@
+import { MissedDaysPopup } from '@/components/MissedDaysPopup';
 import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -189,6 +190,7 @@ export default function Bookkeeping() {
         </View>
       </View>
 
+      <MissedDaysPopup />
       <MonthPickerModal visible={picker} title={t('overview.month')} value={months} onChange={setMonths} onClose={() => setPicker(false)} />
     </ScreenShell>
   );

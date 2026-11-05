@@ -15,9 +15,10 @@ def _escape(text: str) -> str:
     return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
 
-def statement_pdf(lines: list[tuple[float, float, str]]) -> bytes:
-    """One A4 page of Helvetica text, each line placed at (x, y) points from the bottom left."""
-    stream = "\n".join(f"BT /F1 9 Tf {x} {y} Td ({_escape(text)}) Tj ET" for x, y, text in lines).encode("latin-1")
+def statement_pdf(lines: list[tuple[float, float, str]], rules: list[tuple[float, float, float, float]] | None = None) -> bytes:
+    """One A4 page of Helvetica text, each line placed at (x, y) points from the bottom left; `rules` are ruled lines (x0, y0, x1, y1)."""
+    drawing = "\n".join(f"{x0} {y0} m {x1} {y1} l S" for x0, y0, x1, y1 in rules or [])
+    stream = ("\n".join(f"BT /F1 9 Tf {x} {y} Td ({_escape(text)}) Tj ET" for x, y, text in lines) + "\n" + drawing).encode("latin-1")
     objects = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
@@ -170,3 +171,31 @@ def test_ending_balance_falls_back_to_the_last_running_balance():
     result = read_statement(statement_pdf(lines))  # no "Closing Balance" line printed
     assert result["closingBalance"] == 1350.0
     assert (result["totalIn"], result["totalOut"]) == (800.0, 450.0)
+
+
+def test_a_ruled_table_whose_heading_row_is_a_picture_is_still_read():
+    """Some banks (Wing's among them) draw the Date / Debit / Credit heading as a picture: no text heading to find.
+    The table's ruled lines give the columns and rows instead."""
+    edges = [30, 110, 150, 240, 380, 440, 500, 570]  # date, branch, ref, description, debit, credit, balance
+    tops = [700, 640, 580, 520]
+    rules = [(x, 520, x, 700) for x in edges] + [(30, y, 570, y) for y in tops]
+    rows = [
+        ("03-Oct-2026", "995", "REF1", "Transfer in", "-", "10.00", "10.00"),
+        ("05-Oct-2026", "995", "REF2", "Transfer out", "-4.00", "-", "6.00"),
+        ("06-Oct-2026", "995", "REF3", "Shop purchase", "-1.50", "-", "4.50"),
+    ]
+    lines = [
+        (40, 780, "Account Currency: USD"),
+        (330, 770, "Opening Balance: 0.00"),
+        (330, 760, "Total Credit: 10.00"),
+        (330, 750, "Total Debit: -5.50"),
+        (330, 740, "Ending Balance: 4.50"),
+    ]
+    for i, row in enumerate(rows):
+        y = tops[i + 1] + 25
+        for x, text in zip([edges[0] + 4, edges[1] + 4, edges[2] + 4, edges[3] + 4, edges[4] + 4, edges[5] + 4, edges[6] + 4], row):
+            lines.append((x, y, text))
+    result = read_statement(statement_pdf(lines, rules))
+    assert [(r["direction"], r["amount"]) for r in result["rows"]] == [("in", 10.0), ("out", 4.0), ("out", 1.5)]
+    assert [r["date"] for r in result["rows"]] == ["2026-10-03", "2026-10-05", "2026-10-06"]
+    assert all(check["passed"] for check in result["checks"]), result["checks"]

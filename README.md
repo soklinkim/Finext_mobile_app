@@ -25,8 +25,11 @@ lender evidence instead of collateral.
 
 | Area | What the user gets |
 |---|---|
-| **Bookkeeping** | Simple entries (sales, costs, stock, loans, payments, transfers…) that work offline and sync when online. Each entry is posted to a double-entry ledger by fixed accounting rules. Any entry can carry optional photo evidence (a receipt or invoice). A business uses **one currency** (USD or KHR), chosen at setup, so there are no exchange rates to confuse. Entry history can be filtered by type, unpaid, evidence and month. |
-| **Bank statement import** | Upload a bank statement PDF (ACLEDA, ABA, Wing, Canadia and others, English or Khmer). Every transaction is read out, given a suggested entry type and checked for duplicates, and the owner reviews it before anything is saved. The PDF is not stored. The reader is by Saron Borak (see [Credits](#credits)). |
+| **Bookkeeping** | Simple entries (sales, costs, stock, loans, payments, transfers…) that work offline and sync when online. Each entry is posted to a double-entry ledger by fixed accounting rules. An entry can be **edited** or **deleted** from its detail page (delete asks first and removes the entry completely; see the note in [`FINEXT_FINANCE_RULES.md`](FINEXT_FINANCE_RULES.md)). Any entry can carry optional photo evidence (a receipt or invoice). A business uses **one currency** (USD or KHR), chosen at setup, so there are no exchange rates to confuse. Entry history can be filtered by type, unpaid, evidence and month. |
+| **Bank statement import** | Upload a bank statement PDF (ACLEDA, ABA, Wing, Canadia and others, English or Khmer). Every transaction is read out and checked for duplicates. An **Account summary** compares the statement's own opening balance, money in, money out and ending balance with what was detected, before the owner looks at any entry. **No entry type is guessed**: the owner chooses a type for every entry (one at a time, or for a whole search result at once, with a confirmation that says where the entries will go) and can search by description, day and category. Nothing is saved until every entry being added has a type. The PDF is not stored. Statements whose heading row is a picture (Wing Bank's, for one) are read from the table's ruled lines. The reader is by Saron Borak (see [Credits](#credits)). |
+| **Tap a figure to see how it is calculated** | In Analysis (Income, Expense, Net, health ratios) and in the three statements, tapping a figure opens a sheet with an explanation, the formula and the entries it is made of (for example Revenue = Product sale + Service income). Statement lines show the kinds of entry behind them, and the breakdown always adds up to the figure. |
+| **Missing data** | Days with no entry are flagged in the calendar (green recorded, yellow "nothing happened", red missing) and under Transactions › Missing records. For each the owner can enter the real numbers, confirm nothing happened, or fill the day with their own average (marked as an estimate). |
+| **Reminders** | Profile › App › Reminders: daily, weekly or monthly alarms (12-hour time, typed or picked). When one falls due while the app is open, a pop-up opens Add entry; reminders also appear in Notifications, with a red count on the bell for everything unread. They are in-app only: the phone does not ring while the app is closed. |
 | **Financial statements** | Statement of comprehensive income, statement of financial position and statement of cash flows, worded after the Cambodian IFRS for SMEs reference (see [`STATEMENT_TERMS_REVIEW.md`](STATEMENT_TERMS_REVIEW.md)), plus weekly and monthly reports, with prior-period comparison. Always in standard accounting terms, in English and Khmer. Each is previewed, then downloaded as a PDF with a small Finext mark in the corner. |
 | **Financial health** | Key ratios (margins, liquidity, debt, receivable and inventory days) against targets, with plain-language alerts, and an optional owner check-in using the FinHealth Score® survey [11]. |
 | **AI: probability of financial stress** | **Next 3 months:** a projection of the business's own cash flow against the stress conditions (cash under two weeks of expenses, operating cash flow negative three months running, or loan repayments not covered). **Next 12 months:** an XGBoost model trained on real company accounts, with the top reasons for each score. |
@@ -109,7 +112,7 @@ posting_rules.json               Entry types and their journal postings
 ## Offline and sync
 
 The app is **hybrid**: every entry is saved on the phone first, so bookkeeping works without a connection, and a
-background sync pushes changes to the server and pulls what is new. It runs a moment after a change, when the
+background sync pushes changes to the server and pulls what is new. It runs a moment after a change, every 30 seconds while the app is open and connected, when the
 connection returns, when the app comes back to the foreground and at login. Statements, ratios and risk results are
 calculated on the server and show their last saved copy when offline.
 
@@ -118,7 +121,7 @@ calculated on the server and show their last saved copy when offline.
   (with a count of unsynced changes that would be lost). See [`frontend/README.md`](frontend/README.md).
 - **Not synced yet:** evidence photos stay on the phone, as do small preferences (simple-terms switch, check-in
   answers). Business registration documents upload straight to the server and need a connection.
-- There is no "Sync now" button or last-synced time yet.
+- Profile › Cloud sync has a **Sync now** button and shows **when this device last synced**: while online the app also checks every 30 seconds for changes made on the owner's other devices, and offline it shows the last time it did sync.
 
 ## Run it locally
 
@@ -155,7 +158,7 @@ the trained model is already in `backend/app/risk_model_files/`.
 ## Tests
 
 ```powershell
-cd backend; .\venv\Scripts\python -m pytest tests     # 211 tests: posting rules, statements, ratios, AI risk, statement import, lender kit
+cd backend; .\venv\Scripts\python -m pytest tests     # 225 tests: posting rules, statements, ratios, AI risk, statement import, lender kit
 cd ml; .venv\Scripts\python -m pytest tests           # 19 tests: datasets, training checks, export, backend bridge
 cd frontend; npx tsc --noEmit                         # type check
 ```
@@ -176,7 +179,7 @@ At the time of writing `tests/test_settlement.py::test_balance_sheet_equity_foll
 
 - **Bank statement reader:** [`backend/app/statement_reader.py`](backend/app/statement_reader.py) (the
   `statement_to_excel` tool, which reads a bank statement PDF into a clean table across Cambodian banks, in English or
-  Khmer) was written by **Saron Borak**. FINEXT runs it unchanged behind the statement import screen.
+  Khmer) was written by **Saron Borak**. FINEXT runs it unchanged behind the statement import screen. For statements it cannot read, FINEXT adds two fallback readers of its own (`statement_aligned.py`, `statement_ruled.py`) that reuse its building blocks.
 - **Datasets:** the Polish [2], US [3] and Taiwanese [4] bankruptcy datasets, published under CC BY 4.0 by their
   authors.
 - **Open-source software:** Expo and React Native, Expo Router, NativeWind, expo-sqlite, FastAPI, Supabase, XGBoost,

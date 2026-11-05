@@ -1,4 +1,5 @@
 import { Tabs } from 'expo-router';
+import { ReminderPopup } from '@/components/ReminderPopup';
 
 /**
  * The five bottom-nav screens as real tabs: switching is instant, each screen stays mounted (scroll position, selected
@@ -9,12 +10,16 @@ import { Tabs } from 'expo-router';
  */
 export default function TabsLayout() {
   return (
-    <Tabs tabBar={() => null} screenOptions={{ headerShown: false, animation: 'none' }}>
-      <Tabs.Screen name="home" />
-      <Tabs.Screen name="analysis" />
-      <Tabs.Screen name="bookkeeping" />
-      <Tabs.Screen name="statements" />
-      <Tabs.Screen name="profile" />
-    </Tabs>
+    <>
+      <Tabs tabBar={() => null} screenOptions={{ headerShown: false, animation: 'none' }}>
+        <Tabs.Screen name="home" />
+        <Tabs.Screen name="analysis" />
+        <Tabs.Screen name="bookkeeping" />
+        <Tabs.Screen name="statements" />
+        <Tabs.Screen name="profile" />
+      </Tabs>
+      {/* Reminders the owner set (Profile > Reminders): a pop-up that opens Add entry when one falls due. */}
+      <ReminderPopup />
+    </>
   );
 }

@@ -131,6 +131,7 @@ function BackgroundSync({ bookkeeping }: { bookkeeping: Bookkeeping }) {
     let active = true;
     let syncing = false;
     let runAgain = false;
+    let firstRun = true;
     let timeout: ReturnType<typeof setTimeout> | undefined;
     let syncModule: typeof import('@/services/sync') | null = null;
     let analysisModule: typeof import('@/services/analysis') | null = null;
@@ -155,9 +156,14 @@ function BackgroundSync({ bookkeeping }: { bookkeeping: Bookkeeping }) {
         if (__DEV__ && (result.push.conflicts?.length ?? 0) > 0) {
           console.warn('[sync] Newer server copies replaced older local rows:', result.push.conflicts.map((item) => `${item.table}:${item.row.id}`));
         }
+        // The periodic check finds nothing most of the time: only redo the health alerts when rows were sent or received.
+        const changed = Object.values(result.push.accepted ?? {}).some((ids) => (ids?.length ?? 0) > 0) || (result.pull.changes?.length ?? 0) > 0;
+        const refresh = firstRun || changed;
+        firstRun = false;
         try {
           // Run the every-entry health triggers after synced bookkeeping changes, and cache the
           // result so the bell shows new alerts and partner-bank updates without opening the screen.
+          if (!refresh) return;
           analysisModule ??= await import('@/services/analysis');
           await analysisModule.refreshNotificationsAfterSync();
         } catch (error) {
@@ -195,9 +201,12 @@ function BackgroundSync({ bookkeeping }: { bookkeeping: Bookkeeping }) {
       if (state === 'active') schedule();
     });
 
+    // Real time: while the app is open and connected, keep checking for changes made on the owner's other devices.
+    const poll = setInterval(() => { if (AppState.currentState === 'active') schedule(); }, 30_000);
     schedule();
     return () => {
       active = false;
+      clearInterval(poll);
       if (timeout) clearTimeout(timeout);
       unsubscribeChanges();
       unsubscribeSimulation();

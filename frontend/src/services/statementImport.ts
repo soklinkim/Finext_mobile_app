@@ -2,9 +2,11 @@
  * Bank statement import. The server reads the PDF (ONLINE only, nothing stored); the owner reviews every row here and
  * only the rows they keep become ordinary entries, created offline-first like any other.
  *
- * Each row gets a suggested entry type: the type the owner chose before for the same description, else a keyword
- * guess, else a plain "other". Moves between the bank and Cash (ATM withdrawals, cash deposits) become transfers, not
- * costs or income, and loans are left for the Add entry form, so neither distorts the business's figures.
+ * No entry type is guessed: a bank's description (a name, a reference number) says little about what the payment was
+ * for, and a wrong guess would put it in the wrong place in the owner's statements. Every row starts without a type and
+ * the owner chooses one for each before anything is added. Keywords are used only to warn about rows that need a
+ * decision (cash deposits and ATM withdrawals, which may be moves between the bank and Cash, and loans, which are left
+ * for the Add entry form), never to fill in the type.
  */
 import { Platform } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
@@ -81,8 +83,9 @@ export function takePendingStatement(): UploadAsset | null {
  */
 export function statementTotals(read: StatementRead, currency: Currency): { moneyIn: number; moneyOut: number; opening: number | null; ending: number | null } {
   const sum = (direction: 'in' | 'out') => read.rows.filter((r) => r.direction === direction).reduce((total, r) => total + r.amount, 0);
-  const moneyIn = read.totalIn ?? sum('in');
-  const moneyOut = read.totalOut ?? sum('out');
+  // Some banks print the debit total as a negative number ("-801.26"): money out is a size here, so its sign is dropped.
+  const moneyIn = Math.abs(read.totalIn ?? sum('in'));
+  const moneyOut = Math.abs(read.totalOut ?? sum('out'));
   const lastBalance = [...read.rows].reverse().find((r) => r.balance !== null)?.balance ?? null;
   const ending = read.closingBalance ?? lastBalance ?? (read.openingBalance !== null ? read.openingBalance + moneyIn - moneyOut : null);
   const minor = (value: number | null) => (value === null ? null : toMinor(value, currency));
@@ -131,6 +134,7 @@ const normal = (text: string) => text.toLowerCase().replace(/[0-9#*/:.,-]+/g, ' 
 const mentions = (text: string, word: string) => (/[a-z]/.test(word) ? ` ${text}`.includes(` ${word}`) : text.includes(word));
 
 export interface ReviewRow extends StatementRow {
+  /** the entry type the owner chose; empty until they do */
   typeId: string;
   /** an entry with the same amount and date is already in FINEXT */
   duplicate: boolean;
@@ -197,16 +201,9 @@ export async function prepareRows(read: StatementRead, fallbackCurrency: Currenc
       && Math.abs(e.occurredAt - when) <= 1.5 * DAY && (e.direction === row.direction || e.direction === 'move'));
     if (match) used.add(match.id);
     const loan = LOAN_WORDS.some((word) => mentions(text, word));
-    const remembered = learned.get(text);
-    const allowed: readonly string[] = IMPORT_TYPES[row.direction];
-    const guess = KEYWORDS.find((k) => (!k.direction || k.direction === row.direction) && k.words.some((word) => mentions(text, word)))?.type;
-    // A cash deposit the bank labels as sales ("CASH DEPOSIT SALES 1-4 SEP") is suggested as sales: as a transfer
-    // it would not count as money in at all. The owner still confirms it (they may have recorded those sales already).
-    const cashMove = !remembered && guess === 'transfer';
-    const depositOfSales = cashMove && row.direction === 'in' && mentions(text, 'sale');
-    const typeId = remembered && allowed.includes(remembered) ? remembered
-      : depositOfSales ? 'product_sale' : guess ?? (row.direction === 'in' ? 'product_sale' : 'other_cost');
-    return { ...row, currency, typeId, duplicate: Boolean(match), loan, learned: Boolean(remembered), unsure: !remembered && !guess, cashMove, keep: !match && !loan };
+    // Only a warning: this looks like cash going into or out of the bank, which may be a move rather than income or a cost.
+    const cashMove = KEYWORDS.find((k) => k.type === 'transfer')!.words.some((word) => mentions(text, word));
+    return { ...row, currency, typeId: '', duplicate: Boolean(match), loan, learned: false, unsure: true, cashMove, keep: !match && !loan };
   });
 }
 
@@ -228,6 +225,11 @@ export async function importRows(rows: ReviewRow[], bank: Bank, cash: Bank | nul
     const convert = convertsOnImport(original, appCurrency);
     const currency: Currency = convert ? 'USD' : original;
     const amount = convert ? rielToCents(toMinor(row.amount, original)) : toMinor(row.amount, original);
+    // Nothing is added without a type the owner chose.
+    if (!row.typeId) {
+      failed.push(row);
+      continue;
+    }
     const transfer = row.typeId === 'transfer';
     // A transfer needs a Cash account other than the one the statement goes into.
     if (transfer && (!cash || cash.id === bank.id)) {

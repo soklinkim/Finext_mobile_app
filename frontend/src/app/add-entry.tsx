@@ -13,6 +13,7 @@ import { InfoCard } from '@/components/InfoCard';
 import { ScreenShell } from '@/components/ScreenShell';
 import { SegmentedControl } from '@/components/SegmentedControl';
 import { SelectField } from '@/components/SelectField';
+import { EmptyState, LoadingState } from '@/components/StateViews';
 import { Text } from '@/components/Text';
 import { TextField } from '@/components/TextField';
 import { useLocalQuery } from '@/hooks/useLocalQuery';
@@ -35,6 +36,9 @@ import {
   listBanks,
   listLoans,
   addEvidence,
+  formatAmountTyping,
+  getEntryForEdit,
+  updateEntry,
   parseAmountInput,
   validateTransaction,
   type AddTransactionInput,
@@ -48,7 +52,27 @@ type Pay = 'cash' | 'bank' | 'later';
 /** Add an entry — Money in | Money out | Move money (FINEXT_APP_MODULES §3.8). Writes to the local DB only; works offline. */
 const OTHER_LENDER = '__other__';
 
+type EditingEntry = NonNullable<Awaited<ReturnType<typeof getEntryForEdit>>>;
+
+/** Add an entry, or (with ?edit=<id>) change one that is already recorded. */
 export default function AddEntry() {
+  const { t } = useI18n();
+  const { edit } = useLocalSearchParams<{ edit?: string }>();
+  const { data: editing, loading } = useLocalQuery(() => (edit ? getEntryForEdit(String(edit)) : Promise.resolve(null)), [edit]);
+  if (edit && !editing) {
+    return (
+      <ScreenShell title={t('entry.editTitle')} nav="bookkeeping">
+        {loading ? <LoadingState /> : <EmptyState titleKey="entry.notFound" />}
+      </ScreenShell>
+    );
+  }
+  return <EntryForm key={edit ?? 'new'} editing={editing ?? null} />;
+}
+
+/** An amount in minor units as the owner would type it. */
+const amountToText = (minor: number, currency: Currency) => formatAmountTyping(currency === 'USD' ? (minor / 100).toFixed(2) : String(minor), currency);
+
+function EntryForm({ editing }: { editing: EditingEntry | null }) {
   const router = useRouter();
   const { t } = useI18n();
   const dark = useAppTheme();
@@ -57,25 +81,30 @@ export default function AddEntry() {
   const { data: loans } = useLocalQuery(listLoans, []);
   const { data: balances } = useLocalQuery(getAccountBalances, []);
 
-  const [direction, setDirection] = useState<Direction>('in');
-  const [typeId, setTypeId] = useState<string | null>(null);
+  const edited = editing?.entry;
+  const editedMeta = editing?.meta ?? {};
+  const editedNumber = (key: string) => (typeof editedMeta[key] === 'number' ? (editedMeta[key] as number) : undefined);
+  const editedCurrency = (edited?.currency as Currency | undefined) ?? 'USD';
+  const [direction, setDirection] = useState<Direction>(edited?.direction ?? 'in');
+  const [typeId, setTypeId] = useState<string | null>(edited?.typeId ?? null);
   // Opened from a missed-day reminder: dated that day.
   const params = useLocalSearchParams<{ date?: string }>();
   const presetDate = Number(params.date);
   const [dateMs, setDateMs] = useState<number | null>(() => {
+    if (edited) return edited.occurredAt;
     const now = Date.now();
     return Number.isFinite(presetDate) && presetDate > 0 && presetDate < now ? presetDate : now;
   });
-  const [amountText, setAmountText] = useState('');
-  const [currency, setCurrency] = useState<Currency>('USD');
-  const [pay, setPay] = useState<Pay>('cash');
-  const [bankId, setBankId] = useState<string | null>(null);
-  const [toBankId, setToBankId] = useState<string | null>(null);
+  const [amountText, setAmountText] = useState(edited ? amountToText(edited.amount, editedCurrency) : '');
+  const [currency, setCurrency] = useState<Currency>(editedCurrency);
+  const [pay, setPay] = useState<Pay>((edited?.payMethod as Pay | undefined) ?? 'cash');
+  const [bankId, setBankId] = useState<string | null>(edited?.bankId ?? null);
+  const [toBankId, setToBankId] = useState<string | null>(edited?.toBankId ?? null);
   // Entries are classified by their type (Product sale, Rent...); the old free-form categories are no longer picked here.
   const categoryId: string | null = null;
-  const [party, setParty] = useState('');
-  const [note, setNote] = useState('');
-  const [costText, setCostText] = useState('');
+  const [party, setParty] = useState(edited?.counterparty ?? '');
+  const [note, setNote] = useState(edited?.note ?? '');
+  const [costText, setCostText] = useState(editedNumber('cost') ? amountToText(editedNumber('cost')!, editedCurrency) : '');
   const [lender, setLender] = useState('');
   const [lenderType, setLenderType] = useState<'bank_mfi' | 'informal'>('bank_mfi');
   // A bank / MFI loan picks the lender from the bank list, or "Other" to type a name that is not listed.
@@ -87,12 +116,12 @@ export default function AddEntry() {
   const [firstDueMs, setFirstDueMs] = useState<number | null>(null);
   const [installmentText, setInstallmentText] = useState('');
   const [repaymentFrequency, setRepaymentFrequency] = useState<'weekly' | 'monthly'>('monthly');
-  const [termsDays, setTermsDays] = useState(30);
-  const [assetName, setAssetName] = useState('');
-  const [usefulLife, setUsefulLife] = useState('');
-  const [loanName, setLoanName] = useState('');
+  const [termsDays, setTermsDays] = useState(editedNumber('termsDays') ?? 30);
+  const [assetName, setAssetName] = useState(typeof editedMeta.assetName === 'string' ? editedMeta.assetName : '');
+  const [usefulLife, setUsefulLife] = useState(editedNumber('usefulLifeYears') ? String(editedNumber('usefulLifeYears')) : '');
+  const [loanName, setLoanName] = useState(typeof editedMeta.loanName === 'string' ? editedMeta.loanName : '');
   const [evidence, setEvidence] = useState<DraftEvidence[]>([]);
-  const [interestText, setInterestText] = useState('');
+  const [interestText, setInterestText] = useState(editedNumber('interest') ? amountToText(editedNumber('interest')!, editedCurrency) : '');
   const [attempted, setAttempted] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -106,7 +135,7 @@ export default function AddEntry() {
   const interest = parseAmountInput(interestText, currency);
 
   useEffect(() => {
-    if (settings) setCurrency(settings.displayCurrency);
+    if (settings && !edited) setCurrency(settings.displayCurrency);
   }, [settings?.displayCurrency]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // sensible account defaults once banks load
@@ -147,7 +176,8 @@ export default function AddEntry() {
         bankId,
         toBankId: type.direction === 'move' ? toBankId : null,
         categoryId,
-        title: t(`type.${type.id}` as TKey),
+        // Editing keeps the entry's own title (an imported entry carries the bank's description) unless its type changed.
+        title: edited && edited.typeId === type.id ? edited.title : t(`type.${type.id}` as TKey),
         counterparty: party || lenderName,
         note,
         occurredAt: dateMs ?? undefined, // addTransaction uses "now" when no date is picked
@@ -200,12 +230,13 @@ export default function AddEntry() {
     setAttempted(true);
     if (!input || Object.keys(validateTransaction(input)).length > 0) return;
     setSaving(true);
-    const result = await addTransaction(input);
+    const result = editing ? await updateEntry(editing.entry.id, input) : await addTransaction(input);
     setSaving(false);
     // Close this page and land on the Bookkeeping tab already open underneath (replace would stack a second set of tabs).
     if (result.ok) {
       if (evidence.length > 0) await addEvidence(result.id, evidence);
-      router.dismissTo('/bookkeeping');
+      if (editing) router.back();
+      else router.dismissTo('/bookkeeping');
     }
   };
 
@@ -429,14 +460,14 @@ export default function AddEntry() {
 
   return (
     <ScreenShell
-      title={t('screen.addEntry')}
+      title={t(editing ? 'entry.editTitle' : 'screen.addEntry')}
       nav="bookkeeping"
       hero={hero}
       padding={24}
       footer={
         <View>
           {impactStrip}
-          <Button label={t('entry.save')} onPress={save} loading={saving} />
+          <Button label={t(editing ? 'entry.saveChanges' : 'entry.save')} onPress={save} loading={saving} />
         </View>
       }
     >

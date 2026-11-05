@@ -117,11 +117,36 @@ export interface SyncService {
   /** Sync pending rows then calculate the ratios for this quarter so far. */
   getQuarterlyRatios(): Promise<RatioSnapshot[]>;
   getAnalysis(period: AnalysisPeriod): Promise<AnalysisResult>;
-  getCategories(): Promise<CategorySlice[]>;
+  /** Expenses of one month (YYYY-MM; the current month when omitted) split by cost type. */
+  getCategories(month?: string): Promise<CategorySlice[]>;
   dismissAlert(id: string): Promise<void>;
 }
 
 const CURSOR_KEY = '@finext.sync.cursor.v1';
+const LAST_SYNC_KEY = '@finext.sync.last.v1';
+const lastSyncListeners = new Set<() => void>();
+
+/** Remember that this device just exchanged changes with the server (kept per account, on this device). */
+async function recordSynced(): Promise<void> {
+  const session = await getSession();
+  if (!session) return;
+  await AsyncStorage.setItem(LAST_SYNC_KEY + ':' + session.user.id, String(Date.now())).catch(() => undefined);
+  lastSyncListeners.forEach((listener) => listener());
+}
+
+/** When this device last synced with the server, or null if it never has. */
+export async function getLastSynced(): Promise<number | null> {
+  const session = await getSession();
+  if (!session) return null;
+  const raw = await AsyncStorage.getItem(LAST_SYNC_KEY + ':' + session.user.id).catch(() => null);
+  const value = raw ? Number(raw) : NaN;
+  return Number.isFinite(value) ? value : null;
+}
+
+export function subscribeToLastSynced(listener: () => void): () => void {
+  lastSyncListeners.add(listener);
+  return () => lastSyncListeners.delete(listener);
+}
 /** Safety bound on one sync's catch-up (500 rows per page). */
 const MAX_PULL_PAGES = 50;
 
@@ -379,10 +404,15 @@ function sync(): Promise<SyncResult> {
         push = await pushPending();
       }
       const pull = await pullChanges();
-      if (!pull.reset) return { push, pull };
+      if (!pull.reset) {
+        await recordSynced();
+        return { push, pull };
+      }
       // Recovery after a server reset: upload everything again, then catch up from zero.
       const repush = await pushPending();
-      return { push: repush, pull: await pullChanges() };
+      const repull = await pullChanges();
+      await recordSynced();
+      return { push: repush, pull: repull };
     })().finally(() => {
       inFlightSync = null;
     });
@@ -479,9 +509,9 @@ async function getAnalysis(period: AnalysisPeriod): Promise<AnalysisResult> {
   return requestJson(`/accounting/analysis?period=${encodeURIComponent(period)}`);
 }
 
-async function getCategories(): Promise<CategorySlice[]> {
+async function getCategories(month?: string): Promise<CategorySlice[]> {
   await syncForAccountingReports();
-  return requestJson('/accounting/categories');
+  return requestJson(month ? `/accounting/categories?month=${encodeURIComponent(month)}` : '/accounting/categories');
 }
 
 async function dismissAlert(id: string): Promise<void> {

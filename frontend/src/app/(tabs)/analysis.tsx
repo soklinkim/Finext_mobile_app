@@ -1,9 +1,10 @@
 import { useCallback, useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { BarChartCard } from '@/components/BarChartCard';
 import { AnalysisLoading } from '@/components/AnalysisLoading';
 import { FinancialHealthChart } from '@/components/FinancialHealthChart';
+import { FormulaSheet, type FormulaInfo } from '@/components/FormulaSheet';
 import { FutureRiskSection } from '@/components/FutureRiskSection';
 import { IncomeExpenseForecastCard } from '@/components/IncomeExpenseForecastCard';
 import { LoanReadinessSection } from '@/components/LoanReadinessSection';
@@ -18,15 +19,17 @@ import { useAnalysisQuery } from '@/hooks/useAnalysisQuery';
 import { useI18n } from '@/i18n';
 import { getAnalysis, getRatios, getTargets, type AnalysisPeriod } from '@/services/analysis';
 import { formatMoney } from '@/services/bookkeeping';
+import { performanceInfo } from '@/services/formulas';
 import { colors, radius } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
 
 export default function Analysis() {
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, term } = useI18n();
   const dark = useAppTheme();
   const [period, setPeriod] = useState<AnalysisPeriod>('daily');
   const [section, setSection] = useState<'performance' | 'health' | 'loan'>('performance');
+  const [formula, setFormula] = useState<FormulaInfo | null>(null); // how the tapped total was worked out
   const loadAnalysis = useCallback(() => getAnalysis(period), [period]);
   const analysis = useAnalysisQuery(loadAnalysis);
   const targets = useAnalysisQuery(getTargets);
@@ -71,14 +74,14 @@ export default function Analysis() {
               {/* Totals first, then the chart that breaks them down. */}
               <View style={{ flexDirection: 'row', gap: 9 }}>
                 {[
-                  { label: t('summary.income'), amount: analysis.data.totals.income, color: colors.primary[500] },
-                  { label: t('summary.expense'), amount: analysis.data.totals.expense, color: colors.accent.expense },
-                  { label: t('analysis.net'), amount: analysis.data.totals.income - analysis.data.totals.expense, color: analysis.data.totals.income >= analysis.data.totals.expense ? colors.success : colors.danger },
+                  { kind: 'income' as const, label: t('summary.income'), amount: analysis.data.totals.income, color: colors.primary[500] },
+                  { kind: 'expense' as const, label: t('summary.expense'), amount: analysis.data.totals.expense, color: colors.accent.expense },
+                  { kind: 'net' as const, label: t('analysis.net'), amount: analysis.data.totals.income - analysis.data.totals.expense, color: analysis.data.totals.income >= analysis.data.totals.expense ? colors.success : colors.danger },
                 ].map((metric) => (
-                  <View key={metric.label} accessible accessibilityLabel={`${metric.label} ${formatMoney(metric.amount, analysis.data!.currency)}`} style={{ flex: 1, minWidth: 0, padding: 12, borderRadius: radius.card, backgroundColor: dark ? colors.dark.surface : colors.white, borderWidth: 1, borderColor: dark ? colors.dark.border : colors.neutral[200], borderTopWidth: 3, borderTopColor: metric.color, gap: 5 }}>
+                  <Pressable key={metric.label} accessibilityRole="button" accessibilityHint={t('formula.how')} accessibilityLabel={`${metric.label} ${formatMoney(metric.amount, analysis.data!.currency)}`} onPress={() => setFormula(performanceInfo(metric.kind, analysis.data!, { t, term }))} style={{ flex: 1, minWidth: 0, padding: 12, borderRadius: radius.card, backgroundColor: dark ? colors.dark.surface : colors.white, borderWidth: 1, borderColor: dark ? colors.dark.border : colors.neutral[200], borderTopWidth: 3, borderTopColor: metric.color, gap: 5 }}>
                     <Text variant="micro" tone="neutral-600" numberOfLines={1}>{metric.label}</Text>
                     <Text variant="body" weight={700} tone="primary-900" adjustsFontSizeToFit numberOfLines={1}>{formatMoney(metric.amount, analysis.data!.currency)}</Text>
-                  </View>
+                  </Pressable>
                 ))}
               </View>
               <BarChartCard
@@ -121,6 +124,7 @@ export default function Analysis() {
           <LoanReadinessSection />
         </View>
       )}
+      <FormulaSheet info={formula} onClose={() => setFormula(null)} />
     </ScreenShell>
   );
 }

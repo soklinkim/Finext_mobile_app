@@ -7,7 +7,7 @@
  *   figures, and the owner can replace them later.
  * The answers are kept in the synced profile (settings.missedDays), so another phone does not ask again.
  */
-import { addTransaction, convertMinor, getSettings, listBanks, listEntriesSince, REVERSAL_TYPE, reverseEntry, updateSettings, type Currency, type Transaction } from '@/services/bookkeeping';
+import { addTransaction, convertMinor, deleteEntry, getSettings, listBanks, listEntriesSince, REVERSAL_TYPE, updateSettings, type Currency, type Transaction } from '@/services/bookkeeping';
 
 const DAY = 24 * 60 * 60 * 1000;
 /** How far back missed days are flagged. */
@@ -147,6 +147,12 @@ export async function listMissedDays(now = Date.now()): Promise<MissedDay[]> {
   return missed;
 }
 
+/** Days of a month (1-31) the owner answered "nothing happened" (yellow in the calendar). */
+export async function listZeroDays(year: number, month: number): Promise<number[]> {
+  const prefix = `${year}-${String(month + 1).padStart(2, '0')}-`;
+  return Object.entries(await getDayAnswers()).filter(([day, a]) => a === 'zero' && day.startsWith(prefix)).map(([day]) => Number(day.slice(8)));
+}
+
 /** The answer given for each day, keyed YYYY-MM-DD (for the calendar). */
 export async function getDayAnswers(): Promise<Record<string, DayAnswer>> {
   return readAnswers((await getSettings()).missedDays);
@@ -223,12 +229,12 @@ export async function getDayEstimates(day: string): Promise<{ estimates: Transac
   return { estimates: entries.filter(isEstimated), hasReal: entries.some((t) => !isEstimated(t)) };
 }
 
-/** Remove a day's estimates (each is reversed, as the books never edit an entry). Returns false if one could not be. */
-export async function removeEstimates(day: string, reversalTitle: string): Promise<boolean> {
+/** Remove a day's estimates completely. Returns false if one could not be. */
+export async function removeEstimates(day: string): Promise<boolean> {
   const { estimates } = await getDayEstimates(day);
   let ok = true;
   for (const entry of estimates) {
-    const result = await reverseEntry(entry.id, `${reversalTitle}: ${entry.title}`);
+    const result = await deleteEntry(entry.id);
     ok = ok && result.ok;
   }
   return ok;

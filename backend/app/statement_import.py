@@ -12,7 +12,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from app import statement_aligned
+from app import statement_aligned, statement_ruled
 from app import statement_reader as reader
 
 MAX_BYTES = 10 * 1024 * 1024
@@ -56,17 +56,22 @@ def _better_reading(result, path: Path, password: str | None):
     reading the statement's figures agree with more (see statement_aligned). A reading that passes stays as it is."""
     if not _failures(result):
         return result
-    try:
-        aligned = statement_aligned.extract(path, dayfirst=True, password=password or None)
-    except Exception:
-        return result
-    if aligned is None or _failures(aligned) >= _failures(result):
-        return result
-    # Keep what the first reading worked out about the statement where the second has nothing.
-    for name in ("bank", "account_number", "period", "currency"):
-        if getattr(aligned.meta, name) is None:
-            setattr(aligned.meta, name, getattr(result.meta, name))
-    return aligned
+    best = result
+    # Second reading: columns by alignment with their headings. Third: columns and rows from the table's ruled lines,
+    # for statements whose heading row is a picture (there is then no text heading to align with).
+    for second in (statement_aligned, statement_ruled):
+        try:
+            candidate = second.extract(path, dayfirst=True, password=password or None)
+        except Exception:
+            continue
+        if candidate is None or _failures(candidate) >= _failures(best):
+            continue
+        # Keep what the first reading worked out about the statement where this one has nothing.
+        for name in ("bank", "account_number", "period", "currency"):
+            if getattr(candidate.meta, name) is None:
+                setattr(candidate.meta, name, getattr(best.meta, name))
+        best = candidate
+    return best
 
 
 def read_statement(content: bytes, password: str | None = None) -> dict:

@@ -22,7 +22,7 @@ import {
   parseAmountInput,
   recordPayment,
   recordWriteOff,
-  reverseEntry,
+  deleteEntry,
   type EntryDetail,
   type ValidationErrors,
 } from '@/services/bookkeeping';
@@ -141,7 +141,7 @@ function WriteOffForm({ detail, onDone }: { detail: EntryDetail; onDone: () => v
   );
 }
 
-/** One entry: details, payment status for pay-later entries, and Reverse (spec: Actions). */
+/** One entry: details, payment status for pay-later entries, Edit and Delete. */
 export default function EntryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -150,7 +150,7 @@ export default function EntryScreen() {
   const { data: detail, loading } = useLocalQuery(() => getEntryDetail(String(id)), [id]);
   const [paying, setPaying] = useState(false);
   const [writingOff, setWritingOff] = useState(false);
-  const [reverseError, setReverseError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const card = { padding: 16, borderRadius: radius.card, gap: 8, backgroundColor: dark ? colors.dark.surface : colors.white, borderWidth: 1, borderColor: dark ? colors.dark.border : colors.neutral[200] } as const;
 
   if (loading && !detail) return <ScreenShell title={t('entry.detailTitle')} nav="bookkeeping"><LoadingState /></ScreenShell>;
@@ -163,10 +163,19 @@ export default function EntryScreen() {
   const writtenOff = entry.writtenOff ?? 0;
   const paid = entry.openBalance === null ? 0 : entry.amount - entry.openBalance - writtenOff;
 
-  const reverse = () => confirmAction(t('entry.reverseConfirmTitle'), t('entry.reverseConfirmBody'), t('entry.reverse'), t('common.cancel'), async () => {
-    const result = await reverseEntry(entry.id, t('entry.reverseTitle', { title: entry.title }));
-    if (!result.ok) setReverseError(t(result.error as TKey));
-  });
+  // Delete asks first, so a slip of the finger cannot remove an entry. Everything recorded against it goes with it.
+  const remove = () => confirmAction(
+    t('entry.deleteConfirmTitle'),
+    t(payments.length > 0 ? 'entry.deleteConfirmBodyPayments' : 'entry.deleteConfirmBody'),
+    t('entry.delete'),
+    t('common.cancel'),
+    async () => {
+      const result = await deleteEntry(entry.id);
+      if (!result.ok) return setDeleteError(t(result.error as TKey));
+      if (router.canGoBack()) router.back();
+      else router.replace('/bookkeeping');
+    },
+  );
 
   return (
     <ScreenShell title={t('entry.detailTitle')} nav="bookkeeping" padding={24}>
@@ -245,19 +254,22 @@ export default function EntryScreen() {
           <SavedEvidenceSection transactionId={entry.id} />
         </View>
 
-        {!reversed && entry.status !== 'reversal' && (
-          <View style={{ gap: 8 }}>
-            {detail.reverseBlocked === 'entry.reverseBlockedPayments' ? (
-              <Text variant="micro" tone="neutral-600">{t('entry.reverseBlockedPayments')}</Text>
-            ) : (
-              <>
-                <Button size="sm" variant="soft" label={t('entry.reverse')} onPress={reverse} />
-                <Text variant="micro" tone="neutral-600">{t('entry.reverseHint')}</Text>
-              </>
-            )}
-            {reverseError ? <Text variant="micro" tone="danger">{reverseError}</Text> : null}
-          </View>
-        )}
+        <View style={{ gap: 8 }}>
+          {detail.editBlocked ? (
+            <Text variant="micro" tone="neutral-600">{t(detail.editBlocked as TKey === 'entry.reverseBlockedDone' ? 'entry.editBlockedLinked' : (detail.editBlocked as TKey))}</Text>
+          ) : (
+            <Button size="sm" icon="pencil" label={t('entry.edit')} onPress={() => router.push({ pathname: '/add-entry', params: { edit: entry.id } })} />
+          )}
+          {detail.deleteBlocked ? (
+            <Text variant="micro" tone="neutral-600">{t(detail.deleteBlocked as TKey)}</Text>
+          ) : (
+            <>
+              <Button size="sm" variant="soft" danger label={t('entry.delete')} onPress={remove} />
+              <Text variant="micro" tone="neutral-600">{t('entry.deleteHint')}</Text>
+            </>
+          )}
+          {deleteError ? <Text variant="micro" tone="danger">{deleteError}</Text> : null}
+        </View>
       </View>
     </ScreenShell>
   );

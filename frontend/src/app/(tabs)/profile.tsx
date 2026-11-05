@@ -1,5 +1,6 @@
 import { Alert, Platform, Pressable, Switch, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { CloudSyncSection } from '@/components/CloudSyncSection';
 import { Icon, type IconName } from '@/components/Icon';
 import { ScreenShell } from '@/components/ScreenShell';
 import { Text } from '@/components/Text';
@@ -28,6 +29,7 @@ const GROUPS: { title: TKey; items: Item[] }[] = [
     title: 'profile.group.app',
     items: [
       { key: 'settings', icon: 'settings', label: 'profile.menu.settings', hint: 'profile.hint.settings', href: '/settings' },
+      { key: 'reminders', icon: 'bell', label: 'profile.menu.reminders', hint: 'profile.hint.reminders', href: '/reminders' },
       { key: 'policies', icon: 'shield', label: 'profile.menu.policies', hint: 'profile.hint.policies', href: '/policies' },
       { key: 'help', icon: 'help', label: 'profile.menu.help', hint: 'profile.hint.help', href: '/help' },
     ],
@@ -158,6 +160,8 @@ export default function Profile() {
             </View>
           </View>
         ))}
+
+        <CloudSyncSection />
 
         <Pressable accessibilityRole="button" accessibilityLabel={t('profile.menu.logout')} onPress={() => onPress('logout')}
           style={{ ...card, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16, marginTop: 8 }}>

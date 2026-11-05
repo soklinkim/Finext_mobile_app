@@ -48,6 +48,7 @@ The tab labelled "Category" in the Figma nav component is the layers icon and op
 2. **One currency per business.** The owner picks USD or KHR once, at setup, and every amount in the app uses it. There is **no KHR | USD switch** on amount inputs and no exchange rate in the UI. The currency can be changed in Settings only until the first entry, opening balance or budget is recorded; after that it is fixed. (Entries recorded earlier in the other currency still convert at the rate saved with them, and a rate is kept in the data for that.)
 3. Users always type positive numbers. The app derives direction (money in / out) from the entry type.
 4. **Posted entries are never edited or deleted.** "Edit" = reverse the original (swap debits and credits, link to original) and post a new entry. Deleting a transaction in the UI means "Reverse".
+   > **Changed in the app (Nov 2026):** the entry page now has **Edit** (changes the entry in place; not for payments, write-offs, reversals, loans, or entries that have payments) and **Delete** (asks first; removes the entry, its payments and its photos completely, with no reversal entry; not for a loan that has repayments). See `FINEXT_FINANCE_RULES.md`, rule 3.
 5. Never show account codes or "debit / credit" in the UI.
 6. Every list screen needs loading, empty and error states.
 7. Auth-gated: all modules except 1 to 3 require a session. Idle timeout then PIN or fingerprint.
@@ -99,6 +100,7 @@ Screens: Create Account, Log In, Forgot Password, Security PIN (6 digits), New P
 
 ### 3.5 Notifications (5.1)
 - Groups: Today, Yesterday, This Weekend. Types: Reminder (e.g. set up automatic savings), New update, Transaction registered, Expense record advice.
+- Also built: the owner's own entry reminders (Profile › App › Reminders: daily, weekly or monthly at a chosen time) listed first, unread ones marked, with a red count on the bell; days with no entry ("Missed days"), each with enter / nothing happened / use my average.
 - Functions: list, mark read, tap routes to the related screen (transaction, goal, settings). Driven by the notification settings in 3.14.
 
 ### 3.6 Account Balance (6)
@@ -363,7 +365,7 @@ Statements are **derived** from `JournalLine` for a period. Never store statemen
 - Cash Flow end cash equals Balance Sheet cash.
 - Pay later is offered only for types that allow it; a customer or supplier is required when chosen.
 - Fees & licences, Income tax, Loan repayment, Money I took out, Deposits, Loans and Money I put in never show Pay later.
-- Posted entries cannot be edited or deleted, only reversed.
+- Posted entries cannot be edited or deleted, only reversed. (Superseded: the app lets the owner edit and delete; see rule 4 above.)
 - KHR entries show the converted amount and store the rate used.
 - Statements and ratios update immediately after saving an entry.
 

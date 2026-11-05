@@ -23,11 +23,13 @@ interface Props {
   accessibilityHint?: string;
   /** md = full-size page action (default); sm = compact button inside cards and forms */
   size?: 'md' | 'sm';
+  /** red label and icon, for actions that delete something */
+  danger?: boolean;
 }
 
 const BG = { primary: 'bg-primary-900', soft: 'bg-primary-50', tint: 'bg-primary-200', text: '' } as const;
 
-export function Button({ label, onPress, variant = 'primary', icon, trailingIcon, disabled, loading, loadingLabel, className, accessibilityHint, size = 'md' }: Props) {
+export function Button({ label, onPress, variant = 'primary', icon, trailingIcon, disabled, loading, loadingLabel, className, accessibilityHint, size = 'md', danger }: Props) {
   const small = size === 'sm';
   const dark = useAppTheme();
   const isText = variant === 'text';
@@ -36,6 +38,7 @@ export function Button({ label, onPress, variant = 'primary', icon, trailingIcon
   const backgroundColor = dark
     ? variant === 'primary' ? colors.primary[900] : variant === 'soft' ? colors.dark.field : variant === 'tint' ? colors.dark.subtle : undefined
     : undefined;
+  const textColor = danger ? colors.danger : undefined;
   return (
     <Pressable
       accessibilityRole="button"
@@ -51,11 +54,11 @@ export function Button({ label, onPress, variant = 'primary', icon, trailingIcon
     >
       <View className="flex-row items-center justify-center" style={{ gap: small ? 6 : 8 }}>
         {/* While working: a spinner where the icon goes, and the label stays readable. */}
-        {loading ? <ActivityIndicator size="small" color={toneColor(tone, dark)} /> : icon && <Icon name={icon} size={small ? 15 : 18} color={toneColor(tone, dark)} />}
-        <Text variant={small ? 'body-sm' : isText ? 'title-lg' : 'body-lg'} weight={600} tone={tone} style={isText && !disabled && !small ? textShadow : undefined}>
+        {loading ? <ActivityIndicator size="small" color={textColor ?? toneColor(tone, dark)} /> : icon && <Icon name={icon} size={small ? 15 : 18} color={textColor ?? toneColor(tone, dark)} />}
+        <Text variant={small ? 'body-sm' : isText ? 'title-lg' : 'body-lg'} weight={600} tone={tone} style={{ ...(isText && !disabled && !small ? textShadow : {}), ...(textColor ? { color: textColor } : {}) }}>
           {loading ? loadingLabel ?? label : label}
         </Text>
-        {trailingIcon && !loading && <Icon name={trailingIcon} size={small ? 15 : 18} color={toneColor(tone, dark)} />}
+        {trailingIcon && !loading && <Icon name={trailingIcon} size={small ? 15 : 18} color={textColor ?? toneColor(tone, dark)} />}
       </View>
     </Pressable>
   );

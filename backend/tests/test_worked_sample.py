@@ -176,3 +176,16 @@ def test_a_period_still_in_progress_is_not_called_ended():
     assert accounting_router._heading_period("annual", at(2026, 1, 1), at(2026, 10, 27, 9)) == "For the period from 1 January 2026 to 27 October 2026"
     assert accounting_router._heading_period("monthly", at(2026, 10, 1), at(2026, 10, 31, 9)) == "For the month ended 31 October 2026"
     assert accounting_router._heading_period("weekly", at(2026, 10, 26), at(2026, 11, 1, 9)) == "For the week ended 1 November 2026"
+
+
+def test_each_line_explains_where_its_figure_comes_from(current_year):
+    """The breakdown shown when a statement figure is tapped always adds up to the figure itself."""
+    checked = 0
+    for kind in ("income", "balance", "cashflow"):
+        for section in current_year[kind]["sections"]:
+            for line in section["lines"]:
+                sources = line.get("sources")
+                if sources:
+                    checked += 1
+                    assert sum(item["amount"] for item in sources) == line["current"], (kind, line["key"], sources)
+    assert checked >= 10

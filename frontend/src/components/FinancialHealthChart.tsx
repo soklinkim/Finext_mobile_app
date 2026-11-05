@@ -13,6 +13,7 @@ import { colors, radius, tint } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
 import { getHealthHistory, getQuarterlyRatios, type HealthHistoryMonth, type RatioSnapshot } from '@/services/analysis';
 import { formatMoney, getCashTrend } from '@/services/bookkeeping';
+import { healthRatioFormula } from '@/services/formulas';
 import { formatRatio } from '@/services/ratioFormat';
 
 type Status = RatioSnapshot['status'];
@@ -213,6 +214,7 @@ function RatioRow({ item, first, expanded, onToggle }: { item: Judged; first: bo
   // Not ready, or a figure that does not apply ("No interest", "No repayments due"): the server's reason instead.
   const right = ready && shown ? goalText : (ratio.message ?? t('health.group.notready'));
   const description = t(`health.desc.${ratio.id}` as TKey);
+  const formulaText = healthRatioFormula(ratio.id, t);
   const hasTrend = history.filter((value) => value !== null).length >= 2;
   return (
     <View style={{ paddingVertical: 14, gap: 12, ...(first ? {} : { borderTopWidth: 1, borderTopColor: grid }) }}>
@@ -235,6 +237,13 @@ function RatioRow({ item, first, expanded, onToggle }: { item: Judged; first: bo
             labels={{ bad: ratio.betterWhen === 'higher' ? 'Too low' : 'Too high', watch: 'Watch', good: 'Good' }}
             targetLabel={`Standard ${formatRatio({ ...ratio, value: ratio.benchmark })}`}
             accessibilityLabel={`${ratio.label}: ${shown ?? '—'} against the standard target ${formatRatio({ ...ratio, value: ratio.benchmark })}`} />
+          {formulaText ? (
+            <View style={{ gap: 2 }}>
+              <Text variant="micro" weight={700} tone="neutral-600">{t('formula.how')}</Text>
+              <Text variant="body-sm" weight={600} tone="primary-900">{ratio.label} = {formulaText}</Text>
+              {shown ? <Text variant="caption" tone="neutral-600">{`= ${shown}`}</Text> : null}
+            </View>
+          ) : null}
           {hasTrend && (
             <View style={{ gap: 4 }}>
               <Sparkline values={history} target={goal} />
