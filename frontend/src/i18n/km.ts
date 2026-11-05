@@ -683,6 +683,7 @@ export const km: Record<TKey, string> = {
   'assets.balanceRequired': 'សូមបំពេញរាល់មុខតារាងតុល្យការ។ បញ្ចូល 0 សម្រាប់មុខដែលមិនពាក់ព័ន្ធ។',
   'assets.incomeRequired': 'សូមបំពេញរាល់មុខរបាយការណ៍លទ្ធផល។ បញ្ចូល 0 សម្រាប់មុខដែលមិនពាក់ព័ន្ធ។',
   'assets.zeroIfNone': 'អ្នកអាចបញ្ចូល 0 សម្រាប់មុខដែលមិនពាក់ព័ន្ធ។',
+  'assets.fillZeros': 'បំពេញប្រអប់ទទេទាំងអស់ដោយ 0',
 
   'profile.businessName': 'ឈ្មោះអាជីវកម្ម',
   'profile.businessNamePlaceholder': 'បញ្ចូលឈ្មោះអាជីវកម្ម',

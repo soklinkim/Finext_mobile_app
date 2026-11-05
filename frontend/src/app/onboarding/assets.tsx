@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
+import { Keyboard, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button } from '@/components/Button';
 import { DateInput } from '@/components/DateInput';
@@ -115,6 +115,14 @@ function addOneMonth(ms: number): number {
   return date.getTime();
 }
 
+/** The last text field of a section, which gets "Done" on the keyboard instead of "Next". */
+function lastFieldOf(section: EntrySection, otherAssets: OtherAsset[]): string {
+  if (section === 'income') return 'amt:income_tax';
+  if (section === 'assets') return otherAssets.length ? `other:${otherAssets[otherAssets.length - 1].key}` : 'asset:vehicles';
+  if (section === 'liabilities') return 'amt:lease_obligations';
+  return 'amt:owner_drawings';
+}
+
 /** Collect opening balance sheet values for all users and period income for existing businesses. */
 export default function Assets() {
   const router = useRouter();
@@ -159,6 +167,26 @@ export default function Assets() {
     }));
   const setAmount = (key: string, value: string) => setAmounts((old) => ({ ...old, [key]: formatAmountTyping(value, currency) }));
 
+  // Keyboard "Next": every text field registers itself in the order it is drawn, so pressing Next on the phone keyboard
+  // moves the cursor to the next field of the screen (and the last one says Done and closes the keyboard).
+  const inputs = useRef<Record<string, ComponentRef<typeof TextInput> | null>>({});
+  const order: string[] = [];
+  const lastFieldId = lastFieldOf(sections[sectionIndex] ?? 'assets', otherAssets);
+  const chain = (id: string) => {
+    order.push(id);
+    return {
+      fieldRef: (node: ComponentRef<typeof TextInput> | null) => { inputs.current[id] = node; },
+      returnKeyType: id === lastFieldId ? ('done' as const) : ('next' as const),
+      // keep the keyboard open when Next is pressed so it does not flicker between fields
+      submitBehavior: 'submit' as const,
+      onSubmitEditing: () => {
+        const next = order.slice(order.indexOf(id) + 1).find((key) => inputs.current[key]);
+        if (next) inputs.current[next]?.focus();
+        else Keyboard.dismiss();
+      },
+    };
+  };
+
   const dateError = existing && start && end
     ? end <= start
       ? t('error.endAfterStart')
@@ -173,6 +201,39 @@ export default function Assets() {
     liabilities: t('assets.liabilities'),
     equity: t('assets.equity'),
   };
+  /** Puts 0 in every empty field of this section (typed values stay), for items that do not apply to the business. */
+  const fillZeros = () => {
+    setError(undefined);
+    if (currentSection === 'assets') {
+      setRows((old) => old.map((r) => (r.amount.trim() ? r : { ...r, amount: '0' })));
+      setAssets((old) => {
+        const next = { ...old };
+        for (const field of ASSET_FIELDS) if (!next[field.key]?.amount.trim()) next[field.key] = { currency: next[field.key]?.currency ?? currency, amount: '0' };
+        return next;
+      });
+      return;
+    }
+    const fields = currentSection === 'income' ? INCOME_FIELDS : currentSection === 'liabilities' ? BALANCE_FIELDS.slice(0, 8) : BALANCE_FIELDS.slice(8);
+    setAmounts((old) => {
+      const next = { ...old };
+      for (const field of fields) if (!next[field.key]?.trim()) next[field.key] = '0';
+      return next;
+    });
+    if (currentSection === 'liabilities') {
+      setLoans((old) => {
+        const next = { ...old };
+        for (const key of LOAN_KEYS) next[key] = old[key].map((r) => (r.amount.trim() ? r : { ...r, amount: '0' }));
+        return next;
+      });
+    }
+  };
+  const zeroHint = (
+    <View style={{ gap: 8 }}>
+      <Text variant="caption" tone="neutral-600">{t('assets.zeroIfNone')}</Text>
+      <Button variant="soft" size="sm" label={t('assets.fillZeros')} onPress={fillZeros} />
+    </View>
+  );
+
   const hasCashBalance = rows.some((row) => row.amount.trim());
   const hasEveryAssetCategory = ASSET_FIELDS.every((field) => assets[field.key]?.amount.trim());
   const hasEveryLiability = BALANCE_FIELDS.slice(0, 8).every((field) => amounts[field.key]?.trim());
@@ -315,6 +376,7 @@ export default function Assets() {
             onChangeText={(value) => setAssetAmount(key, value)}
             keyboardType="decimal-pad"
             placeholder="0"
+            {...chain(`asset:${key}`)}
           />
         </View>
       </View>
@@ -359,6 +421,7 @@ export default function Assets() {
                 onChangeText={(lender) => updateLoans(key, (rows) => rows.map((r) => (r.key === row.key ? { ...r, lender } : r)))}
                 placeholder={t('entry.otherLenderName')}
                 accessibilityLabel={t('entry.otherLenderName')}
+                {...chain(`loanbank:${key}:${row.key}`)}
               />
             ) : null}
             <TextField
@@ -369,6 +432,7 @@ export default function Assets() {
               keyboardType="decimal-pad"
               placeholder="0"
               right={<Text variant="body-sm" weight={500}>{currency}</Text>}
+              {...chain(`loan:${key}:${row.key}`)}
             />
           </View>
         ))}
@@ -390,6 +454,7 @@ export default function Assets() {
       keyboardType="decimal-pad"
       placeholder="0"
       right={<Text variant="body-sm" weight={500}>{currency}</Text>}
+      {...chain(`amt:${field.key}`)}
     />
   );
 
@@ -412,7 +477,7 @@ export default function Assets() {
         <Text variant="caption" tone="neutral-600">{t('assets.sectionProgress', { current: sectionIndex + 1, total: sections.length })}</Text>
         {currentSection === 'income' && (
           <View style={{ gap: 12 }}>
-            <Text variant="caption" tone="neutral-600">{t('assets.zeroIfNone')}</Text>
+            {zeroHint}
             <View style={panelStyle}>
               <DateInput label={t('assets.startDate')} value={start} onChange={setStart} error={error && !start ? error : undefined} />
               <DateInput label={t('assets.endDate')} value={end} onChange={setEnd} error={dateError ?? (error && !end ? error : undefined)} />
@@ -430,7 +495,7 @@ export default function Assets() {
 
         {currentSection === 'assets' && (
           <View style={{ gap: 16 }}>
-        <Text variant="caption" tone="neutral-600">{t('assets.zeroIfNone')}</Text>
+        {zeroHint}
         {existing && <Text variant="caption" tone="neutral-600">{`${t('assets.endDate')}: ${end ? new Date(end).toLocaleDateString() : '—'}`}</Text>}
         <View style={panelStyle}>
         <Text variant="body-lg" weight={700} tone="primary-900">{t('assets.current')}</Text>
@@ -464,6 +529,7 @@ export default function Assets() {
                 onChangeText={(bankName) => setRows((old) => old.map((r) => r.key === row.key ? { ...r, bankName } : r))}
                 placeholder={t('entry.otherLenderName')}
                 accessibilityLabel={t('entry.otherLenderName')}
+                {...chain(`bank:${row.key}`)}
               />
             ) : null}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -476,6 +542,7 @@ export default function Assets() {
                   onChangeText={(amount) => setRows((old) => old.map((r) => r.key === row.key ? { ...r, amount: formatAmountTyping(amount, r.currency) } : r))}
                   keyboardType="decimal-pad"
                   placeholder="0"
+                  {...chain(`cash:${row.key}`)}
                 />
               </View>
             </View>
@@ -497,6 +564,7 @@ export default function Assets() {
               value={other.name}
               onChangeText={(name) => setOtherAssets((old) => old.map((o) => (o.key === other.key ? { ...o, name } : o)))}
               placeholder={t('assets.otherAssetPlaceholder')}
+              {...chain(`othername:${other.key}`)}
               right={
                 <Text variant="body-sm" weight={600} tone="primary-900" accessibilityRole="button" accessibilityLabel={t('assets.removeOther')} onPress={() => setOtherAssets((old) => old.filter((o) => o.key !== other.key))}>
                   ✕
@@ -513,6 +581,7 @@ export default function Assets() {
                   onChangeText={(value) => setOtherAssets((old) => old.map((o) => (o.key === other.key ? { ...o, amount: formatAmountTyping(value, currency) } : o)))}
                   keyboardType="decimal-pad"
                   placeholder="0"
+                  {...chain(`other:${other.key}`)}
                 />
               </View>
             </View>
@@ -527,7 +596,7 @@ export default function Assets() {
 
         {currentSection === 'liabilities' && (
           <View style={{ gap: 16 }}>
-            <Text variant="caption" tone="neutral-600">{t('assets.zeroIfNone')}</Text>
+            {zeroHint}
             <View style={panelStyle}>
             <Text variant="body-lg" weight={700} tone="primary-900">{t('assets.currentLiabilities')}</Text>
             {BALANCE_FIELDS.slice(0, 6).map((f) => (LOAN_KEYS.includes(f.key as LoanKey) ? loanField(f) : financialField(f)))}
@@ -541,7 +610,7 @@ export default function Assets() {
 
         {currentSection === 'equity' && (
           <View style={{ gap: 16 }}>
-            <Text variant="caption" tone="neutral-600">{t('assets.zeroIfNone')}</Text>
+            {zeroHint}
             <View style={panelStyle}>
             {BALANCE_FIELDS.slice(8).map(financialField)}
             <Text variant="body" tone="primary-900">{t('assets.periodProfit')}: {formatMoney(incomeNet, currency)}</Text>

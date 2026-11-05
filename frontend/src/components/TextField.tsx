@@ -1,6 +1,6 @@
-import { useRef, useState, type ComponentRef } from 'react';
+import { useImperativeHandle, useRef, useState, type ComponentRef, type Ref } from 'react';
 import { TextInput, View, type TextInputProps } from 'react-native';
-import { useScrollToError } from './FieldFocus';
+import { useRevealOnFocus, useScrollToError } from './FieldFocus';
 import { FieldLabel } from './FieldLabel';
 import { Text } from './Text';
 import { colors, fontFamily } from '@/theme';
@@ -22,15 +22,20 @@ interface Props extends Omit<TextInputProps, 'style'> {
   required?: boolean;
   /** White box with a 1 px primary-200 border at rest, for fields on a tinted card where the default fill disappears. */
   outlined?: boolean;
+  /** gives the screen the underlying input, e.g. to move the cursor to the next field when the keyboard's Next key is pressed */
+  fieldRef?: Ref<ComponentRef<typeof TextInput>>;
 }
 
 /** Text input on primary-50. Focus = 2 px primary-500 outline, error = 2 px danger outline + helper text. */
-export function TextField({ label, error, variant = 'entry', right, left, fieldBackgroundColor, onFocus, onBlur, multiline, appearance = 'box', required, outlined, ...rest }: Props) {
+export function TextField({ label, error, variant = 'entry', right, left, fieldBackgroundColor, onFocus, onBlur, multiline, appearance = 'box', required, outlined, fieldRef, ...rest }: Props) {
   const { locale } = useI18n();
   const dark = useAppTheme();
   const isForm = variant === 'form';
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<ComponentRef<typeof TextInput>>(null);
+  const revealOnFocus = useRevealOnFocus();
+  // Hand the underlying input to the screen (see fieldRef) without disturbing our own ref.
+  useImperativeHandle(fieldRef, () => inputRef.current as ComponentRef<typeof TextInput>, []);
   const outerRef = useScrollToError(error, { focus: () => inputRef.current?.focus(), skip: focused });
   const restingBorder = outlined ? (dark ? colors.dark.border : colors.primary[200]) : 'transparent';
   const border = error ? colors.danger : focused ? colors.primary[500] : restingBorder;
@@ -50,7 +55,7 @@ export function TextField({ label, error, variant = 'entry', right, left, fieldB
             multiline={multiline}
             placeholderTextColor={colors.neutral[500]}
             accessibilityLabel={label}
-            onFocus={(e) => { setFocused(true); onFocus?.(e); }}
+            onFocus={(e) => { setFocused(true); revealOnFocus?.(); onFocus?.(e); }}
             onBlur={(e) => { setFocused(false); onBlur?.(e); }}
             style={{ flex: 1, minWidth: 0, color: dark ? colors.dark.text : colors.neutral[900], fontFamily: fontFamily(500, locale), fontSize: 15, paddingVertical: 2, minHeight: multiline ? 48 : 24, textAlignVertical: multiline ? 'top' : 'center' }}
             {...passwordProps}
@@ -77,6 +82,7 @@ export function TextField({ label, error, variant = 'entry', right, left, fieldB
           accessibilityLabel={label}
           onFocus={(e) => {
             setFocused(true);
+            revealOnFocus?.();
             onFocus?.(e);
           }}
           onBlur={(e) => {

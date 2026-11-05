@@ -727,6 +727,7 @@ export const en = {
   'assets.balanceRequired': 'Complete every balance sheet line. Enter 0 for items that do not apply.',
   'assets.incomeRequired': 'Complete every income statement line. Enter 0 for items that do not apply.',
   'assets.zeroIfNone': "You can enter 0 for any items that don't apply.",
+  'assets.fillZeros': 'Fill empty fields with 0',
 
   // business profile
   'profile.businessName': 'Business Name',
@@ -1357,7 +1358,7 @@ export const en = {
   'fh.q8.o3': 'Disagree somewhat',
   'fh.q8.o4': 'Disagree strongly',
   'state.serverUnreachableTitle': 'Can’t reach the FINEXT server',
-  'state.serverUnreachable': 'You’re online, but the server didn’t answer. Check that it’s running and that this device can reach it (same Wi-Fi, firewall allows it), then try again. You can still record bookkeeping entries.',
+  'state.serverUnreachable': 'You’re online, but the server didn’t answer. It may be waking up after a quiet period: wait a minute and try again. If it keeps failing, check that it’s running and that this device can reach it. You can still record bookkeeping entries.',
   'stress.noConditions': 'None of the stress signs appear in any of the possible futures.',
   'debt.check.open': 'Check a new loan',
   'pack.tile': 'Loan application pack',

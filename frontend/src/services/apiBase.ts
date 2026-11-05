@@ -19,9 +19,20 @@ export const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || defaultApiUrl).r
 /** The lender portal for partner-bank staff, served by the same API. */
 export const LENDER_PORTAL_URL = `${API_BASE_URL}/portal/`;
 
-/** Most API calls answer in well under a second; uploads, file downloads and sync can take longer on mobile data. */
-export const REQUEST_TIMEOUT_MS = 15_000;
-export const LONG_REQUEST_TIMEOUT_MS = 60_000;
+/**
+ * Most API calls answer in well under a second; uploads, file downloads and sync can take longer on mobile data.
+ * A free-tier host that has been idle needs about a minute to wake up, so the limits leave room for that first request.
+ */
+export const REQUEST_TIMEOUT_MS = 30_000;
+export const LONG_REQUEST_TIMEOUT_MS = 90_000;
+
+/**
+ * Wakes a sleeping host in the background when the app opens (free hosting pauses an idle server, and waking it takes
+ * up to a minute), so the first sign-in or sync does not have to wait for it. Fire and forget: failures are ignored.
+ */
+export function wakeServer(): void {
+  fetchWithTimeout(`${API_BASE_URL}/health`, {}, 90_000).catch(() => undefined);
+}
 
 /**
  * fetch with a time limit. A firewall or an unreachable host often drops the connection without refusing it, and the

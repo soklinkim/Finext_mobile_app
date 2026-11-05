@@ -15,12 +15,17 @@ interface FieldFocusValue {
   claim: (claim: FieldClaim) => void;
   /** the scrolling content, which fields measure themselves against */
   inner: () => unknown;
+  /** scroll the field that has the cursor into view above the keyboard (called whenever a field gets focus) */
+  reveal?: () => void;
 }
 
 /** Provided by ScreenShell: lets fields with an error ask the screen to scroll to the first one. */
 export const FieldFocusContext = createContext<FieldFocusValue | null>(null);
 
 export const useBumpFieldFocus = () => useContext(FieldFocusContext)?.bump;
+
+/** Lets a field ask the screen to scroll it above the keyboard when it gets focus. */
+export const useRevealOnFocus = () => useContext(FieldFocusContext)?.reveal;
 
 /**
  * Attach the returned ref to a field's outer View. When the field shows an error (it appears, or the main button is pressed

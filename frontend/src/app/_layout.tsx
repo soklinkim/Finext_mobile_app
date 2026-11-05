@@ -25,11 +25,15 @@ import { AppThemeProvider, useAppTheme } from '@/theme/AppTheme';
 import { colors } from '@/theme';
 import type { Locale } from '@/theme';
 import { getSession, subscribeToAuthChanges } from '@/services/auth';
+import { wakeServer } from '@/services/apiBase';
 import { getLanguagePreference, getPlainLanguage, subscribeToLanguagePreference, subscribeToPlainLanguage } from '@/services/preferences';
 
 if (process.env.EXPO_OS !== 'web') {
   SplashScreen.preventAutoHideAsync().catch(() => undefined);
 }
+
+// Start waking the API (if its host put it to sleep) while the app is still loading.
+wakeServer();
 
 /** Opens the DB (migrate + seed on first run) exactly once, before any screen renders. */
 type Bookkeeping = typeof import('@/services/bookkeeping');

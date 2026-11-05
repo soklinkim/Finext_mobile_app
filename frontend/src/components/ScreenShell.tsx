@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Keyboard, KeyboardAvoidingView, Platform, ScrollView, TextInput, View, type LayoutChangeEvent, type ScrollViewInstance } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -74,12 +74,31 @@ export function ScreenShell({
   // iOS KeyboardAvoidingView already shrinks the screen; elsewhere reserve the keyboard's height so lower fields can scroll above it.
   const bottomPad = navSpace + footerH + 24 + (nav ? 0 : insets.bottom) + (Platform.OS === 'ios' ? 0 : keyboardH);
 
+  // Scroll the field that has the cursor to just below the top of the sheet so the fields after it stay visible above the
+  // keyboard. Runs when the keyboard opens and again each time another field gets focus (the keyboard stays open when
+  // moving between fields, so the keyboard-height change alone would not scroll).
+  const revealTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const reveal = useCallback(() => {
+    clearTimeout(revealTimer.current);
+    revealTimer.current = setTimeout(() => {
+      if (Platform.OS === 'web') {
+        (document.activeElement as HTMLElement | null)?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+        return;
+      }
+      const input = TextInput.State.currentlyFocusedInput?.();
+      const inner = scrollRef.current?.getInnerViewNode?.();
+      if (!input || !inner) return;
+      input.measureLayout(inner, (_x, y) => scrollRef.current?.scrollTo({ y: Math.max(0, y - 120), animated: true }), () => undefined);
+    }, 100);
+  }, []);
+
   // Fields with an error ask to be shown; after a short moment the topmost one wins: scroll to it and put the cursor in it.
   const [attempt, setAttempt] = useState(0);
   const claims = useRef<FieldClaim[]>([]);
   const claimTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const fieldFocus = useMemo(() => ({
     tick: attempt,
+    reveal,
     bump: () => setAttempt((n) => n + 1),
     inner: () => scrollRef.current?.getInnerViewNode?.(),
     claim: (claim: FieldClaim) => {
@@ -93,23 +112,12 @@ export function ScreenShell({
         best.focus?.();
       }, 120);
     },
-  }), [attempt]);
+  }), [attempt, reveal]);
 
   // Bring the focused field into view whenever the keyboard opens.
   useEffect(() => {
-    if (!keyboardH) return;
-    const timer = setTimeout(() => {
-      if (Platform.OS === 'web') {
-        (document.activeElement as HTMLElement | null)?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
-        return;
-      }
-      const input = TextInput.State.currentlyFocusedInput?.();
-      const inner = scrollRef.current?.getInnerViewNode?.();
-      if (!input || !inner) return;
-      input.measureLayout(inner, (_x, y) => scrollRef.current?.scrollTo({ y: Math.max(0, y - 120), animated: true }), () => undefined);
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [keyboardH]);
+    if (keyboardH) reveal();
+  }, [keyboardH, reveal]);
 
   return (
     <FieldFocusContext.Provider value={fieldFocus}>
