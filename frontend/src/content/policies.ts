@@ -98,7 +98,7 @@ export const POLICIES: Record<PolicyId, Policy> = {
           '6.2 Use. Data is used to keep the user\'s books, produce statements, health ratios and AI estimates, sync between the user\'s devices, and prepare loan packs at the user\'s request. Data is never sold or used for advertising.',
           '6.3 Consent and sharing. A lender can see a user\'s data only after the user gives consent in the app, choosing the lender, the information (loan readiness score, statements, health ratios, trends, documents) and the period (30, 90 or 180 days). Users can withdraw consent at any time, with immediate effect. Every lender view is recorded. AI risk estimates are not shared with lenders.',
           '6.4 Storage and security. Data is kept on the user\'s device and in FINEXT\'s cloud database. Access requires sign-in, and each account can reach only its own data. [Before launch: confirm encrypted connections (HTTPS) everywhere and state the server location.]',
-          '6.5 Retention and deletion. Data is kept while the account is open. On a deletion request, data is removed [within 30 days], except records the law requires FINEXT to keep, which are kept only as long as required. [An in-app deletion option is to be added.]',
+          '6.5 Retention and deletion. Data is kept while the account is open. On a deletion request, data is removed within 30 days, except records the law requires FINEXT to keep, which are kept only as long as required. [An in-app deletion option is to be added.]',
           '6.6 Rights of users. Users can see, correct, copy (statements as PDF) and ask to delete their data, and withdraw consent to sharing. Requests are answered within one month.',
           '6.7 Data quality. Entries are checked against accounting rules when recorded, and unusual entries (likely duplicates, an extra zero, a cost recorded as income, future dates) are flagged for the user to review before they affect estimates. Past days with no entries are flagged so the user can complete them.',
           '6.8 Estimated and converted figures. FINEXT never fills in missing data on its own. For a day with no entries, the user chooses to enter the real figures, record the day as zero, or fill it with the average of their recorded days; an average is marked ~, says how it was worked out, and can be removed or replaced by real figures at any time. When a statement in riel is imported into an app set to US dollars, each amount is converted at a fixed rate of 4,000 riel = 1 US dollar after the user has checked it, marked *, and the original riel amount is kept in the entry\'s note.',
@@ -230,7 +230,7 @@ export const POLICIES: Record<PolicyId, Policy> = {
       {
         heading: 'How long we keep it',
         body: [
-          'While your account is open. After you ask us to delete it, we remove your data [within 30 days], except anything the law requires us to keep, which we keep only for as long as required.',
+          'While your account is open. After you ask us to delete it, we remove your data within 30 days, except anything the law requires us to keep, which we keep only for as long as required.',
         ],
       },
       {
