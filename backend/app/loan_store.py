@@ -148,13 +148,26 @@ def set_decision(lender_id: str, share_id: str, decision: str, note: str | None,
         return "answered" if row and row[0] else "missing"
 
 
-def respond_to_offer(sme_user_id: str, share_id: str, response: str, note: str | None, now: int) -> bool:
-    """The business accepts or declines the bank's offer, once. False when there is no open offer to answer."""
+def respond_to_offer(sme_user_id: str, share_id: str, response: str, note: str | None, now: int,
+                     seen_decided_at: int | None = None) -> str:
+    """The business accepts or declines the bank's offer, once: 'saved'; 'changed' when the bank changed its decision
+    or offer after the business saw it (`seen_decided_at`), so nobody accepts terms they were not shown; or 'missing'
+    when there is no open offer to answer."""
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute(
             "update loan_shares set sme_response = %s, sme_response_note = %s, sme_responded_at = %s "
             "where id = %s::uuid and sme_user_id = %s and decision = 'approved' and offer_amount is not null "
-            "and sme_response is null and revoked_at is null and expires_at > %s",
-            (response, note, now, share_id, sme_user_id, now),
+            "and sme_response is null and revoked_at is null and expires_at > %s "
+            "and (%s::bigint is null or decided_at = %s::bigint)",
+            (response, note, now, share_id, sme_user_id, now, seen_decided_at, seen_decided_at),
         )
-        return cur.rowcount > 0
+        if cur.rowcount > 0:
+            return "saved"
+        if seen_decided_at is None:
+            return "missing"
+        cur.execute(
+            "select 1 from loan_shares where id = %s::uuid and sme_user_id = %s and decision = 'approved' "
+            "and offer_amount is not null and sme_response is null and revoked_at is null and expires_at > %s",
+            (share_id, sme_user_id, now),
+        )
+        return "changed" if cur.fetchone() else "missing"

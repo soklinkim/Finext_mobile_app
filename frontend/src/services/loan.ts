@@ -99,11 +99,12 @@ export function shareWithLender(input: { lenderId: string; scopes: ShareScope[];
 }
 
 /** Accept or decline a bank's offer (once). Needs a connection. */
-export function respondToOffer(id: string, response: OfferResponse, note?: string): Promise<{ smeResponse: OfferResponse }> {
+/** `offerDecidedAt`: when the offer on screen was made, so the server refuses if the bank has changed it since. */
+export function respondToOffer(id: string, response: OfferResponse, offerDecidedAt: number | null, note?: string): Promise<{ smeResponse: OfferResponse }> {
   return json(`/loan/shares/${encodeURIComponent(id)}/response`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ response, note: note ?? null }),
+    body: JSON.stringify({ response, offerDecidedAt, note: note ?? null }),
   });
 }
 

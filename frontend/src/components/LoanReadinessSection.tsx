@@ -521,10 +521,11 @@ function BankSharing() {
       async () => {
         setAnswering(share.id);
         try {
-          await respondToOffer(share.id, response);
+          await respondToOffer(share.id, response, share.decidedAt ?? null);
           reload();
         } catch (e) {
           setError(errorText(e));
+          reload(); // e.g. the bank changed its offer: show the new one
         } finally {
           setAnswering(null);
         }

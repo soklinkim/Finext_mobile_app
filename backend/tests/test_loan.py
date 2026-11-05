@@ -99,12 +99,14 @@ class FakeStore:
         self.share.update(decision=decision, decisionNote=note, offer=offer)
         return "saved"
 
-    def respond_to_offer(self, sme, share_id, response, note, now):
+    def respond_to_offer(self, sme, share_id, response, note, now, seen_decided_at=None):
         open_offer = self.share["decision"] == "approved" and self.share["offer"] and not self.share["smeResponse"]
         if sme != "sme-user" or str(share_id) != SHARE_ID or not open_offer:
-            return False
+            return "missing"
+        if seen_decided_at is not None and seen_decided_at != self.share.get("decidedAt"):
+            return "changed"
         self.share.update(smeResponse=response, smeResponseNote=note, smeRespondedAt=now)
-        return True
+        return "saved"
 
     def upsert_share(self, sme, lender_id, scopes, now, expires_at):
         self.upserts.append((sme, lender_id, scopes))
@@ -221,6 +223,19 @@ def test_business_accepts_or_declines_once_and_the_decision_is_then_final(monkey
         res = client.put(f"/lender/applicants/{SHARE_ID}/decision", json={"decision": "declined"})
         assert res.status_code == 409
         assert store.share["decision"] == "approved"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_an_offer_changed_after_the_business_saw_it_is_not_accepted(monkeypatch):
+    client, store = client_as(monkeypatch, "sme-user")
+    url = f"/loan/shares/{SHARE_ID}/response"
+    try:
+        store.share.update(decision="approved", offer=OFFER, decidedAt=500)
+        res = client.put(url, json={"response": "accepted", "offerDecidedAt": 400})  # saw an older offer
+        assert res.status_code == 409 and "changed its offer" in res.json()["detail"]
+        assert store.share["smeResponse"] is None
+        assert client.put(url, json={"response": "accepted", "offerDecidedAt": 500}).status_code == 200
     finally:
         app.dependency_overrides.clear()
 
