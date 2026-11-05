@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import Svg, { Line, Path } from 'react-native-svg';
+import { useRouter } from 'expo-router';
 import { AnalysisLoading } from './AnalysisLoading';
 import { StatusMark, type MarkKind } from './HealthCharts';
 import { Button } from './Button';
@@ -287,6 +288,8 @@ function Checkbox({ label, checked, onToggle }: { label: string; checked: boolea
 
 function ShareForm({ lenders, onDone, onCancel }: { lenders: Lender[]; onDone: (share: LoanShare) => void; onCancel: () => void }) {
   const { t, locale } = useI18n();
+  const router = useRouter();
+  const dark = useAppTheme();
   const errorText = useErrorText();
   const { card } = useCard();
   const [lenderId, setLenderId] = useState<string | null>(lenders.length === 1 ? lenders[0].id : null);
@@ -345,6 +348,15 @@ function ShareForm({ lenders, onDone, onCancel }: { lenders: Lender[]; onDone: (
         checked={consent}
         onToggle={() => setConsent((v) => !v)}
       />
+      {/* What consent means, one tap away before the owner agrees. */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
+        <Pressable accessibilityRole="link" hitSlop={6} onPress={() => router.push({ pathname: '/policy/[id]', params: { id: 'privacy' } })}>
+          <Text variant="micro" weight={600} style={{ color: dark ? colors.dark.primary : colors.primary[500] }}>{t('loan.policyPrivacy')}</Text>
+        </Pressable>
+        <Pressable accessibilityRole="link" hitSlop={6} onPress={() => router.push({ pathname: '/policy/[id]', params: { id: 'lenders' } })}>
+          <Text variant="micro" weight={600} style={{ color: dark ? colors.dark.primary : colors.primary[500] }}>{t('loan.policyLenders')}</Text>
+        </Pressable>
+      </View>
       {error ? <Text variant="micro" tone="danger">{error}</Text> : null}
       <View className="flex-row" style={{ gap: 10 }}>
         <View style={{ flex: 1 }}>
