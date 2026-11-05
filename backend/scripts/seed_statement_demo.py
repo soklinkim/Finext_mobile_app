@@ -36,7 +36,7 @@ SEED = 7  # the same made-up descriptions on every run
 
 PROFILE = {
     "businessName": "Morning Cup Coffee Cart",
-    "businessIndustry": "restaurant",
+    "businessIndustry": "food_stall",
     "registrationStatus": "unregistered",
     "location": "Phnom Penh",
     "mainProducts": "Iced coffee, tea and snacks",
