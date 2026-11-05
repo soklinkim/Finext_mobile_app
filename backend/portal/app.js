@@ -97,6 +97,9 @@ const SCOPE_LABELS = {
 const INDUSTRY_LABELS = {
   convenience: 'Mini Mart / Convenience Store', restaurant: 'Restaurant or Café', retail: 'Retail',
   wholesale: 'Wholesale', services: 'Services', manufacturing: 'Manufacturing', other: 'Other',
+  produce: 'Fruits & Vegetables', meat_fish: 'Meat & Fish', food_stall: 'Cooked Food / Snack Stall',
+  groceries: 'Groceries & Dry Goods', clothing: 'Clothing & Textiles', household: 'Household & Hardware',
+  beauty: 'Cosmetics & Personal Care', phones: 'Phones & Accessories',
 };
 const industry = (code) => INDUSTRY_LABELS[code] || code;
 const DOC_LABELS = { patent_tax: 'Patent Tax certificate', certificate_of_incorporation: 'Certificate of Incorporation' };

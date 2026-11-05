@@ -33,12 +33,14 @@ export const EMPTY_PROFILE: BusinessProfileValues = {
 };
 
 const INDUSTRIES: { value: string; key: TKey }[] = [
-  { value: 'convenience', key: 'industry.convenience' },
-  { value: 'restaurant', key: 'industry.restaurant' },
-  { value: 'retail', key: 'industry.retail' },
-  { value: 'wholesale', key: 'industry.wholesale' },
-  { value: 'services', key: 'industry.services' },
-  { value: 'manufacturing', key: 'industry.manufacturing' },
+  { value: 'produce', key: 'industry.produce' },
+  { value: 'meat_fish', key: 'industry.meat_fish' },
+  { value: 'food_stall', key: 'industry.food_stall' },
+  { value: 'groceries', key: 'industry.groceries' },
+  { value: 'clothing', key: 'industry.clothing' },
+  { value: 'household', key: 'industry.household' },
+  { value: 'beauty', key: 'industry.beauty' },
+  { value: 'phones', key: 'industry.phones' },
   { value: 'other', key: 'industry.other' },
 ];
 

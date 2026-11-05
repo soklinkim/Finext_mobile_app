@@ -593,7 +593,7 @@ function BankSharing() {
   );
 }
 
-/** Analysis › Loan readiness: the score and how to improve it, then consent-based sharing with partner banks. */
+/** Analysis › Loan readiness: the score and how to improve it. (The "Share with a bank" block, BankSharing, is hidden for now.) */
 export function LoanReadinessSection() {
   const { t } = useI18n();
   const readiness = useAnalysisQuery(getLoanReadiness);
@@ -610,9 +610,6 @@ export function LoanReadinessSection() {
           <Text variant="micro" tone="neutral-600">{t('loan.disclaimer')}</Text>
         </>
       )}
-      <View style={{ marginTop: 8 }}>
-        <BankSharing />
-      </View>
     </View>
   );
 }
