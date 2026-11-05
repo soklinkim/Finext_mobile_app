@@ -13,6 +13,7 @@
 1. **Double-entry, hidden from the user.** The owner answers simple questions ("Money in → Sales → Product sale, $50, paid by ABA"). The app turns each answer into a balanced journal entry. The user never sees debits or credits unless they open a statement.
 2. **Every entry balances.** The sum of debits equals the sum of credits for every journal entry. Reject any entry that does not.
 3. **Posted entries are immutable.** Never edit or delete a posted entry. Corrections use a reversing entry plus a new entry (§6).
+   > **Changed in the app (Nov 2026):** the owner can now edit an entry in place and delete it from the entry's page (delete asks first). A deleted entry is marked deleted (`deleted_at`) and kept in the server's sync table, but it no longer posts and is not shown. Because of this the app no longer keeps a visible audit trail of corrections. If a lender or auditor needs the immutable rule back, switch the entry page back to Reverse (`reverseEntry` is still in `services/bookkeeping`).
 4. **Statements are derived, never stored.** The Income Statement, Balance Sheet and Cash Flow are calculated from account balances on demand.
 5. **Offline-first.** Everything in §§2–7 (entry, posting, balances, statements) runs on the device with no network. Ratios and the AI health manager (§§9–10) may run online, but simple balances must not depend on them.
 6. **Money is stored as integers**: USD in cents, KHR in riel. Never use floating point for amounts. Ratios are calculated as decimals at display time only.
@@ -204,7 +205,7 @@ Guard: `FROM` ≠ `TO`. A transfer never appears in income or expense totals.
 | **Refund or return** | A customer returns goods or gets money back, or you return goods to a supplier. | Customer refund: Dr `4900` · Cr Cash/Bank (or `1100` if unpaid). If goods go back to stock, also Dr `1200` · Cr `5000`. Supplier return: Dr Cash/Bank (or `2000`) · Cr `1200`. | Linked to the original entry. Cannot exceed the original amount. |
 | **Apply customer deposit** | An earlier deposit is used against a sale. | Dr `2100` · Cr `4000` (or `4100`). | Cannot exceed the deposit balance. |
 | **Write off unpaid amount** | The customer will not pay. | Dr `6990` (bad debt) · Cr `1100`. | Note required. Review flag. |
-| **Edit or reverse** | The user changes or cancels a posted entry. | A reversing entry swaps every debit and credit and links to the original. An edit then posts a new entry. | Posted entries are never edited or deleted. |
+| **Edit or reverse** | The user changes or cancels a posted entry. | A reversing entry swaps every debit and credit and links to the original. An edit then posts a new entry. | Posted entries are never edited or deleted. (The app now allows edit and delete: see the note under rule 3.) |
 
 ---
 

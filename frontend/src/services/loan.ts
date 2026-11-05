@@ -17,6 +17,22 @@ export interface Lender {
   name: string;
 }
 
+/** What a bank offers when it approves: the business accepts or declines exactly this. */
+export interface LoanOffer {
+  amount: number; // major units of `currency`
+  currency: 'USD' | 'KHR';
+  annualRate: number; // %
+  termMonths: number;
+}
+
+export type OfferResponse = 'accepted' | 'declined';
+
+/** Equal monthly repayment for the offer (principal and interest), in major units. */
+export function monthlyRepayment(offer: LoanOffer): number {
+  const r = offer.annualRate / 100 / 12;
+  return r === 0 ? offer.amount / offer.termMonths : (offer.amount * r) / (1 - (1 + r) ** -offer.termMonths);
+}
+
 export interface LoanShare {
   id: string;
   lenderId: string;
@@ -33,6 +49,12 @@ export interface LoanShare {
   readinessLevel: ReadinessLevel | null;
   /** when the bank first marked it "reviewing" (or first decided) */
   reviewingAt: number | null;
+  /** set with decision = 'approved' */
+  offer: LoanOffer | null;
+  /** the business's answer to the offer; the bank's decision is final once it is set */
+  smeResponse: OfferResponse | null;
+  smeResponseNote: string | null;
+  smeRespondedAt: number | null;
   viewCount?: number;
   firstViewedAt?: number | null;
   lastViewedAt?: number | null;
@@ -73,6 +95,16 @@ export function shareWithLender(input: { lenderId: string; scopes: ShareScope[];
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ...input, consent: true }),
+  });
+}
+
+/** Accept or decline a bank's offer (once). Needs a connection. */
+/** `offerDecidedAt`: when the offer on screen was made, so the server refuses if the bank has changed it since. */
+export function respondToOffer(id: string, response: OfferResponse, offerDecidedAt: number | null, note?: string): Promise<{ smeResponse: OfferResponse }> {
+  return json(`/loan/shares/${encodeURIComponent(id)}/response`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ response, offerDecidedAt, note: note ?? null }),
   });
 }
 

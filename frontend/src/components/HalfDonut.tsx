@@ -9,8 +9,11 @@ export interface DonutSlice {
   percent: number;
 }
 
-// Segment colours in order (§6.8)
-const SEGMENT_COLORS = [colors.accent.expense, colors.accent.tile, colors.primary[500]];
+// Segment colours in order: far apart in hue (blue, orange, green, purple, red, teal, pink, olive), each dark enough for white labels.
+const SEGMENT_COLORS = ['#1D4ED8', '#EA580C', '#15803D', '#7E22CE', '#DC2626', '#0F766E', '#BE185D', '#A16207'];
+/** A slice narrower than this (in degrees) has no room for its label inside; its figure is in the legend. */
+const MIN_LABEL_DEG = 16;
+const percentText = (value: number) => `${value.toFixed(2)}%`;
 
 const W = 300;
 const H = 160;
@@ -45,18 +48,20 @@ export function HalfDonut({ slices }: { slices: DonutSlice[] }) {
     const end = cursor - sweep;
     cursor = end;
     const mid = (start + end) / 2;
-    return { ...s, color: SEGMENT_COLORS[i % SEGMENT_COLORS.length], d: arcPath(start - GAP_DEG / 2, end + GAP_DEG / 2), label: polar((R_IN + R_OUT) / 2, mid) };
+    return { ...s, sweep, color: SEGMENT_COLORS[i % SEGMENT_COLORS.length], d: arcPath(start - GAP_DEG / 2, end + GAP_DEG / 2), label: polar((R_IN + R_OUT) / 2, mid) };
   });
   return (
     <View className="items-center" style={{ gap: 16 }}>
-      <View accessible accessibilityRole="image" accessibilityLabel={slices.map((s) => `${s.name} ${s.percent}%`).join(', ')}>
+      <View accessible accessibilityRole="image" accessibilityLabel={slices.map((s) => `${s.name} ${percentText(s.percent)}`).join(', ')}>
         <Svg width={W} height={H}>
           {arcs.map((a) => (
             <G key={a.name}>
               <Path d={a.d} fill={a.color} />
-              <SvgText x={a.label.x} y={a.label.y + 5} fill={colors.white} fontSize={16} fontWeight="600" textAnchor="middle" fontFamily={fontFamily(600, locale)}>
-                {a.percent}%
-              </SvgText>
+              {a.sweep >= MIN_LABEL_DEG && (
+                <SvgText x={a.label.x} y={a.label.y + 5} fill={colors.white} fontSize={13} fontWeight="600" textAnchor="middle" fontFamily={fontFamily(600, locale)}>
+                  {percentText(a.percent)}
+                </SvgText>
+              )}
             </G>
           ))}
         </Svg>
@@ -66,7 +71,7 @@ export function HalfDonut({ slices }: { slices: DonutSlice[] }) {
           <View key={a.name} className="flex-row items-center" style={{ gap: 8 }}>
             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: a.color }} />
             <Text variant="caption" weight={600} tone="primary-900">
-              {a.name}
+              {a.name} · {percentText(a.percent)}
             </Text>
           </View>
         ))}

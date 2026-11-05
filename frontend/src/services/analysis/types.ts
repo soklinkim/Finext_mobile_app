@@ -13,6 +13,9 @@ export interface AnalysisResult {
   income: number[];
   expense: number[];
   totals: { income: number; expense: number };
+  /** what the totals are made of, by kind of entry (an entry type id, or "system_depreciation"); each list adds up to its total. Absent in older data. */
+  incomeSources?: { source: string; amount: number }[];
+  expenseSources?: { source: string; amount: number }[];
 }
 
 export interface ForecastPoint {
@@ -297,6 +300,8 @@ export interface StatementLine {
   style?: 'line' | 'subtotal' | 'total';
   /** cash-flow style: show a + on positive numbers */
   showPlus?: boolean;
+  /** where the figure comes from: each kind of entry behind it (an entry type id, "depreciation" or "opening"), signed as the line shows it. Absent in older data. */
+  sources?: { source: string; amount: number }[];
 }
 
 export interface StatementSection {

@@ -71,7 +71,8 @@ class FakeStore:
         self.members = {"bank-staff": {"id": LENDER_ID, "name": "Test Bank"}}
         self.share = {"id": SHARE_ID, "lenderId": LENDER_ID, "lenderName": "Test Bank", "scopes": ["readiness", "trend"],
                       "createdAt": 1, "expiresAt": 10**15, "revokedAt": None, "decision": "new", "decisionNote": None,
-                      "decidedAt": None, "readinessScore": 50, "readinessLevel": "almost", "readinessAt": 1}
+                      "decidedAt": None, "readinessScore": 50, "readinessLevel": "almost", "readinessAt": 1,
+                      "offer": None, "smeResponse": None, "smeResponseNote": None, "smeRespondedAt": None}
         self.views = []
         self.upserts = []
 
@@ -92,9 +93,20 @@ class FakeStore:
     def save_readiness_snapshot(self, *args, **kwargs):
         pass
 
-    def set_decision(self, lender_id, share_id, decision, note, now):
-        self.share.update(decision=decision, decisionNote=note)
-        return True
+    def set_decision(self, lender_id, share_id, decision, note, offer, now):
+        if self.share["smeResponse"]:
+            return "answered"
+        self.share.update(decision=decision, decisionNote=note, offer=offer)
+        return "saved"
+
+    def respond_to_offer(self, sme, share_id, response, note, now, seen_decided_at=None):
+        open_offer = self.share["decision"] == "approved" and self.share["offer"] and not self.share["smeResponse"]
+        if sme != "sme-user" or str(share_id) != SHARE_ID or not open_offer:
+            return "missing"
+        if seen_decided_at is not None and seen_decided_at != self.share.get("decidedAt"):
+            return "changed"
+        self.share.update(smeResponse=response, smeResponseNote=note, smeRespondedAt=now)
+        return "saved"
 
     def upsert_share(self, sme, lender_id, scopes, now, expires_at):
         self.upserts.append((sme, lender_id, scopes))
@@ -167,14 +179,78 @@ def test_score_hidden_from_list_when_readiness_not_shared(monkeypatch):
         app.dependency_overrides.clear()
 
 
+OFFER = {"amount": 5000, "currency": "USD", "annualRate": 12.5, "termMonths": 24}
+
+
 def test_decision_is_saved(monkeypatch):
     client, store = client_as(monkeypatch, "bank-staff")
     try:
-        res = client.put(f"/lender/applicants/{SHARE_ID}/decision", json={"decision": "approved", "note": "  Welcome  "})
-        assert res.json() == {"decision": "approved", "decisionNote": "Welcome"}
+        res = client.put(f"/lender/applicants/{SHARE_ID}/decision", json={"decision": "reviewing", "note": "  Welcome  "})
+        assert res.json() == {"decision": "reviewing", "decisionNote": "Welcome", "offer": None}
         assert client.put(f"/lender/applicants/{SHARE_ID}/decision", json={"decision": "maybe"}).status_code == 422
     finally:
         app.dependency_overrides.clear()
+
+
+def test_an_approval_carries_an_offer_for_the_business_to_answer(monkeypatch):
+    client, store = client_as(monkeypatch, "bank-staff")
+    try:
+        url = f"/lender/applicants/{SHARE_ID}/decision"
+        assert client.put(url, json={"decision": "approved"}).status_code == 422  # no offer
+        assert client.put(url, json={"decision": "approved", "offer": {**OFFER, "termMonths": 0}}).status_code == 422
+        assert client.put(url, json={"decision": "approved", "offer": {**OFFER, "currency": "EUR"}}).status_code == 422
+        res = client.put(url, json={"decision": "approved", "offer": OFFER})
+        assert res.status_code == 200 and res.json()["offer"] == OFFER
+        # Declining (or reviewing) drops any offer: there is nothing left to accept.
+        assert client.put(url, json={"decision": "declined", "offer": OFFER}).json()["offer"] is None
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_business_accepts_or_declines_once_and_the_decision_is_then_final(monkeypatch):
+    client, store = client_as(monkeypatch, "sme-user")
+    url = f"/loan/shares/{SHARE_ID}/response"
+    try:
+        # Nothing to answer before the bank approves with an offer.
+        assert client.put(url, json={"response": "accepted"}).status_code == 409
+        store.share.update(decision="approved", offer=OFFER)
+        assert client.put(url, json={"response": "maybe"}).status_code == 422
+        res = client.put(url, json={"response": "accepted", "note": "  Thank you  "})
+        assert res.json() == {"smeResponse": "accepted", "smeResponseNote": "Thank you"}
+        assert client.put(url, json={"response": "declined"}).status_code == 409  # answered once
+        # The bank can no longer change its decision.
+        app.dependency_overrides[current_user] = lambda: "bank-staff"
+        res = client.put(f"/lender/applicants/{SHARE_ID}/decision", json={"decision": "declined"})
+        assert res.status_code == 409
+        assert store.share["decision"] == "approved"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_an_offer_changed_after_the_business_saw_it_is_not_accepted(monkeypatch):
+    client, store = client_as(monkeypatch, "sme-user")
+    url = f"/loan/shares/{SHARE_ID}/response"
+    try:
+        store.share.update(decision="approved", offer=OFFER, decidedAt=500)
+        res = client.put(url, json={"response": "accepted", "offerDecidedAt": 400})  # saw an older offer
+        assert res.status_code == 409 and "changed its offer" in res.json()["detail"]
+        assert store.share["smeResponse"] is None
+        assert client.put(url, json={"response": "accepted", "offerDecidedAt": 500}).status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_an_open_offer_asks_the_business_to_answer_in_its_notification(monkeypatch):
+    from app import loan_notifications as notes
+
+    class Store:
+        def list_shares_for_sme(self, user_id):
+            return [{"id": "s1", "lenderName": "KB PRASAC Bank", "revokedAt": None, "decisionNote": "Visit a branch",
+                     "firstViewedAt": None, "reviewingAt": None, "decision": "approved", "decidedAt": 300,
+                     "offer": OFFER, "smeResponse": None}]
+
+    monkeypatch.setattr(notes, "loan_store", Store())
+    assert notes.loan_notifications("sme")[0]["body"] == "Visit a branch Open Loan readiness to accept or decline the offer."
 
 
 def test_sharing_requires_explicit_consent_and_valid_scopes(monkeypatch):

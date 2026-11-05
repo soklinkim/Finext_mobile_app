@@ -92,6 +92,8 @@ class Settings(SyncRow):
     main_products: Optional[str] = None
     push_notifications: bool = True
     dark_theme: bool = False
+    # JSON {"YYYY-MM-DD": "zero" | "estimated"}: the owner's answer for days with no entries.
+    missed_days: Optional[str] = Field(default=None, max_length=8000)
 
 
 class OnboardingFinancialEntry(SyncRow):

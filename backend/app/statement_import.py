@@ -12,6 +12,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
+from app import statement_aligned, statement_ruled
 from app import statement_reader as reader
 
 MAX_BYTES = 10 * 1024 * 1024
@@ -46,6 +47,33 @@ def _masked(number: str | None) -> str | None:
     return f"•••• {digits[-4:]}" if len(digits) >= 4 else None
 
 
+def _failures(result) -> int:
+    return sum(1 for check in result.checks if not check.passed)
+
+
+def _better_reading(result, path: Path, password: str | None):
+    """When the first reading fails its own arithmetic, read the columns again by alignment and keep whichever
+    reading the statement's figures agree with more (see statement_aligned). A reading that passes stays as it is."""
+    if not _failures(result):
+        return result
+    best = result
+    # Second reading: columns by alignment with their headings. Third: columns and rows from the table's ruled lines,
+    # for statements whose heading row is a picture (there is then no text heading to align with).
+    for second in (statement_aligned, statement_ruled):
+        try:
+            candidate = second.extract(path, dayfirst=True, password=password or None)
+        except Exception:
+            continue
+        if candidate is None or _failures(candidate) >= _failures(best):
+            continue
+        # Keep what the first reading worked out about the statement where this one has nothing.
+        for name in ("bank", "account_number", "period", "currency"):
+            if getattr(candidate.meta, name) is None:
+                setattr(candidate.meta, name, getattr(best.meta, name))
+        best = candidate
+    return best
+
+
 def read_statement(content: bytes, password: str | None = None) -> dict:
     """Read a statement PDF. Raises StatementError for files that cannot be read as a statement."""
     if len(content) > MAX_BYTES:
@@ -65,6 +93,7 @@ def read_statement(content: bytes, password: str | None = None) -> dict:
             if reader.is_encrypted(path):
                 raise StatementError("wrong_password" if password else "password", "This PDF is password protected.") from exc
             raise StatementError("unreadable", "This PDF could not be read.") from exc
+        result = _better_reading(result, path, password)
 
     if not result.rows:
         raise StatementError("no_table", "No transaction table was found. If this is a scanned statement, "
@@ -84,15 +113,21 @@ def read_statement(content: bytes, password: str | None = None) -> dict:
             "balance": row.balance,
             "currency": _currency(row.currency) or _currency(meta.currency),
         })
+    dated = [row for row in rows if row["date"]]
+    # The three figures an import is about: money in, money out and the ending balance. The statement's own printed
+    # figures come first; without them, what the rows add up to (and the last row's running balance).
+    last_balance = next((row["balance"] for row in reversed(dated) if row["balance"] is not None), None)
     return {
         "bank": meta.bank,
         "account": _masked(meta.account_number),
         "period": meta.period,
         "currency": _currency(meta.currency),
         "openingBalance": meta.opening_balance,
-        "closingBalance": meta.closing_balance,
+        "closingBalance": meta.closing_balance if meta.closing_balance is not None else last_balance,
+        "totalIn": meta.total_in if meta.total_in is not None else round(sum(r["amount"] for r in dated if r["direction"] == "in"), 2),
+        "totalOut": meta.total_out if meta.total_out is not None else round(sum(r["amount"] for r in dated if r["direction"] == "out"), 2),
         "pages": result.pages,
-        "rows": [row for row in rows if row["date"]],
+        "rows": dated,
         "checks": [{"name": c.name, "passed": c.passed, "detail": c.detail} for c in result.checks],
         "notes": result.notes,
     }

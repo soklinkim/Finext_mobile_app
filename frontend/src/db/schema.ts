@@ -130,6 +130,8 @@ export const settings = sqliteTable('settings', {
   mainProducts: text('main_products'),
   pushNotifications: integer('push_notifications', { mode: 'boolean' }).notNull().default(true),
   darkTheme: integer('dark_theme', { mode: 'boolean' }).notNull().default(false),
+  /** JSON {"YYYY-MM-DD": "zero" | "estimated"}: the owner's answer for days with no entries (services/missedDays) */
+  missedDays: text('missed_days'),
 });
 
 export type Bank = typeof banks.$inferSelect;

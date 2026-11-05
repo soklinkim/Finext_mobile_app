@@ -63,6 +63,25 @@ def share(req: ShareRequest, user_id: str = Depends(current_sme)):
     return {**created, "readinessScore": result["score"], "readinessLevel": result["level"], "readinessAt": now, "active": True}
 
 
+class OfferResponse(BaseModel):
+    response: Literal["accepted", "declined"]
+    note: str | None = Field(default=None, max_length=1000)
+    # When the offer being answered was made (its decidedAt), so a changed offer is not accepted unseen.
+    offer_decided_at: int | None = Field(default=None, alias="offerDecidedAt")
+
+
+@router.put("/shares/{share_id}/response")
+def respond(share_id: UUID, req: OfferResponse, user_id: str = Depends(current_sme)):
+    """Accept or decline the loan a bank offered. Answered once: the bank then sees it and its decision is final."""
+    note = (req.note or "").strip() or None
+    result = loan_store.respond_to_offer(user_id, str(share_id), req.response, note, _now(), req.offer_decided_at)
+    if result == "changed":
+        raise HTTPException(status_code=409, detail="The bank changed its offer. Check the new offer before you answer.")
+    if result != "saved":
+        raise HTTPException(status_code=409, detail="There is no open offer to answer for this bank.")
+    return {"smeResponse": req.response, "smeResponseNote": note}
+
+
 @router.delete("/shares/{share_id}", status_code=204)
 def revoke(share_id: UUID, user_id: str = Depends(current_sme)):
     if not loan_store.revoke_share(user_id, share_id, _now()):

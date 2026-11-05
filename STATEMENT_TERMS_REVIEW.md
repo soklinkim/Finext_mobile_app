@@ -154,3 +154,9 @@ These follow the reference's naming pattern but are not in the document. Each is
 ## 4. Not covered yet
 - The downloadable statement page and the PDF are English only, in both languages.
 - The structure items listed under "Structure differences" (current / non-current subtotals, cash flow starting from operating profit, Statement of Changes in Equity, Notes).
+
+## 5. Khmer text added later that needs a native speaker's review
+These were written without a native speaker, so the wording, and the accounting terms in particular, should be checked before release:
+- **"Tap a figure" sheets** (`formula.*` in `frontend/src/i18n/km.ts`): the explanation written for each statement line (income, balance sheet, cash flow), the health-ratio formulas, and the Income / Expense / Net explanations.
+- **Bank statement import**: the account summary, the "choose a type" prompts, the bulk-type confirmation, search and the "entries left" card (`import.*`).
+- **Reminders, missed days, sync** (`reminder.*`, `missed.*`, `sync.*`), **entry edit and delete** (`entry.delete*`, `entry.edit*`) and the **language names** in Settings.

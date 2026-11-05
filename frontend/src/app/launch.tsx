@@ -9,7 +9,7 @@ import { CambodiaFlag, UkFlag } from '@/components/Flags';
 import { colors, fontFamily, type Locale } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
 
-// Flags are drawn as vectors for now; to use flag pictures instead, swap each `flag` for an <Image> of the uploaded file.
+// Both flags are pictures (assets/images/cambodia-flag.png and uk-flag.png).
 const LANGUAGES: { value: Locale; label: string; flag: typeof CambodiaFlag }[] = [
   { value: 'km', label: 'ខ្មែរ', flag: CambodiaFlag },
   { value: 'en-GB', label: 'English', flag: UkFlag },

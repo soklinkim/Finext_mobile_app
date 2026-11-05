@@ -10,7 +10,7 @@ import { formatInputDate } from '@/lib/format';
 import { getLanguagePreference } from '@/services/preferences';
 import type { Bank, BusinessAsset, Category, Settings, Transaction } from '@/db/schema';
 import { emitChange } from './events';
-import { evidenceCounts } from './evidence';
+import { evidenceCounts, listEvidence, removeEvidence } from './evidence';
 import { getEntryType, type Direction, type GroupId } from './entryTypes';
 import { convertMinor, type Currency } from './money';
 
@@ -302,6 +302,8 @@ export interface TransactionView {
   /** signed for display: in = +, out = -, move = positive-neutral */
   signed: number;
   occurredAt: number;
+  /** when the entry was recorded in the app (not the date it is for) */
+  createdAt: number;
   categoryName: string | null;
   categoryIcon: string | null;
   payMethod: Transaction['payMethod'];
@@ -375,6 +377,7 @@ function toView(
     currency: t.currency,
     signed: t.direction === 'out' ? -t.amount : t.amount,
     occurredAt: t.occurredAt,
+    createdAt: t.createdAt,
     categoryName: cat?.name ?? null,
     categoryIcon: cat?.icon ?? null,
     payMethod: t.payMethod,
@@ -507,6 +510,34 @@ export async function getAccountBalances(): Promise<AccountBalance[]> {
   return [...map.values()];
 }
 
+/**
+ * Cash and bank money over the last `days` days, from this device's books (works offline): one closing figure per day,
+ * oldest first, ending today, plus how much it changed over the window. Same rule as the account balances: a
+ * "pay later" entry is not cash yet, and moving money between accounts changes no total.
+ */
+export async function getCashTrend(days = 7): Promise<{ currency: Currency; today: number; change: number; points: number[] }> {
+  const s = await getSettings();
+  const currency = s.displayCurrency;
+  const today = (await getAccountBalances()).reduce((sum, account) =>
+    sum + convertMinor(account.byCurrency.KHR, 'KHR', currency, s.rateKhrPerUsd) + convertMinor(account.byCurrency.USD, 'USD', currency, s.rateKhrPerUsd), 0);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  // Day i closes at the end of (days - 1 - i) days ago; its figure is today's less everything that came after it.
+  const dayEnds = Array.from({ length: days }, (_, i) => startOfToday.getTime() + (i - days + 2) * DAY);
+  const windowStart = startOfToday.getTime() - (days - 1) * DAY;
+  const after = new Array<number>(days).fill(0);
+  let change = 0;
+  for (const t of allLive()) {
+    if (t.payMethod === 'later' || t.direction === 'move' || t.occurredAt < windowStart) continue;
+    const v = convertMinor(t.amount, t.currency, currency, t.exchangeRate) * (t.direction === 'in' ? 1 : -1);
+    change += v;
+    dayEnds.forEach((end, i) => {
+      if (t.occurredAt >= end) after[i] += v;
+    });
+  }
+  return { currency, today, change, points: after.map((later) => today - later) };
+}
+
 export async function setBudgetTarget(targetMinor: number, currency: Currency): Promise<void> {
   const existing = db.select().from(schema.budgets).where(isNull(schema.budgets.deletedAt)).get();
   if (existing) {
@@ -595,6 +626,10 @@ export interface EntryDetail {
   linked: TransactionView | null;
   /** i18n key explaining why Reverse is unavailable, or null when it is allowed */
   reverseBlocked: string | null;
+  /** i18n key explaining why Edit is unavailable, or null when it is allowed */
+  editBlocked: string | null;
+  /** i18n key explaining why Delete is unavailable, or null when it is allowed */
+  deleteBlocked: string | null;
   meta: Record<string, unknown>;
 }
 
@@ -616,7 +651,87 @@ export async function getEntryDetail(id: string): Promise<EntryDetail | null> {
       : payments.some((p) => p.status !== 'reversed')
         ? 'entry.reverseBlockedPayments'
         : null;
-  return { entry: view(row), payments, reversal: reversal ? view(reversal) : null, linked: linked ? view(linked) : null, reverseBlocked, meta };
+  // Edit: not for payments, write-offs and reversals (delete them instead), loans (their schedule is built from the entry),
+  // or an entry that already has payments against it (its amount could no longer cover them).
+  const editBlocked = row.typeId === REVERSAL_TYPE || isSettlement(row) ? 'entry.editBlockedLinked'
+    : row.typeId === 'loan_received' ? 'entry.editBlockedLoan'
+    : rel.reversed.has(id) ? 'entry.reverseBlockedDone'
+    : payments.length > 0 ? 'entry.editBlockedPayments'
+    : null;
+  // Delete: a loan that already has repayments recorded would leave those repayments with nothing to repay.
+  const loanName = String(meta.lender ?? row.counterparty ?? '').trim().toLowerCase();
+  const deleteBlocked = row.typeId === 'loan_received' && loanName
+    && rows.some((r) => r.typeId === 'loan_repayment' && String(metaOf(r).loanName ?? '').trim().toLowerCase() === loanName)
+    ? 'entry.deleteBlockedLoan' : null;
+  return { entry: view(row), payments, reversal: reversal ? view(reversal) : null, linked: linked ? view(linked) : null, reverseBlocked, editBlocked, deleteBlocked, meta };
+}
+
+/** The stored entry and its details, to fill the form when editing. */
+export async function getEntryForEdit(id: string): Promise<{ entry: Transaction; meta: Record<string, unknown> } | null> {
+  const row = allLive().find((r) => r.id === id);
+  return row ? { entry: row, meta: metaOf(row) } : null;
+}
+
+/**
+ * Delete an entry completely, as if it had never been recorded. Payments and write-offs recorded against it, and any
+ * reversal of it, go with it. Sync carries the deletion to the account.
+ */
+export async function deleteEntry(id: string): Promise<{ ok: true; removed: number } | { ok: false; error: string }> {
+  const detail = await getEntryDetail(id);
+  if (!detail) return { ok: false, error: 'entry.notFound' };
+  if (detail.deleteBlocked) return { ok: false, error: detail.deleteBlocked };
+  const rows = allLive();
+  const doomed = new Set<string>([id]);
+  // Everything that points at a doomed entry (its payments, write-offs, reversals) goes too, and so on.
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const r of rows) {
+      if (doomed.has(r.id)) continue;
+      const m = metaOf(r);
+      if (doomed.has(String(m.settlesId ?? '')) || doomed.has(String(m.reversesId ?? ''))) {
+        doomed.add(r.id);
+        grew = true;
+      }
+    }
+  }
+  const now = Date.now();
+  for (const rowId of doomed) {
+    db.update(schema.transactions).set({ deletedAt: now, updatedAt: now, syncStatus: 'pending' }).where(eq(schema.transactions.id, rowId)).run();
+    // Its receipt photos are stored only on this device: they go with it.
+    for (const photo of await listEvidence(rowId)) await removeEvidence(photo.id);
+  }
+  emitChange();
+  return { ok: true, removed: doomed.size };
+}
+
+/** Change an entry in place (same checks as a new one). The account's books are rebuilt from the changed entry when it syncs. */
+export async function updateEntry(id: string, input: AddTransactionInput): Promise<AddResult> {
+  const errors = validateTransaction(input);
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  const detail = await getEntryDetail(id);
+  if (!detail || detail.editBlocked) return { ok: false, errors: { amount: detail?.editBlocked ?? 'entry.notFound' } };
+  const type = getEntryType(input.typeId)!;
+  db.update(schema.transactions).set({
+    title: input.title?.trim() || defaultTitle(input.typeId),
+    typeId: input.typeId,
+    direction: type.direction,
+    groupId: type.groupId,
+    amount: Math.round(input.amount),
+    currency: input.currency,
+    payMethod: input.payMethod,
+    bankId: input.payMethod === 'later' ? null : (input.bankId ?? null),
+    toBankId: type.direction === 'move' ? (input.toBankId ?? null) : null,
+    categoryId: input.categoryId ?? null,
+    counterparty: input.counterparty?.trim() || null,
+    note: input.note?.trim() || null,
+    occurredAt: input.occurredAt ?? detail.entry.occurredAt,
+    reviewFlag: type.reviewFlag ?? false,
+    meta: input.meta ? JSON.stringify(input.meta) : null,
+    updatedAt: Date.now(),
+    syncStatus: 'pending',
+  }).where(eq(schema.transactions.id, id)).run();
+  emitChange();
+  return { ok: true, id };
 }
 
 export interface PaymentInput {
@@ -769,6 +884,9 @@ export interface AddTransactionInput {
   note?: string;
   occurredAt?: number;
   meta?: {
+    /** filled from the average of recorded days for a day the owner did not record (services/missedDays) */
+    estimated?: boolean;
+    basedOnDays?: number;
     cost?: number;
     lender?: string;
     lenderType?: 'bank_mfi' | 'informal';

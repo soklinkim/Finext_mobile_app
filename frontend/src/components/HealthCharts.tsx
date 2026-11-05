@@ -22,7 +22,7 @@ export function useChartColors() {
 }
 
 /** SVG needs pixel widths: measure the container once it is laid out. */
-function useWidth(): [number, (event: LayoutChangeEvent) => void] {
+export function useWidth(): [number, (event: LayoutChangeEvent) => void] {
   const [width, setWidth] = useState(0);
   return [width, (event) => setWidth(Math.round(event.nativeEvent.layout.width))];
 }

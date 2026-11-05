@@ -78,7 +78,7 @@ export function UnusualEntriesCard() {
             <View style={{ flex: 1, gap: 2 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
                 <Text variant="body-sm" weight={600} tone="primary-900" numberOfLines={1} style={{ flex: 1 }}>{item.title}</Text>
-                <Text variant="body-sm" weight={700} tone={item.direction === 'out' ? 'expense' : 'primary-900'}>
+                <Text variant="body-sm" weight={700} tone={item.direction === 'out' ? 'money-out' : 'money-in'}>
                   {formatMoney(item.direction === 'out' ? -item.amount : item.amount, item.currency)}
                 </Text>
               </View>

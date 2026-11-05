@@ -14,6 +14,7 @@ import { useI18n } from '@/i18n';
 import { colors, radius } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
 import { getSettings, updateSettings } from '@/services/bookkeeping';
+import { getSignUpDetails } from '@/services/auth';
 
 /** Edit Business Profile (§6.30) — same fields as onboarding, plus the Push Notifications and Dark Theme toggles. */
 export default function EditProfile() {
@@ -36,15 +37,31 @@ export default function EditProfile() {
       ? t('settings.ownerProfile')
       : t('profile.edit');
 
-  // load once; later changes to the settings row must not overwrite what the user is typing
+  // load once; later changes to the settings row must not overwrite what the user is typing. A box the profile has
+  // left empty starts with what the owner gave at sign-up (accounts made before sign-up saved a business profile).
   useEffect(() => {
-    if (settings && !values) {
-      setValues(toProfileValues(settings) ?? EMPTY_PROFILE);
-      setOwnerEmail(settings.ownerEmail ?? '');
-      setOwnerPhone(settings.ownerPhone ?? '');
+    if (!settings || values) return;
+    let active = true;
+    void getSignUpDetails().then((signUp) => {
+      if (!active) return;
+      const saved = toProfileValues(settings) ?? EMPTY_PROFILE;
+      const pick = (current: string, fallback: string | null | undefined) => current || fallback || '';
+      setValues({
+        ...saved,
+        businessName: pick(saved.businessName, signUp?.businessName),
+        businessIndustry: pick(saved.businessIndustry, signUp?.businessIndustry),
+        location: pick(saved.location, signUp?.location),
+        startOperationDate: pick(saved.startOperationDate, signUp?.startOperationDate),
+        mainProducts: pick(saved.mainProducts, signUp?.mainProducts),
+        ownerName: pick(saved.ownerName, signUp?.ownerName),
+        contact: pick(saved.contact, signUp?.ownerPhone),
+      });
+      setOwnerEmail(pick(settings.ownerEmail ?? '', signUp?.ownerEmail));
+      setOwnerPhone(pick(settings.ownerPhone ?? '', signUp?.ownerPhone));
       setPush(settings.pushNotifications);
       setDark(settings.darkTheme);
-    }
+    });
+    return () => { active = false; };
   }, [settings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ownerErrors = {

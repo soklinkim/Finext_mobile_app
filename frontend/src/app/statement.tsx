@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Button } from '@/components/Button';
+import { FormulaSheet, type FormulaInfo } from '@/components/FormulaSheet';
 import { KpiTile } from '@/components/KpiTile';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { ScreenShell } from '@/components/ScreenShell';
@@ -13,6 +14,7 @@ import { useAnalysisQuery } from '@/hooks/useAnalysisQuery';
 import { StandardTerms, useI18n, type TKey } from '@/i18n';
 import { getStatements, type Statement, type StatementKind, type StatementPeriod } from '@/services/analysis';
 import { formatMoneyWhole } from '@/services/bookkeeping';
+import { quickRatioInfo, statementKpiInfo, statementLineInfo } from '@/services/formulas';
 import { statementHtml } from '@/services/statementPdf';
 
 function kpiValue(k: Statement['kpis'][number], currency: Statement['currency'], showPlus: boolean): string {
@@ -49,6 +51,9 @@ function StatementContent() {
     : loaded;
   // The page to download, shown in a preview first; null while the preview is closed.
   const [preview, setPreview] = useState<string | null>(null);
+  // The formula of the figure last tapped.
+  const [formula, setFormula] = useState<FormulaInfo | null>(null);
+  const ctx = { t, term };
 
   return (
     <ScreenShell title={t('screen.statements')} backFallbackHref="/statements" nav="statements" padding={24}>
@@ -63,11 +68,13 @@ function StatementContent() {
           <>
             <View className="flex-row" style={{ gap: 8 }}>
               {statement.kpis.map((k) => (
-                <KpiTile key={k.label} label={term(k.label)} value={kpiValue(k, statement.currency, kind === 'cashflow')} caption={k.caption} highlight={k.highlight} />
+                <KpiTile key={k.label} label={term(k.label)} value={kpiValue(k, statement.currency, kind === 'cashflow')} caption={k.caption} highlight={k.highlight}
+                  onPress={() => setFormula(statementKpiInfo(statement, k.label, ctx))} />
               ))}
             </View>
             {/* The statement itself as a sheet of A4 paper, like the PDF it downloads as. */}
-            <PaperStatement statement={statement} business={q.data.business} />
+            <Text variant="micro" tone="neutral-600">{t('formula.tap')}</Text>
+            <PaperStatement statement={statement} business={q.data.business} onPressLine={(line, column) => setFormula(statementLineInfo(statement, line, column, ctx))} />
             {statement.quickRatios && (
               <View style={{ gap: 8 }}>
                 <Text variant="caption" weight={600} tone="primary-500">
@@ -77,7 +84,8 @@ function StatementContent() {
                   {statement.quickRatios.map((r) => {
                     const percent = r.label.toLowerCase().includes('margin');
                     const format = (value: number) => percent ? `${(value * 100).toFixed(1)}%` : `${value.toFixed(2)}x`;
-                    return <KpiTile key={r.label} label={term(r.label)} value={format(r.current)} caption={r.prior !== undefined ? `${q.data!.income.columnHeaders[1]}: ${format(r.prior)}` : undefined} />;
+                    return <KpiTile key={r.label} label={term(r.label)} value={format(r.current)} caption={r.prior !== undefined ? `${q.data!.income.columnHeaders[1]}: ${format(r.prior)}` : undefined}
+                      onPress={() => setFormula(quickRatioInfo(statement, r.label, format(r.current), ctx))} />;
                   })}
                 </View>
               </View>
@@ -85,6 +93,7 @@ function StatementContent() {
           </>
         )}
       </View>
+      <FormulaSheet info={formula} onClose={() => setFormula(null)} />
       <PdfPreview html={preview} title={statement?.title ?? t('screen.statements')} onClose={() => setPreview(null)} failedMessage={t('stmt.downloadFailed')} />
     </ScreenShell>
   );

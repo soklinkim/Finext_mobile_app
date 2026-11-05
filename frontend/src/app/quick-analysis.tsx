@@ -14,42 +14,41 @@ import { useI18n } from '@/i18n';
 import { getAnalysis } from '@/services/analysis';
 import { formatMoney, getPeriodTotals, listTransactions } from '@/services/bookkeeping';
 import { MONTHS } from '@/lib/format';
-import { colors } from '@/theme';
+import { colors, radius, tint } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
 
 /** Quick Analysis — weekly money in / money out (local), month chart (cached), latest rows (local). */
 export default function QuickAnalysis() {
   const router = useRouter();
   const { t, locale } = useI18n();
-  const dark = useAppTheme();
   const { data: week } = useLocalQuery(() => getPeriodTotals('weekly'), []);
   const { data: txs } = useLocalQuery(() => listTransactions({ limit: 3 }), []);
   const loadWeeklyChart = useCallback(() => getAnalysis('weekly'), []);
+  const dark = useAppTheme();
   const chart = useAnalysisQuery(loadWeeklyChart);
   const cur = week?.currency ?? 'USD';
 
   const hero = (
     <View className="flex-row items-center px-9" style={{ gap: 16, paddingVertical: 16 }}>
       <View className="flex-1" style={{ gap: 12 }}>
-        <View className="flex-row items-center" style={{ gap: 12 }}>
-          <Icon name="salary" size={36} strokeWidth={1.5} />
+        <View className="flex-row items-center" style={{ gap: 12, padding: 10, borderRadius: radius.md, backgroundColor: tint(colors.success, 0.24), borderWidth: 1.5, borderColor: tint(colors.success, 0.7) }}>
+          <Icon name="salary" size={36} strokeWidth={1.75} color={dark ? colors.success : colors.successText} />
           <View className="flex-1">
             <Text variant="caption" tone="primary-900" weight={400}>
               {t('quick.moneyIn')}
             </Text>
-            <Text variant="body-lg" weight={700} tone="primary-900" adjustsFontSizeToFit numberOfLines={1}>
+            <Text variant="body-lg" weight={700} tone="money-in" adjustsFontSizeToFit numberOfLines={1}>
               {formatMoney(week?.moneyIn ?? 0, cur)}
             </Text>
           </View>
         </View>
-        <View className="bg-white" style={{ height: 1, ...(dark ? { backgroundColor: colors.dark.border } : {}) }} />
-        <View className="flex-row items-center" style={{ gap: 12 }}>
-          <Icon name="expense" size={36} strokeWidth={1.5} />
+        <View className="flex-row items-center" style={{ gap: 12, padding: 10, borderRadius: radius.md, backgroundColor: tint(colors.danger, 0.18), borderWidth: 1.5, borderColor: tint(colors.danger, 0.6) }}>
+          <Icon name="expense" size={36} strokeWidth={1.75} color={dark ? colors.danger : colors.dangerText} />
           <View className="flex-1">
             <Text variant="caption" tone="primary-900" weight={400}>
               {t('quick.moneyOut')}
             </Text>
-            <Text variant="body-lg" weight={700} tone="expense" adjustsFontSizeToFit numberOfLines={1}>
+            <Text variant="body-lg" weight={700} tone="money-out" adjustsFontSizeToFit numberOfLines={1}>
               {formatMoney(-(week?.moneyOut ?? 0), cur)}
             </Text>
           </View>

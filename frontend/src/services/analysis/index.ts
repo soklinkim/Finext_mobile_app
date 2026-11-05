@@ -47,8 +47,9 @@ export function getTargets(): Promise<CachedResult<Target[]>> {
   return withCache('targets', emptyTargets);
 }
 
-export function getCategoryBreakdown(): Promise<CachedResult<CategorySlice[]>> {
-  return withCache('accounting:categories', () => syncService.getCategories(), { requireOnline: true });
+/** Expenses of one month (YYYY-MM) by cost type; the current month when none is given. */
+export function getCategoryBreakdown(month?: string): Promise<CachedResult<CategorySlice[]>> {
+  return withCache(`accounting:categories:${month ?? 'current'}`, () => syncService.getCategories(month), { requireOnline: true });
 }
 
 export function getStatements(period: StatementPeriod = 'monthly'): Promise<CachedResult<Statements | null>> {
@@ -91,6 +92,11 @@ export function previewAccountingImpact(input: AccountingPreviewInput): Promise<
 
 export function getRatios(): Promise<CachedResult<RatioSnapshot[]>> {
   return withCache('accounting:ratios', async () => (await syncService.getFinancialHealth()).ratios, { requireOnline: true });
+}
+
+/** The same ratios over this quarter so far (Health > Key ratios > Quarterly). */
+export function getQuarterlyRatios(): Promise<CachedResult<RatioSnapshot[]>> {
+  return withCache('accounting:ratios:quarterly', () => syncService.getQuarterlyRatios(), { requireOnline: true });
 }
 
 export function getHealthHistory(): Promise<CachedResult<HealthHistoryMonth[]>> {

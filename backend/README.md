@@ -23,6 +23,16 @@ Browsers may call the API only from the Expo web dev server (`:8081` on localhos
 
 Bookkeeping writes go to local SQLite first with `syncStatus = 'pending'`. The client pushes pending rows, marks only accepted rows as synced, then pulls server changes using a per-user sequence cursor. Invalid rows stay pending and are reported. If the server has a newer version of a row, it returns that version and the client merges it into SQLite. Soft deletes sync as tombstones.
 
+## Where a figure comes from
+
+- `GET /accounting/statements` adds `sources` to each statement line: the kinds of entry behind the figure (an entry type id, `depreciation` or `opening`), signed as the line shows it. The list adds up to the line (`tests/test_worked_sample.py`). Retained earnings, opening cash and net profit lines have none.
+- `GET /accounting/analysis` adds `incomeSources` and `expenseSources` (by entry type, or `system_depreciation`) that add up to the totals.
+- `GET /accounting/categories?month=YYYY-MM` splits one month's expenses by cost type (the current month when `month` is left out).
+
+## Statement import readers
+
+`POST /import/statement` reads a PDF with `statement_reader.py` (unchanged third-party code). When that finds no rows or fails its own arithmetic checks, `statement_import.py` also tries `statement_aligned.py` (columns by alignment with their headings) and `statement_ruled.py` (columns and rows from the table's ruled lines, for statements whose heading row is an image) and keeps the reading that passes the most checks. The totals the statement prints may be negative (some banks print "Total Debit: -801.26"); the app treats them as sizes.
+
 ## Statements and their wording
 
 `GET /accounting/statements?period=weekly|monthly|annual` returns the three statements. Their titles, section headings and

@@ -100,7 +100,7 @@ The offline ledger is one database per device, so a device holds one account's d
 | Source of truth | Local SQLite database | The server |
 | Works offline | Always, fully | Only from the last cached response |
 | Computed where | On the device: entry lists, the Bookkeeping overview totals for the chosen months, filters and search, loan list | On the server: Home and Account Balance totals, charts, targets, category breakdown, financial statements, ratios, risk, loan readiness, notifications |
-| Screens | Bookkeeping overview, Add entry, Transactions (with filters), Entry detail, Calendar "Spends", Search, Quick Analysis tiles and recent entries | Home, Account Balance, Analysis, Quick Analysis chart, Calendar "Categories", Financial Statements, Financial Health, Loan, Notifications |
+| Screens | Bookkeeping overview, Add entry, Transactions (with filters), Entry detail, Calendar "Spends", Quick Analysis tiles and recent entries | Home, Account Balance, Analysis, Quick Analysis chart, Calendar "Categories" (for the month shown in the calendar), Financial Statements, Financial Health, Loan, Notifications |
 
 **How the analysis cache works** (`services/analysis/cache.ts`, one `withCache(key, fetcher)` for every call):
 
@@ -113,9 +113,9 @@ Connectivity comes from `expo-network` (`services/network.ts`, hook `useNetworkS
 
 ## Sync
 
-`services/sync` pushes rows with `sync_status = 'pending'` to `POST /sync/push` and pulls changes from `GET /sync/changes` with a per-user cursor (last-writer-wins for newer local edits). `BackgroundSync` in `app/_layout.tsx` runs it about a third of a second after a local change, when the connection returns, when the app returns to the foreground, and at login (the profile is fetched first, so a new device does not send an owner who finished onboarding elsewhere through onboarding again).
+`services/sync` pushes rows with `sync_status = 'pending'` to `POST /sync/push` and pulls changes from `GET /sync/changes` with a per-user cursor (last-writer-wins for newer local edits). `BackgroundSync` in `app/_layout.tsx` runs it about a third of a second after a local change, every 30 seconds while the app is open and connected (the heavier health-alert refresh runs only when something was sent or received), when the connection returns, when the app returns to the foreground, and at login (the profile is fetched first, so a new device does not send an owner who finished onboarding elsewhere through onboarding again).
 
-Synced tables: `banks`, `categories`, `transactions`, `business_assets`, `budgets`, `settings`, `onboarding_financial_entries`. **Not synced:** `entry_attachments` (evidence photos) and the small device preferences. There is no "Sync now" button and no last-synced time; Settings shows how many changes are waiting, and an entry detail says "Not synced" while pending.
+Synced tables: `banks`, `categories`, `transactions`, `business_assets`, `budgets`, `settings`, `onboarding_financial_entries`. **Not synced:** `entry_attachments` (evidence photos) and the small device preferences. Profile › Cloud sync has a **Sync now** button and shows when this device last synced (`getLastSynced`, kept per account in AsyncStorage); offline it shows that time instead of "everything is synced". An entry detail says "Not synced" while pending.
 
 ## Database schema
 
@@ -143,7 +143,7 @@ Drizzle schema: `src/db/schema.ts`. The SQL that actually creates the tables is 
 | `onboarding_financial_entries` | `section`, `entry_key`, `amount`, `currency`, `as_of`, period dates. Opening liabilities, equity and income-statement figures. |
 | `settings` | One row, `id = 'app'`: `language`, `onboarding_status`, `start_option`, `display_currency` (the business's one currency), `rate_khr_per_usd`, business profile fields, `push_notifications`, `dark_theme` |
 
-Users always type positive numbers; `direction` decides the sign. Posted transactions are never edited or deleted in the UI; they are reversed.
+Users always type positive numbers; `direction` decides the sign. **Entries can be edited and deleted** (a deliberate change from the original "reverse only" rule): `updateEntry` changes the row in place and `deleteEntry` soft-deletes it (`deleted_at`) together with the payments, write-offs and reversals that point at it and its receipt photos; the deletion syncs like any change. Payments, write-offs, reversals and loans cannot be edited, an entry with payments cannot be edited, and a loan with repayments cannot be deleted. `reverseEntry` still exists but no screen uses it.
 
 **How the local numbers are computed** (`services/bookkeeping/index.ts`):
 
@@ -153,15 +153,17 @@ Users always type positive numbers; `direction` decides the sign. Posted transac
 
 ## What is built and what is not
 
-**Built:** launch, Log In, Sign Up (two steps: business details and review), Forgot password, one-screen setup (language, finance words, currency), onboarding (start option, business profile, opening balances: assets including property / equipment / vehicles and added long-term assets, liabilities with several lenders, equity, and income figures for an existing business), Home, Account Balance, Quick Analysis, Analysis, Search (by type and date), Calendar, Transactions with filters, Bookkeeping overview with a multi-month picker, **Add an entry** (all entry types plus Move money, impact strip, Pay later rules, loan repayment against recorded loans, optional photo evidence, validation that scrolls to the first missing field), entry detail (mark as paid, write off, reverse, evidence), bank statement import, Financial Statements (three statements, weekly and monthly reports, PDF download, standard terms in English and Khmer), Financial Health, Loan readiness and sharing, Loan application pack, Notifications, Profile, Edit profile, Security (change password, sign out everywhere), Settings, Policies, Help, simple and standard finance wording with explanations.
+**Built:** launch, Log In, Sign Up (two steps: business details and review), Forgot password, one-screen setup (language, finance words, currency), onboarding (start option, business profile, opening balances: assets including property / equipment / vehicles and added long-term assets, liabilities with several lenders, equity, and income figures for an existing business), Home, Account Balance, Quick Analysis, Analysis, Calendar (green / yellow / red days, expenses by category for the month), Transactions (a date or date range, several categories at once, "Missing records", "Recent Entries" in the order they were recorded; the old Search screen redirects here), Bookkeeping overview with a multi-month picker, **Add an entry** (all entry types plus Move money, impact strip, Pay later rules, loan repayment against recorded loans, optional photo evidence, validation that scrolls to the first missing field), entry detail (mark as paid, write off, edit, delete, evidence), bank statement import (account summary, a type chosen for every entry, search and bulk type, leftovers can be continued),  reminders and missed-day pop-ups, tap-to-see-the-formula sheets in Analysis and the statements, Financial Statements (three statements, weekly and monthly reports, PDF download, standard terms in English and Khmer), Financial Health, Loan readiness and sharing, Loan application pack, Notifications, Profile, Edit profile, Security (change password, sign out everywhere), Settings, Policies, Help, simple and standard finance wording with explanations.
 
 **Not built (known gaps):**
 
-- A "Sync now" button and a last-synced time; evidence photos and device preferences are not synced.
+- Evidence photos and device preferences are not synced, and reminders are kept on the device only.
 - Photo evidence only (no PDFs), and it is not included in statements or the loan pack.
 - A separate local database per account (one account per device today).
-- PIN and fingerprint, Delete account, Online Support chat, push notifications.
+- PIN and fingerprint, Delete account, Online Support chat, push notifications. Reminders only fire while the app is open (a phone alarm needs `expo-notifications` and a development build).
 - Statement of Changes in Equity, Notes to the statements and current / non-current subtotals (see `STATEMENT_TERMS_REVIEW.md`); the downloadable statement page and PDF are English only.
+- Formulas for the health score, loan readiness, risk and forecast figures (they come from the server's models); health ratios show their formula but not the figures behind it.
+- Khmer text added for these features was written without a native speaker and needs review before release.
 - A dedicated "Owed to me / I owe" list (the Transactions "Unpaid" filter is the closest).
 
 ## Notes and decisions

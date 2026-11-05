@@ -15,10 +15,21 @@ interface Props {
   onSelect: (date: Date) => void;
   /** days of this month that have transactions get a small dot */
   activeDays?: number[];
+  /** days with no entries that the owner has not answered: red number and dot */
+  missedDays?: number[];
+  /** days filled with an average: green like a recorded day, with a "~" */
+  estimatedDays?: number[];
+  /** days the owner confirmed nothing happened: yellow */
+  zeroDays?: number[];
+  /** a chosen span of days (both ends marked, the days between tinted); used instead of `selected` */
+  range?: { from: number | null; to: number | null };
 }
 
+/** Calendar status colours: recorded = green, nothing happened = yellow, missing = red (a soft fill, readable under the number). */
+const TINT = { recorded: '#52D5BA40', zero: '#FFAF2A59', missed: '#FF426740' } as const;
+
 /** §6.13 — month/year dropdowns, Monday-first 7-column grid, selected = 36 px primary-900 circle, today = 1 px ring. */
-export function CalendarGrid({ year, month, onMonthChange, selected, onSelect, activeDays = [] }: Props) {
+export function CalendarGrid({ year, month, onMonthChange, selected, onSelect, activeDays = [], missedDays = [], estimatedDays = [], zeroDays = [], range }: Props) {
   const { locale, t } = useI18n();
   const [picker, setPicker] = useState<'month' | 'year' | null>(null);
   const first = new Date(year, month, 1);
@@ -73,18 +84,39 @@ export function CalendarGrid({ year, month, onMonthChange, selected, onSelect, a
           {row.map((d, c) => {
             if (!d) return <View key={c} className="flex-1" />;
             const date = new Date(year, month, d);
-            const isSel = selected ? sameDay(selected, date) : false;
+            const atStart = range?.from != null && sameDay(new Date(range.from), date);
+            const atEnd = range?.to != null && sameDay(new Date(range.to), date);
+            const spanning = range?.from != null && range?.to != null && range.from < range.to && !sameDay(new Date(range.from), new Date(range.to));
+            const inSpan = spanning && date.getTime() >= new Date(new Date(range!.from!).setHours(0, 0, 0, 0)).getTime() && date.getTime() <= range!.to!;
+            const isSel = (selected ? sameDay(selected, date) : false) || atStart || atEnd;
             const isToday = sameDay(today, date);
+            const missed = missedDays.includes(d);
+            const estimated = estimatedDays.includes(d);
+            const zero = zeroDays.includes(d);
+            const recorded = activeDays.includes(d) || estimated;
+            const fill = missed ? TINT.missed : zero && !recorded ? TINT.zero : recorded ? TINT.recorded : null;
+            const status = missed ? t('missed.legendMissed') : zero && !recorded ? t('missed.legendZero') : estimated ? t('missed.legendEstimate') : recorded ? t('missed.legendRecorded') : '';
+            const label = `${d} ${MONTHS[locale][month]} ${year}${status ? `, ${status}` : ''}`;
             return (
-              <Pressable key={c} accessibilityRole="button" accessibilityState={{ selected: isSel }} accessibilityLabel={`${d} ${MONTHS[locale][month]} ${year}`} onPress={() => onSelect(date)} className="flex-1 items-center justify-center">
+              <Pressable key={c} accessibilityRole="button" accessibilityState={{ selected: isSel }} accessibilityLabel={label} onPress={() => onSelect(date)} className="flex-1 items-center justify-center">
+                {/* The span: one band from the first day to the last, rounded where it starts, ends or wraps to a new week. */}
+                {inSpan && (
+                  <View pointerEvents="none" style={{
+                    position: 'absolute', top: 2, bottom: 2,
+                    left: atStart ? '50%' : 0, right: atEnd ? '50%' : 0,
+                    backgroundColor: colors.primary[200],
+                    borderTopLeftRadius: atStart || c === 0 || d === 1 ? 18 : 0, borderBottomLeftRadius: atStart || c === 0 || d === 1 ? 18 : 0,
+                    borderTopRightRadius: atEnd || c === 6 || d === days ? 18 : 0, borderBottomRightRadius: atEnd || c === 6 || d === days ? 18 : 0,
+                  }} />
+                )}
                 <View
                   className={`items-center justify-center ${isSel ? 'bg-primary-900' : ''}`}
-                  style={{ width: 36, height: 36, borderRadius: 18, borderWidth: isToday && !isSel ? 1 : 0, borderColor: colors.primary[500] }}
+                  style={{ width: 36, height: 36, borderRadius: 18, borderWidth: isSel && range ? 2 : isToday && !isSel ? 1 : 0, borderColor: isSel && range ? colors.white : colors.primary[500], ...(fill && !isSel ? { backgroundColor: fill } : {}) }}
                 >
-                  <Text variant="body" weight={400} tone={isSel ? 'white' : 'neutral-900'}>
+                  <Text variant="body" weight={missed ? 600 : 400} tone={isSel ? 'white' : 'neutral-900'} style={missed && !isSel ? { color: colors.dangerText } : undefined}>
                     {d}
                   </Text>
-                  {activeDays.includes(d) && !isSel && <View style={{ position: 'absolute', bottom: 3, width: 4, height: 4, borderRadius: 2, backgroundColor: colors.accent.expense }} />}
+                  {estimated && !isSel && <Text variant="micro" weight={700} style={{ position: 'absolute', top: -2, right: 1, color: colors.warningText }}>~</Text>}
                 </View>
               </Pressable>
             );

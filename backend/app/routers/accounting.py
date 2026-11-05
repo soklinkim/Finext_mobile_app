@@ -124,6 +124,14 @@ def _statement_period(now: datetime, period: str):
         return (current_start, now + timedelta(milliseconds=1), prior_start, prior_end,
                 current_start.strftime("%B %Y"), prior_start.strftime("%B %Y"))
 
+    if period == "quarterly":
+        current_start = _quarter_start(now)
+        prior_start = _quarter_start(current_start - timedelta(days=1))
+        elapsed = now - current_start + timedelta(milliseconds=1)
+        prior_end = min(prior_start + elapsed, current_start)
+        return (current_start, now + timedelta(milliseconds=1), prior_start, prior_end,
+                _quarter_name(current_start), _quarter_name(prior_start))
+
     if period == "annual":
         current_start = datetime(now.year, 1, 1, tzinfo=BUSINESS_TZ)
         prior_start = datetime(now.year - 1, 1, 1, tzinfo=BUSINESS_TZ)
@@ -135,7 +143,23 @@ def _statement_period(now: datetime, period: str):
         return (current_start, now + timedelta(milliseconds=1), prior_start, prior_now + timedelta(milliseconds=1),
                 f"Year to date {now.year}", f"Year to date {now.year - 1}")
 
-    raise HTTPException(status_code=400, detail="period must be weekly, monthly, or annual")
+    raise HTTPException(status_code=400, detail="period must be weekly, monthly, quarterly, or annual")
+
+
+def _quarter_start(moment: datetime) -> datetime:
+    """First day of the calendar quarter (Jan, Apr, Jul, Oct) that `moment` falls in."""
+    return datetime(moment.year, ((moment.month - 1) // 3) * 3 + 1, 1, tzinfo=BUSINESS_TZ)
+
+
+def _quarter_name(start: datetime) -> str:
+    return f"Q{(start.month - 1) // 3 + 1} {start.year}"
+
+
+def _months_after(moment: datetime, months: int) -> datetime:
+    """The same day `months` calendar months later (the month's last day when it is shorter)."""
+    index = moment.month - 1 + months
+    year, month = moment.year + index // 12, index % 12 + 1
+    return moment.replace(year=year, month=month, day=min(moment.day, monthrange(year, month)[1]))
 
 
 def _long_date(moment: datetime) -> str:
@@ -148,6 +172,8 @@ def _heading_period(period: str, start: datetime, today: datetime) -> str:
         last_day, word = start + timedelta(days=6), "week"
     elif period == "monthly":
         last_day, word = start.replace(day=monthrange(start.year, start.month)[1]), "month"
+    elif period == "quarterly":
+        last_day, word = _months_after(start, 3) - timedelta(days=1), "quarter"
     else:
         last_day, word = start.replace(month=12, day=31), "year"
     if today.date() == last_day.date():
@@ -183,6 +209,16 @@ def statements(user_id: str = Depends(current_sme), period: Annotated[str, Query
     def signed(line: dict, amount: int) -> int:
         return amount if line["side"] == "debit" else -amount
 
+    # Where each account's figure comes from: (account, source) -> signed amount, for the statement period and for all time.
+    # The source is the entry type that posted it ("product_sale", "rent"...), "depreciation" or "opening" (set-up balances).
+    by_source_period: dict[tuple[str, str], int] = {}
+    by_source_all: dict[tuple[str, str], int] = {}
+
+    def track(code: str, source: str, amount: int, in_period: bool) -> None:
+        by_source_all[(code, source)] = by_source_all.get((code, source), 0) + amount
+        if in_period:
+            by_source_period[(code, source)] = by_source_period.get((code, source), 0) + amount
+
     for tx in transactions:
         if tx.get("deletedAt") is not None:
             continue
@@ -197,6 +233,7 @@ def statements(user_id: str = Depends(current_sme), period: Annotated[str, Query
                 target[code] = target.get(code, 0) + signed(line, amount)
             if when < current_start:
                 historical_lines[code] = historical_lines.get(code, 0) + signed(line, amount)
+            track(code, tx["typeId"], signed(line, amount), current_start <= when < current_end)
 
     # Balances entered during onboarding are opening positions. The source captures
     # assets separately in business_assets and statement values in this table.
@@ -214,12 +251,14 @@ def statements(user_id: str = Depends(current_sme), period: Annotated[str, Query
                 target[code] = target.get(code, 0) + signed(line, amount)
             if when < current_start:
                 historical_lines[code] = historical_lines.get(code, 0) + signed(line, amount)
+            track(code, "depreciation", signed(line, amount), current_start <= when < current_end)
     for row in opening:
         code = ONBOARDING_ACCOUNT_MAP.get(row["entryKey"])
         if not code:
             continue
         amount = _minor_amount(row["amount"], row["currency"], currency, rate)
         balances[code] = balances.get(code, 0) + (amount if code in DEBIT_NORMAL_ACCOUNTS else -amount)
+        track(code, "opening", amount if code in DEBIT_NORMAL_ACCOUNTS else -amount, False)
 
     def natural(codes: tuple[str, ...], period: dict[str, int] | None = None) -> int:
         values = period if period is not None else balances
@@ -240,10 +279,22 @@ def statements(user_id: str = Depends(current_sme), period: Annotated[str, Query
 
     cur, prev = pnl(current_lines), pnl(prior_lines)
 
-    def line(key: str, label: str, current: int, previous: int | None = None, style: str = "line"):
+    def src(*groups: tuple[tuple[str, ...], int], period: bool = False) -> list[dict]:
+        """What a line's figure is made of: each kind of entry that fed its accounts, as the line shows it (sign included)."""
+        data = by_source_period if period else by_source_all
+        found: dict[str, int] = {}
+        for codes, sign in groups:
+            for source in {k for (c, k) in data if c in codes}:
+                amount = natural_balance(codes, {c: data.get((c, source), 0) for c in codes}) * sign
+                found[source] = found.get(source, 0) + amount
+        return [{"source": k, "amount": v} for k, v in sorted(found.items(), key=lambda item: -abs(item[1])) if v]
+
+    def line(key: str, label: str, current: int, previous: int | None = None, style: str = "line", sources: list[dict] | None = None):
         value = {"key": key, "label": label, "current": current, "style": style}
         if previous is not None:
             value["prior"] = previous
+        if sources:
+            value["sources"] = sources
         return value
 
     def operating_lines(values: dict[str, int], previous_values: dict[str, int]):
@@ -256,13 +307,13 @@ def statements(user_id: str = Depends(current_sme), period: Annotated[str, Query
             ("depreciation", "Depreciation", ("6800",)),
             ("otherOperating", "Other operating expenses", ("6600", "6700", "6900", "6950", "6990")),
         ]
-        return [line(key, label, -natural(codes, values), -natural(codes, previous_values)) for key, label, codes in groups]
+        return [line(key, label, -natural(codes, values), -natural(codes, previous_values), sources=src((codes, -1), period=True)) for key, label, codes in groups]
 
     income = {"kind": "income", "title": "Statement of Comprehensive Income", "heading": headings["income"], "periodLabel": period_name, "currency": currency,
         "kpis": [{"label": "Revenue", "value": cur["revenue"], "format": "money"}, {"label": "Net profit", "value": cur["net"], "format": "money", "highlight": True}],
         "columnHeaders": [period_name, prior_name], "sections": [
-            {"heading": "", "lines": [line("sales", "Revenue", cur["revenue"], prev["revenue"]), line("cogs", "Cost of goods sold", -cur["cogs"], -prev["cogs"]), line("gross", "Gross profit", cur["gross"], prev["gross"], style="subtotal")]},
-            {"heading": "Operating expenses", "lines": operating_lines(current_lines, prior_lines) + [line("operating", "Total operating expenses", -cur["operating"], -prev["operating"], style="subtotal"), line("operatingProfit", "Operating profit", cur["operating_profit"], prev["operating_profit"], style="subtotal"), line("otherIncome", "Other income", cur["other"], prev["other"]), line("interest", "Interest expense", -cur["interest"], -prev["interest"]), line("pbt", "Profit before tax", cur["operating_profit"] + cur["other"] - cur["interest"], prev["operating_profit"] + prev["other"] - prev["interest"], style="subtotal"), line("tax", "Income tax expense", -cur["tax"], -prev["tax"]), line("net", "Net profit", cur["net"], prev["net"], style="total")]},
+            {"heading": "", "lines": [line("sales", "Revenue", cur["revenue"], prev["revenue"], sources=src((("4000", "4100"), 1), (("4900",), -1), period=True)), line("cogs", "Cost of goods sold", -cur["cogs"], -prev["cogs"], sources=src((("5000",), -1), period=True)), line("gross", "Gross profit", cur["gross"], prev["gross"], style="subtotal")]},
+            {"heading": "Operating expenses", "lines": operating_lines(current_lines, prior_lines) + [line("operating", "Total operating expenses", -cur["operating"], -prev["operating"], style="subtotal"), line("operatingProfit", "Operating profit", cur["operating_profit"], prev["operating_profit"], style="subtotal"), line("otherIncome", "Other income", cur["other"], prev["other"], sources=src((("4200",), 1), period=True)), line("interest", "Interest expense", -cur["interest"], -prev["interest"], sources=src((("7000",), -1), period=True)), line("pbt", "Profit before tax", cur["operating_profit"] + cur["other"] - cur["interest"], prev["operating_profit"] + prev["other"] - prev["interest"], style="subtotal"), line("tax", "Income tax expense", -cur["tax"], -prev["tax"], sources=src((("7100",), -1), period=True)), line("net", "Net profit", cur["net"], prev["net"], style="total")]},
         ], "quickRatios": ([{"label": "Gross margin", "current": cur["gross"] / cur["revenue"], **({"prior": prev["gross"] / prev["revenue"]} if prev["revenue"] else {})}, {"label": "Net margin", "current": cur["net"] / cur["revenue"], **({"prior": prev["net"] / prev["revenue"]} if prev["revenue"] else {})}] if cur["revenue"] else [])}
 
     assets = natural(("1000", "1010", "1100", "1200", "1300", "1500", "1600")) - natural(("1590",))
@@ -282,8 +333,8 @@ def statements(user_id: str = Depends(current_sme), period: Annotated[str, Query
     balance = {"kind": "balance", "title": "Statement of Financial Position", "heading": headings["balance"], "periodLabel": f"As at {today.strftime('%d %B %Y')}", "currency": currency,
         "kpis": [{"label": "Total assets", "value": assets, "format": "money"}, {"label": "Total liabilities", "value": liabilities, "format": "money"}, {"label": "Owner's equity", "value": equity, "format": "money"}],
         "columnHeaders": [today.strftime("%d %b %Y")], "sections": [
-            {"heading": "Assets", "lines": [line("cash", "Cash", natural(("1000", "1010"))), line("receivables", "Trade receivables", natural(("1100",))), line("inventory", "Inventories", natural(("1200",))), line("prepaid", "Prepaid expenses", natural(("1300",))), line("currentAssets", "Total current assets", current_assets, style="subtotal"), line("equipment", "Property and equipment", natural(("1500",)) - natural(("1590",))), line("longAssets", "Other long-term assets", natural(("1600",))), line("assets", "Total assets", assets, style="total")]},
-            {"heading": "Liabilities and equity", "lines": [line("payables", "Trade payables", natural(("2000",))), line("deposits", "Customer deposits", natural(("2100",))), line("accrued", "Accrued expenses & taxes payable", natural(("2200", "2300"))), line("shortLoans", "Short-term loans (bank / MFI)", natural(("2400",))), line("otherBorrowings", "Other short-term borrowings", natural(("2500",))), line("longLoans", "Long-term loans", natural(("2600",))), line("leases", "Lease obligations", natural(("2700",))), line("liabilities", "Total liabilities", liabilities, style="subtotal"), line("capital", "Owner's capital", capital), line("retained", "Retained earnings", retained), line("profit", "Net profit for the period", cur["net"]), line("drawings", "Less: owner's drawings", -drawings), line("equity", "Total equity", equity, style="subtotal"), line("totalLE", "Total liabilities and equity", liabilities + equity, style="total")]},
+            {"heading": "Assets", "lines": [line("cash", "Cash", natural(("1000", "1010")), sources=src((("1000", "1010"), 1))), line("receivables", "Trade receivables", natural(("1100",)), sources=src((("1100",), 1))), line("inventory", "Inventories", natural(("1200",)), sources=src((("1200",), 1))), line("prepaid", "Prepaid expenses", natural(("1300",)), sources=src((("1300",), 1))), line("currentAssets", "Total current assets", current_assets, style="subtotal"), line("equipment", "Property and equipment", natural(("1500",)) - natural(("1590",)), sources=src((("1500",), 1), (("1590",), -1))), line("longAssets", "Other long-term assets", natural(("1600",)), sources=src((("1600",), 1))), line("assets", "Total assets", assets, style="total")]},
+            {"heading": "Liabilities and equity", "lines": [line("payables", "Trade payables", natural(("2000",)), sources=src((("2000",), 1))), line("deposits", "Customer deposits", natural(("2100",)), sources=src((("2100",), 1))), line("accrued", "Accrued expenses & taxes payable", natural(("2200", "2300")), sources=src((("2200", "2300"), 1))), line("shortLoans", "Short-term loans (bank / MFI)", natural(("2400",)), sources=src((("2400",), 1))), line("otherBorrowings", "Other short-term borrowings", natural(("2500",)), sources=src((("2500",), 1))), line("longLoans", "Long-term loans", natural(("2600",)), sources=src((("2600",), 1))), line("leases", "Lease obligations", natural(("2700",)), sources=src((("2700",), 1))), line("liabilities", "Total liabilities", liabilities, style="subtotal"), line("capital", "Owner's capital", capital, sources=src((("3000",), 1))), line("retained", "Retained earnings", retained), line("profit", "Net profit for the period", cur["net"]), line("drawings", "Less: owner's drawings", -drawings, sources=src((("3200",), -1), period=True)), line("equity", "Total equity", equity, style="subtotal"), line("totalLE", "Total liabilities and equity", liabilities + equity, style="total")]},
         ], "check": {"label": "Balance check", "difference": balance_check}, "quickRatios": ([{"label": "Current ratio", "current": current_assets / current_liabilities}] if current_liabilities else []) + ([{"label": "Liabilities-to-equity", "current": liabilities / equity}] if equity else [])}
 
     cash = natural(("1000", "1010"))
@@ -298,9 +349,9 @@ def statements(user_id: str = Depends(current_sme), period: Annotated[str, Query
     opening_cash = cash - natural(("1000", "1010"), current_lines)
     cashflow = {"kind": "cashflow", "title": "Statement of Cash Flows", "heading": headings["cashflow"], "periodLabel": period_name, "currency": currency,
         "kpis": [{"label": "Net cash change", "value": net_cash_change, "format": "money", "highlight": True}], "columnHeaders": [period_name],
-        "sections": [{"heading": "Cash flows from operating activities", "lines": [line("netProfit", "Net profit", cur["net"]), line("depreciation", "Add back: depreciation", depreciation), line("receivables", "Change in trade receivables", -change("1100")), line("inventory", "Change in inventories", -change("1200")), line("prepaid", "Change in prepaid assets", -change("1300")), line("payables", "Change in trade payables", change("2000")), line("deposits", "Change in customer deposits", change("2100")), line("accrued", "Change in accrued expenses & tax", change("2200") + change("2300")), line("operatingCash", "Net cash from operating activities", cash_operating, style="subtotal")]},
-                      {"heading": "Cash flows from investing activities", "lines": [line("equipmentCash", "Property & equipment", -(change("1500") - change("1590") + depreciation)), line("otherAssetsCash", "Other long-term assets", -change("1600")), line("investingCash", "Net cash from investing activities", cash_investing, style="subtotal")]},
-                      {"heading": "Cash flows from financing activities", "lines": [line("debtCash", "Loans & lease obligations", change("2400") + change("2500") + change("2600") + change("2700")), line("capitalCash", "Owner's capital contributed", change("3000")), line("drawingsCash", "Less: owner's drawings", -change("3200")), line("financingCash", "Net cash from financing activities", cash_financing, style="subtotal"), line("netCash", "Net increase (decrease) in cash", net_cash_change, style="total"), line("openingCash", "Cash at start of period", opening_cash), line("closingCash", "Cash at end of period", opening_cash + net_cash_change)]}],
+        "sections": [{"heading": "Cash flows from operating activities", "lines": [line("netProfit", "Net profit", cur["net"]), line("depreciation", "Add back: depreciation", depreciation, sources=src((("6800",), 1), period=True)), line("receivables", "Change in trade receivables", -change("1100"), sources=src((("1100",), -1), period=True)), line("inventory", "Change in inventories", -change("1200"), sources=src((("1200",), -1), period=True)), line("prepaid", "Change in prepaid assets", -change("1300"), sources=src((("1300",), -1), period=True)), line("payables", "Change in trade payables", change("2000"), sources=src((("2000",), 1), period=True)), line("deposits", "Change in customer deposits", change("2100"), sources=src((("2100",), 1), period=True)), line("accrued", "Change in accrued expenses & tax", change("2200") + change("2300"), sources=src((("2200", "2300"), 1), period=True)), line("operatingCash", "Net cash from operating activities", cash_operating, style="subtotal")]},
+                      {"heading": "Cash flows from investing activities", "lines": [line("equipmentCash", "Property & equipment", -(change("1500") - change("1590") + depreciation), sources=src((("1500",), -1), (("1590",), 1), (("6800",), -1), period=True)), line("otherAssetsCash", "Other long-term assets", -change("1600"), sources=src((("1600",), -1), period=True)), line("investingCash", "Net cash from investing activities", cash_investing, style="subtotal")]},
+                      {"heading": "Cash flows from financing activities", "lines": [line("debtCash", "Loans & lease obligations", change("2400") + change("2500") + change("2600") + change("2700"), sources=src((("2400", "2500", "2600", "2700"), 1), period=True)), line("capitalCash", "Owner's capital contributed", change("3000"), sources=src((("3000",), 1), period=True)), line("drawingsCash", "Less: owner's drawings", -change("3200"), sources=src((("3200",), -1), period=True)), line("financingCash", "Net cash from financing activities", cash_financing, style="subtotal"), line("netCash", "Net increase (decrease) in cash", net_cash_change, style="total"), line("openingCash", "Cash at start of period", opening_cash), line("closingCash", "Cash at end of period", opening_cash + net_cash_change)]}],
         "check": {"label": "Cash flow check", "difference": cash - (opening_cash + net_cash_change)}}
     return {"business": settings.get("businessName") or "FINEXT", "period": period_name,
             "income": income, "balance": balance, "cashflow": cashflow,
@@ -492,9 +543,15 @@ def _scheduled_debt_service(user_id: str, currency: str, rate: int, start: datet
 
 
 @router.get("/ratios")
-def ratios(user_id: str = Depends(current_sme)):
-    """Calculate supported workbook ratios and apply inclusive yellow/red thresholds."""
-    report = statements(user_id, period="monthly")
+def ratios(user_id: str = Depends(current_sme), period: Annotated[str, Query()] = "monthly"):
+    """Calculate supported workbook ratios and apply inclusive yellow/red thresholds.
+
+    `period` is the window the profit and flow ratios cover: this month so far (monthly, the default) or this quarter
+    so far (quarterly), each compared with the same stretch of the period before. Balance-sheet ratios are as at today
+    either way, and interest coverage and DSCR always use the last complete quarter."""
+    if period not in {"monthly", "quarterly"}:
+        raise HTTPException(status_code=400, detail="period must be monthly or quarterly")
+    report = statements(user_id, period=period)
     metrics = report["_metrics"]
     pnl = metrics["current"]
     prev = metrics["prior"]
@@ -502,17 +559,16 @@ def ratios(user_id: str = Depends(current_sme)):
     movements = metrics["periodMovements"]
     income_lines = {line["key"]: line["current"] for section in report["income"]["sections"] for line in section["lines"]}
     balance_lines = {line["key"]: line["current"] for section in report["balance"]["sections"] for line in section["lines"]}
-    days = datetime.now(BUSINESS_TZ).day
-    month_start = datetime.now(BUSINESS_TZ).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     now = datetime.now(BUSINESS_TZ)
+    period_start = _quarter_start(now) if period == "quarterly" else now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    # Days covered so far, for the "days" ratios (a month so far is its day of the month).
+    days = (now.date() - period_start.date()).days + 1
     enough_month = False
     enough_quarter = False
     began = _business_start(user_id)
     if began:
-        due_year = began.year + (1 if began.month == 12 else 0)
-        due_month = 1 if began.month == 12 else began.month + 1
-        due_day = min(began.day, monthrange(due_year, due_month)[1])
-        enough_month = now >= began.replace(year=due_year, month=due_month, day=due_day)
+        # A period's ratios count once the business has been recorded for a whole period of that length.
+        enough_month = now >= _months_after(began, 3 if period == "quarterly" else 1)
     quarter_start, quarter_end = _complete_quarter(now)
     if began:
         enough_quarter = began <= quarter_start
@@ -535,7 +591,7 @@ def ratios(user_id: str = Depends(current_sme)):
     credit_sales = sum(_minor_amount(tx["amount"], tx["currency"], currency, tx.get("exchangeRate", rate))
                        for tx in _effective_transactions(user_id)
                        if tx.get("payMethod") == "later" and tx.get("typeId") in {"product_sale", "service_income"}
-                       and datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=BUSINESS_TZ) >= month_start)
+                       and datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=BUSINESS_TZ) >= period_start)
     current_inventory = balance_lines.get("inventory", 0)
     opening_inventory = current_inventory - movements.get("1200", 0)
     average_inventory = (current_inventory + opening_inventory) / 2
@@ -576,7 +632,7 @@ def ratios(user_id: str = Depends(current_sme)):
         results.append({"id": key, "label": label, "value": value, "status": status,
                         "benchmark": rule["benchmark"], "yellow": rule["yellow"], "red": rule["red"], "betterWhen": rule["better"],
                         "message": message})
-    return {"period": report["period"], "ratios": results}
+    return {"period": report["period"], "periodKind": period, "ratios": results}
 
 
 def either_or_both(first: str, second: str) -> str | None:
@@ -930,23 +986,43 @@ def analysis(period: str = "daily", user_id: str = Depends(current_sme)):
         ends = starts[1:] + [datetime(now.year + 1, 1, 1, tzinfo=BUSINESS_TZ)]
     incomes = [0] * len(buckets)
     expenses = [0] * len(buckets)
+    # What the totals are made of: the kind of entry behind each amount (so the app can show where a total comes from).
+    income_by_type: dict[str, int] = {}
+    expense_by_type: dict[str, int] = {}
     for row in rows:
         date = datetime.fromtimestamp(row["date"] / 1000, tz=BUSINESS_TZ)
         for i, (start, end) in enumerate(zip(buckets, ends)):
             if start <= date < end:
                 incomes[i] += row["income"]
                 expenses[i] += row["expense"]
+                income_by_type[row["typeId"]] = income_by_type.get(row["typeId"], 0) + row["income"]
+                expense_by_type[row["typeId"]] = expense_by_type.get(row["typeId"], 0) + row["expense"]
                 break
     return {"period": period, "currency": currency, "labels": labels,
             "income": incomes, "expense": expenses,
-            "totals": {"income": sum(incomes), "expense": sum(expenses)}}
+            "totals": {"income": sum(incomes), "expense": sum(expenses)},
+            "incomeSources": _ranked(income_by_type), "expenseSources": _ranked(expense_by_type)}
+
+
+def _ranked(by_type: dict[str, int]) -> list[dict]:
+    return [{"source": k, "amount": v} for k, v in sorted(by_type.items(), key=lambda item: -abs(item[1])) if v]
 
 
 @router.get("/categories")
-def categories(user_id: str = Depends(current_sme)):
+def categories(month: str | None = None, user_id: str = Depends(current_sme)):
+    """Expenses of one month split by cost type: `month` is YYYY-MM (default: the current month)."""
     rows, currency = _activity_rows(user_id)
     now = datetime.now(BUSINESS_TZ)
-    start = datetime(now.year, now.month, 1, tzinfo=BUSINESS_TZ)
+    year, number = now.year, now.month
+    if month is not None:
+        try:
+            year, number = (int(part) for part in month.split("-"))
+            datetime(year, number, 1)
+        except ValueError:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+    start = datetime(year, number, 1, tzinfo=BUSINESS_TZ)
+    end = datetime(year + (number == 12), number % 12 + 1, 1, tzinfo=BUSINESS_TZ)
     account_groups: dict[str, int] = {}
     transactions = {tx["id"]: tx for tx in db.get_table_rows(user_id, "transactions") if tx.get("deletedAt") is None}
     banks = db.get_table_rows(user_id, "banks", include_deleted=True)
@@ -957,7 +1033,7 @@ def categories(user_id: str = Depends(current_sme)):
     rate = settings.get("rateKhrPerUsd", 4000)
     expenses = {"5000", "6000", "6100", "6200", "6300", "6400", "6500", "6600", "6700", "6800", "6900", "6950", "6990", "7000", "7100"}
     for tx in transactions.values():
-        if datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=BUSINESS_TZ) < start:
+        if not start <= datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=BUSINESS_TZ) < end:
             continue
         for line in journal_for(tx, kinds, loan_accounts, costs):
             if line["accountCode"] not in expenses or line["side"] != "debit":
@@ -968,7 +1044,7 @@ def categories(user_id: str = Depends(current_sme)):
     opening = db.get_table_rows(user_id, "onboarding_financial_entries")
     opening_as_of = max((row.get("asOf") or 0 for row in opening if row.get("section") == "balance_sheet"), default=0)
     for entry in depreciation_entries(list(transactions.values()), after=opening_as_of):
-        if datetime.fromtimestamp(entry["date"] / 1000, tz=BUSINESS_TZ) >= start:
+        if start <= datetime.fromtimestamp(entry["date"] / 1000, tz=BUSINESS_TZ) < end:
             code = "6800"
             amount = _minor_amount(entry["lines"][0]["amount"], entry["currency"], currency, rate)
             account_groups[code] = account_groups.get(code, 0) + amount

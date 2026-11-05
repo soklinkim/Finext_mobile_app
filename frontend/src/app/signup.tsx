@@ -119,9 +119,16 @@ export default function Signup() {
     setAuthNotice(undefined);
     setSaving(true);
     try {
+      // Kept with the login as well as on this device, so the details are not lost if this device never syncs.
+      const profile = fromProfileValues(business);
       const auth = await signUp(form.email, form.password, {
         full_name: form.name.trim(),
         phone: form.phone.trim(),
+        ...Object.fromEntries(Object.entries({
+          business_name: profile.businessName, business_industry: profile.businessIndustry, location: profile.location,
+          start_operation_date: profile.startOperationDate, main_products: profile.mainProducts,
+          registration_status: profile.registrationStatus, registration_number: profile.registrationNumber,
+        }).filter((entry): entry is [string, string] => Boolean(entry[1]))),
       });
       if (!auth.session) {
         await updateSettings({

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, type LayoutChangeEvent } from 'react-native';
+import { Pressable, View, type LayoutChangeEvent } from 'react-native';
 import { Text } from './Text';
 import { useI18n } from '@/i18n';
 import type { Statement, StatementLine } from '@/services/analysis';
@@ -16,12 +16,12 @@ const HAIRLINE = '#E6E6E6';
 const A4 = 297 / 210;
 const SIDE_BY_SIDE = 560; // sheet width at which Current and Prior fit next to each other
 
-function Row({ line, value, currency }: { line: StatementLine; value: number | undefined; currency: Statement['currency'] }) {
+function Row({ line, value, currency, onPress }: { line: StatementLine; value: number | undefined; currency: Statement['currency']; onPress?: () => void }) {
   const { term } = useI18n();
   const style = line.style ?? 'line';
   const bold = style !== 'line';
   return (
-    <View style={{
+    <Pressable accessibilityRole={onPress ? 'button' : undefined} accessibilityHint={onPress ? 'Shows how this is calculated' : undefined} disabled={!onPress || value === undefined} onPress={onPress} style={{
       flexDirection: 'row', gap: 8, paddingVertical: style === 'total' ? 7 : 5,
       borderBottomWidth: style === 'total' ? 3 : 1, borderBottomColor: style === 'total' ? INK : HAIRLINE,
       ...(style === 'subtotal' ? { borderTopWidth: 1, borderTopColor: INK } : {}),
@@ -31,11 +31,11 @@ function Row({ line, value, currency }: { line: StatementLine; value: number | u
       <Text variant="micro" weight={bold ? 700 : 400} style={{ color: INK, fontVariant: ['tabular-nums'] }}>
         {value === undefined ? '—' : paperMoney(value, currency)}
       </Text>
-    </View>
+    </Pressable>
   );
 }
 
-function Panel({ statement, index, label }: { statement: Statement; index: 0 | 1; label: string }) {
+function Panel({ statement, index, label, onPressLine }: { statement: Statement; index: 0 | 1; label: string; onPressLine?: (line: StatementLine, column: 0 | 1) => void }) {
   const { term } = useI18n();
   return (
     <View style={{ flex: 1, minWidth: 0 }}>
@@ -50,7 +50,7 @@ function Panel({ statement, index, label }: { statement: Statement; index: 0 | 1
             </Text>
           ) : null}
           {section.lines.map((line) => (
-            <Row key={line.key} line={line} value={index === 0 ? line.current : line.prior} currency={statement.currency} />
+            <Row key={line.key} line={line} value={index === 0 ? line.current : line.prior} currency={statement.currency} onPress={onPressLine ? () => onPressLine(line, index) : undefined} />
           ))}
         </View>
       ))}
@@ -58,7 +58,7 @@ function Panel({ statement, index, label }: { statement: Statement; index: 0 | 1
   );
 }
 
-export function PaperStatement({ statement, business }: { statement: Statement; business: string }) {
+export function PaperStatement({ statement, business, onPressLine }: { statement: Statement; business: string; onPressLine?: (line: StatementLine, column: 0 | 1) => void }) {
   const { term } = useI18n();
   const [width, setWidth] = useState(0);
   const heading = statement.heading ?? [business, statement.title, statement.periodLabel];
@@ -77,7 +77,7 @@ export function PaperStatement({ statement, business }: { statement: Statement; 
       <View style={{ height: 1, backgroundColor: '#D4D4D4', marginTop: 14, marginBottom: 20 }} />
       <View style={{ flexDirection: sideBySide ? 'row' : 'column', gap: sideBySide ? 28 : 28 }}>
         {periods.map((period, index) => (
-          <Panel key={index} statement={statement} index={index as 0 | 1} label={`${index === 0 ? 'Current' : 'Prior'} · ${period}`} />
+          <Panel key={index} statement={statement} index={index as 0 | 1} label={`${index === 0 ? 'Current' : 'Prior'} · ${period}`} onPressLine={onPressLine} />
         ))}
       </View>
       {statement.check ? (

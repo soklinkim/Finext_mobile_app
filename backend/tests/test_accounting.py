@@ -100,3 +100,51 @@ def test_sales_spike_waits_for_three_complete_months(monkeypatch):
     long_ago = (now.replace(day=1) - timedelta(days=200)).strftime("%Y-%m-%d")
     monkeypatch.setattr(accounting_router, "db", LedgerDB(rows, {"id": "app", "startOperationDate": long_ago}))
     assert accounting_router._sales_spike("u")[0] is not None
+
+
+def test_quarter_windows_run_from_the_quarter_start_and_compare_with_the_quarter_before():
+    from datetime import datetime
+    from app.business_time import BUSINESS_TZ
+    now = datetime(2026, 11, 4, 10, tzinfo=BUSINESS_TZ)
+    start, end, prior_start, prior_end, name, prior_name = accounting_router._statement_period(now, "quarterly")
+    assert (start.month, start.day, prior_start.month, prior_start.year) == (10, 1, 7, 2026)
+    assert end > now and prior_end <= start  # this quarter so far vs the same stretch of the last one
+    assert (name, prior_name) == ("Q4 2026", "Q3 2026")
+    january = datetime(2026, 1, 20, tzinfo=BUSINESS_TZ)
+    assert accounting_router._statement_period(january, "quarterly")[4:] == ("Q1 2026", "Q4 2025")
+
+
+def test_quarterly_ratios_cover_the_whole_quarter_so_far(monkeypatch):
+    """A sale earlier in the quarter counts in the quarterly margin; the monthly one sees only this month."""
+    import time
+    from datetime import datetime, timedelta
+    from app.business_time import BUSINESS_TZ
+    from tests.test_settlement import entry
+    now = datetime.now(BUSINESS_TZ)
+    quarter_start = accounting_router._quarter_start(now)
+    rows = [entry("early", "product_sale", "in", 10_000, meta={"cost": 0}, at=int((quarter_start + timedelta(hours=1)).timestamp() * 1000)),
+            entry("today", "product_sale", "in", 10_000, meta={"cost": 5_000}, at=int(time.time() * 1000) - 1000)]
+    began = (now - timedelta(days=400)).strftime("%Y-%m-%d")
+    monkeypatch.setattr(accounting_router, "db", LedgerDB(rows, {"id": "app", "startOperationDate": began}))
+
+    def margin(period):
+        result = accounting_router.ratios("u", period=period)
+        assert result["periodKind"] == period
+        return next(r for r in result["ratios"] if r["id"] == "gross_margin")["value"]
+
+    assert margin("quarterly") == 0.75
+    same_month = quarter_start.month == now.month
+    assert margin("monthly") == (0.75 if same_month else 0.5)
+    # Called directly, the default stays monthly.
+    assert accounting_router.ratios("u")["periodKind"] == "monthly"
+
+
+def test_ratios_reject_unknown_periods(monkeypatch):
+    monkeypatch.setattr(accounting_router, "db", EmptyDB())
+    app.dependency_overrides[current_user] = lambda: "test-user"
+    try:
+        client = TestClient(app)
+        assert client.get("/accounting/ratios?period=quarterly").json()["periodKind"] == "quarterly"
+        assert client.get("/accounting/ratios?period=weekly").status_code == 400
+    finally:
+        app.dependency_overrides.clear()
