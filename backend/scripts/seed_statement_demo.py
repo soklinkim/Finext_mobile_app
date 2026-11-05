@@ -2,7 +2,7 @@
 
 Real: each row's date and amount, and the statement's opening balance (read with FINEXT's own statement reader, and
 checked against the statement's printed totals). Made up: what each row was for (sale, stock, transport, ...), its
-title, and the business profile. Account numbers, people's names, phone numbers and reference codes are never kept.
+title, each sale's cost of goods, and the business profile. Account numbers, people's names, phone numbers and reference codes are never kept.
 
 Riel amounts are whole riel in FINEXT, so the few amounts with sen (e.g. 1,058.20) are rounded to the nearest riel.
 
@@ -27,6 +27,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from app.bookkeeping import _default_cost  # noqa: E402
 from app.business_time import BUSINESS_TZ  # noqa: E402
 from app.statement_import import read_statement  # noqa: E402
 
@@ -124,6 +125,17 @@ def build(read: dict, bank_id: str, now_ms: int, period_start: str | None = None
             "payMethod": "bank", "bankId": bank_id, "toBankId": None, "categoryId": None, "counterparty": None,
             "note": note, "occurredAt": _noon(r["date"], i), "reviewFlag": type_id in ("other_income", "other_cost"), "meta": None,
         })
+    # Each sale's cost of goods is made up too: the usual share of the sale, but never more than the stock bought before
+    # it and not yet sold. Left to the app's estimate, the cart would sell more stock than it bought and its recorded
+    # stock (and so its assets) would fall below zero, which the risk model reads as broken books.
+    stock = 0
+    for row in sorted(rows, key=lambda x: x["occurredAt"]):
+        if row["typeId"] == "stock_materials":
+            stock += row["amount"]
+        elif row["typeId"] == "product_sale":
+            cost = min(stock, _default_cost(row["amount"]))
+            stock -= cost
+            row["meta"] = json.dumps({"cost": cost})
     # The opening balance is dated the start of the statement period. When the reader did not pick the period up, the
     # first day of the first row's month (statements run whole months); `--from=YYYY-MM-DD` overrides it.
     start = period_start or (read["period"].split(" to ")[0] if read.get("period") else read["rows"][0]["date"][:8] + "01")
