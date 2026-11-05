@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { NoCachedDataError, type CachedResult } from '@/services/analysis';
+import { subscribeToAuthChanges } from '@/services/auth';
 import { useNetworkStatus } from './useNetworkStatus';
 
 export interface AnalysisQuery<T> {
@@ -16,23 +17,37 @@ export interface AnalysisQuery<T> {
 }
 
 /**
+ * The last result of each analysis call, kept while the app is open. A screen that opens later (Home → Account Balance)
+ * starts from it instead of blank, so the page does not flash empty and then jump when the server answers; the fresh
+ * result replaces it a moment later. Cleared on sign-out so another account never sees these figures.
+ */
+const lastResults = new Map<unknown, CachedResult<unknown>>();
+subscribeToAuthChanges((signedIn) => {
+  if (!signedIn) lastResults.clear();
+});
+
+/**
  * Calls an analysis service function. Re-runs when `deps` change and whenever the
  * connection comes back (so cached data is refreshed automatically).
  */
 export function useAnalysisQuery<T>(fn: () => Promise<CachedResult<T>>): AnalysisQuery<T> {
   const { isOnline } = useNetworkStatus();
-  const [state, setState] = useState<{ result?: CachedResult<T>; loading: boolean; noCache: boolean; error: Error | null }>({
+  const [state, setState] = useState<{ result?: CachedResult<T>; loading: boolean; noCache: boolean; error: Error | null }>(() => ({
+    result: lastResults.get(fn) as CachedResult<T> | undefined,
     loading: true,
     noCache: false,
     error: null,
-  });
+  }));
   const seq = useRef(0);
 
   const run = useCallback(() => {
     const id = ++seq.current;
     setState((s) => ({ ...s, loading: true, noCache: false, error: null }));
     fn()
-      .then((result) => id === seq.current && setState({ result, loading: false, noCache: false, error: null }))
+      .then((result) => {
+        lastResults.set(fn, result);
+        if (id === seq.current) setState({ result, loading: false, noCache: false, error: null });
+      })
       .catch((e: unknown) => {
         if (id !== seq.current) return;
         if (e instanceof NoCachedDataError) setState({ loading: false, noCache: true, error: null });

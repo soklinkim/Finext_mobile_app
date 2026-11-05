@@ -82,6 +82,13 @@ const LEVELS = {
 };
 const STATUS = { pass: 'Good', warn: 'Watch', fail: 'Weak', missing: 'No data' };
 const DECISIONS = { new: 'New', reviewing: 'Reviewing', approved: 'Approved', declined: 'Declined' };
+// The business's answer to an approved offer.
+const RESPONSES = { accepted: 'Accepted by business', declined: 'Declined by business' };
+const offerAmount = (offer) => money(offer.currency === 'USD' ? Math.round(offer.amount * 100) : offer.amount, offer.currency);
+const offerText = (offer) => `${offerAmount(offer)} · ${offer.annualRate}% a year · ${offer.termMonths} months`;
+/** Status chips: the bank's decision, then the business's answer once it has replied to an offer. */
+const statusChips = (share) => `${chip(share.decision, DECISIONS[share.decision])}${share.smeResponse
+  ? ` ${chip(share.smeResponse === 'accepted' ? 'approved' : 'declined', RESPONSES[share.smeResponse])}` : ''}`;
 const SCOPE_LABELS = {
   readiness: 'Loan readiness', statements: 'Financial statements', health: 'Financial health ratios',
   trend: 'Monthly income & expenses', documents: 'Business documents',
@@ -466,7 +473,7 @@ async function renderList(initialDecision = '') {
               <td>${a.readinessScore != null && a.readinessLevel !== 'insufficient_data'
                 ? `<div class="mini"><strong>${esc(a.readinessScore)}</strong><div class="bar hide-sm"><div style="width:${Number(a.readinessScore) || 0}%"></div></div>${chip(a.readinessLevel, LEVELS[a.readinessLevel] || '')}</div>`
                 : a.readinessLevel ? chip(a.readinessLevel, LEVELS[a.readinessLevel]) : '<span class="muted">Not shared</span>'}</td>
-              <td>${chip(a.decision, DECISIONS[a.decision])}</td>
+              <td>${statusChips(a)}</td>
               <td class="hide-sm">${date(a.createdAt)}</td>
               <td class="hide-sm">${date(a.expiresAt)}</td>
               <td class="num" aria-hidden="true">${icon('next').replace('<svg ', '<svg width="18" height="18" ')}</td>
@@ -616,14 +623,43 @@ function documentsSection(docs, shareId) {
 }
 
 function decisionPanel(share) {
+  // Once the business has answered the offer, the decision is final: show the outcome instead of the form.
+  if (share.smeResponse) {
+    const accepted = share.smeResponse === 'accepted';
+    return `
+    <div class="card soft stack decision">
+      ${sectionTitle('check', 'Outcome')}
+      <p style="margin:0">${chip(accepted ? 'approved' : 'declined', RESPONSES[share.smeResponse])} · ${date(share.smeRespondedAt)}</p>
+      ${share.offer ? `<p class="small" style="margin:0"><strong>Your offer:</strong> ${esc(offerText(share.offer))}</p>` : ''}
+      ${share.smeResponseNote ? `<p class="small" style="margin:0"><strong>Their note:</strong> “${esc(share.smeResponseNote)}”</p>` : ''}
+      <p class="muted small" style="margin:0">${accepted ? 'Contact the business to arrange the paperwork and disbursement.' : 'The business turned this offer down. The decision can no longer be changed.'}</p>
+    </div>`;
+  }
+  const o = share.offer || {};
+  const approved = share.decision === 'approved';
   return `
     <form class="card soft stack decision" id="decision">
       ${sectionTitle('check', 'Your decision')}
-      <p class="muted small" style="margin:0">Current: ${chip(share.decision, DECISIONS[share.decision])} ${share.decidedAt ? `· ${date(share.decidedAt)}` : ''}. The business sees this status and note in its app.</p>
+      <p class="muted small" style="margin:0">Current: ${chip(share.decision, DECISIONS[share.decision])} ${share.decidedAt ? `· ${date(share.decidedAt)}` : ''}. The business sees this status and note in its app${approved && share.offer ? ', and can accept or decline your offer' : ''}.</p>
       <div><label for="decision-status">Status</label>
         <select id="decision-status">
           ${['reviewing', 'approved', 'declined'].map((d) => `<option value="${d}" ${share.decision === d ? 'selected' : ''}>${DECISIONS[d]}</option>`).join('')}
         </select></div>
+      <!-- An approval is an offer the business accepts or declines in its app. -->
+      <fieldset id="offer" class="stack" style="border:0;padding:0;margin:0" ${approved ? '' : 'hidden'}>
+        <div class="row" style="gap:8px">
+          <div class="grow"><label for="offer-amount">Loan amount</label>
+            <input id="offer-amount" type="number" min="1" step="0.01" inputmode="decimal" value="${esc(o.amount ?? '')}" placeholder="5000"></div>
+          <div><label for="offer-currency">Currency</label>
+            <select id="offer-currency">${['USD', 'KHR'].map((c) => `<option ${o.currency === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
+        </div>
+        <div class="row" style="gap:8px">
+          <div class="grow"><label for="offer-rate">Interest (% a year)</label>
+            <input id="offer-rate" type="number" min="0" max="100" step="0.01" inputmode="decimal" value="${esc(o.annualRate ?? '')}" placeholder="12"></div>
+          <div class="grow"><label for="offer-term">Term (months)</label>
+            <input id="offer-term" type="number" min="1" max="360" step="1" inputmode="numeric" value="${esc(o.termMonths ?? '')}" placeholder="24"></div>
+        </div>
+      </fieldset>
       <div><label for="decision-note">Note to the business (optional)</label>
         <textarea id="decision-note" rows="3" maxlength="1000" placeholder="e.g. Please visit a branch with your ID card.">${esc(share.decisionNote || '')}</textarea></div>
       <div class="spread"><span id="decision-msg" class="small muted"></span><button type="submit">Save decision</button></div>
@@ -649,7 +685,7 @@ async function renderApplicant(shareId) {
           <span class="avatar" aria-hidden="true">${esc(initials(b.businessName))}</span>
           <div class="grow"><h1>${esc(b.businessName || 'Unnamed business')}</h1>
             <p class="muted" style="margin:0">${esc([industry(b.businessIndustry), b.location].filter(Boolean).join(' · '))}</p></div>
-          <div class="row" style="flex:0 0 auto;gap:8px">${data.readiness ? chip(data.readiness.level, LEVELS[data.readiness.level]) : ''}${chip(share.decision, DECISIONS[share.decision])}</div>
+          <div class="row" style="flex:0 0 auto;gap:8px">${data.readiness ? chip(data.readiness.level, LEVELS[data.readiness.level]) : ''}${statusChips(share)}</div>
         </div>
         <div class="facts">
           <div><div class="label">Owner</div>${esc(b.ownerName || '—')}</div>
@@ -673,18 +709,34 @@ async function renderApplicant(shareId) {
       </div>
     </div>`;
 
-  document.getElementById('decision').addEventListener('submit', async (event) => {
+  const form = document.getElementById('decision');
+  if (!form) return; // the business has answered: nothing left to decide
+  const status = document.getElementById('decision-status');
+  const offerFields = document.getElementById('offer');
+  status.addEventListener('change', () => { offerFields.hidden = status.value !== 'approved'; });
+  form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const msg = document.getElementById('decision-msg');
     const button = event.target.querySelector('button');
+    const value = (id) => document.getElementById(id).value.trim();
+    const body = { decision: status.value, note: document.getElementById('decision-note').value };
+    if (status.value === 'approved') {
+      const offer = { amount: Number(value('offer-amount')), currency: value('offer-currency'), annualRate: Number(value('offer-rate')), termMonths: Number(value('offer-term')) };
+      if (!(offer.amount > 0) || value('offer-rate') === '' || !(offer.annualRate >= 0 && offer.annualRate <= 100)
+          || !(Number.isInteger(offer.termMonths) && offer.termMonths >= 1 && offer.termMonths <= 360)) {
+        msg.textContent = 'To approve, enter the loan amount, interest rate (0–100%) and term (1–360 months).';
+        return;
+      }
+      body.offer = offer;
+    }
     button.disabled = true;
     try {
       await api(`/lender/applicants/${encodeURIComponent(shareId)}/decision`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ decision: document.getElementById('decision-status').value, note: document.getElementById('decision-note').value }),
+        body: JSON.stringify(body),
       });
-      msg.textContent = 'Saved.';
+      msg.textContent = status.value === 'approved' ? 'Saved. The business can now accept or decline your offer.' : 'Saved.';
     } catch (error) {
       msg.textContent = error.message;
     } finally {

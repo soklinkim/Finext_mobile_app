@@ -25,6 +25,8 @@ const colors = {
   warning: '#FFAF2A',
   success: '#52D5BA',
   successText: '#0F7A64', // success as text on white: #52D5BA is too light to read there
+  dangerText: '#D81B45', // money out as text on white: #FF4267 is too light for small text there
+  warningText: '#9A5B00', // "watch" as text on white: #FFAF2A is too light to read there
   alert: '#FB6B18',
   white: '#FFFFFF',
   progress: { fill: '#000000' },

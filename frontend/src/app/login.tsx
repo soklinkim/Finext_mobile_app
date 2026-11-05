@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Linking, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { AuthHeader } from '@/components/AuthHeader';
@@ -10,7 +10,7 @@ import { TextField } from '@/components/TextField';
 import { useI18n } from '@/i18n';
 import { LENDER_PORTAL_URL } from '@/services/apiBase';
 import { LedgerConflictNotice } from '@/components/LedgerConflictNotice';
-import { LenderAccountError, LocalLedgerOwnedError, signIn } from '@/services/auth';
+import { getLastEmail, LenderAccountError, LocalLedgerOwnedError, SignInError, signIn } from '@/services/auth';
 import { enterAfterLogin } from '@/services/accountGate';
 import { isOnline } from '@/services/network';
 import { colors } from '@/theme';
@@ -25,6 +25,8 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  // Email and password did not match: both boxes say what to check, until either is edited.
+  const [mismatch, setMismatch] = useState(false);
   const [saving, setSaving] = useState(false);
   // A bank staff login: explained, with the way to the portal, instead of a plain error.
   const [lender, setLender] = useState(false);
@@ -33,8 +35,16 @@ export default function Login() {
   const openPortal = () => { void Linking.openURL(LENDER_PORTAL_URL); };
   const iconColor = dark ? colors.dark.primary : colors.primary[500];
 
+  // The email last used on this device, so a near-miss like name@ vs name123@ does not happen.
+  useEffect(() => {
+    let active = true;
+    void getLastEmail().then((email) => { if (active && email) setUser((typed) => typed || email); });
+    return () => { active = false; };
+  }, []);
+
   const submit = async () => {
     setError(undefined);
+    setMismatch(false);
     setLender(false);
     setDeviceOwned(false);
     if (!user.trim() || !password) {
@@ -55,6 +65,11 @@ export default function Login() {
         setDeviceOwned(true);
         return;
       }
+      if (e instanceof SignInError) {
+        setMismatch(e.code === 'invalid_credentials');
+        setError(t(e.code === 'invalid_credentials' ? 'auth.err.invalid' : e.code === 'email_not_confirmed' ? 'auth.err.notConfirmed' : 'auth.err.rateLimited'));
+        return;
+      }
       // Offline, Supabase only says "Failed to fetch": say what is wrong instead.
       setError(!(await isOnline()) ? t('security.needsConnection') : e instanceof Error ? e.message : 'Unable to log in. Please try again.');
     } finally {
@@ -70,22 +85,22 @@ export default function Login() {
       padding={24}
     >
       <View style={{ gap: 20 }}>
-        <TextField variant="form" label={t('auth.email')} value={user} onChangeText={setUser} placeholder="example@example.com"
+        <TextField variant="form" label={t('auth.email')} value={user} onChangeText={(v) => { setUser(v); setMismatch(false); }} placeholder="example@example.com"
           autoCapitalize="none" keyboardType="email-address" autoComplete="email"
           left={<Icon name="mail" size={18} color={iconColor} />}
-          error={error && !user.trim() ? error : undefined} />
+          error={mismatch ? t('auth.checkEmail') : error && !user.trim() ? error : undefined} />
         <View style={{ gap: 8 }}>
           <TextField
             variant="form"
             label={t('auth.password')}
             value={password}
-            onChangeText={setPassword}
+            onChangeText={(v) => { setPassword(v); setMismatch(false); }}
             secureTextEntry={!show}
             placeholder={t('auth.enterPassword')}
             autoComplete="password"
             onSubmitEditing={() => { void submit(); }}
             left={<Icon name="lock" size={18} color={iconColor} />}
-            error={error && !password ? error : undefined}
+            error={mismatch ? t('auth.checkPassword') : error && !password ? error : undefined}
             right={
               <Pressable accessibilityRole="button" accessibilityLabel={t('auth.togglePassword')} onPress={() => setShow((v) => !v)} hitSlop={10}>
                 <Icon name={show ? 'eye' : 'eyeOff'} size={20} />

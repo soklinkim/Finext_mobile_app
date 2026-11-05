@@ -124,6 +124,14 @@ def _statement_period(now: datetime, period: str):
         return (current_start, now + timedelta(milliseconds=1), prior_start, prior_end,
                 current_start.strftime("%B %Y"), prior_start.strftime("%B %Y"))
 
+    if period == "quarterly":
+        current_start = _quarter_start(now)
+        prior_start = _quarter_start(current_start - timedelta(days=1))
+        elapsed = now - current_start + timedelta(milliseconds=1)
+        prior_end = min(prior_start + elapsed, current_start)
+        return (current_start, now + timedelta(milliseconds=1), prior_start, prior_end,
+                _quarter_name(current_start), _quarter_name(prior_start))
+
     if period == "annual":
         current_start = datetime(now.year, 1, 1, tzinfo=BUSINESS_TZ)
         prior_start = datetime(now.year - 1, 1, 1, tzinfo=BUSINESS_TZ)
@@ -135,7 +143,23 @@ def _statement_period(now: datetime, period: str):
         return (current_start, now + timedelta(milliseconds=1), prior_start, prior_now + timedelta(milliseconds=1),
                 f"Year to date {now.year}", f"Year to date {now.year - 1}")
 
-    raise HTTPException(status_code=400, detail="period must be weekly, monthly, or annual")
+    raise HTTPException(status_code=400, detail="period must be weekly, monthly, quarterly, or annual")
+
+
+def _quarter_start(moment: datetime) -> datetime:
+    """First day of the calendar quarter (Jan, Apr, Jul, Oct) that `moment` falls in."""
+    return datetime(moment.year, ((moment.month - 1) // 3) * 3 + 1, 1, tzinfo=BUSINESS_TZ)
+
+
+def _quarter_name(start: datetime) -> str:
+    return f"Q{(start.month - 1) // 3 + 1} {start.year}"
+
+
+def _months_after(moment: datetime, months: int) -> datetime:
+    """The same day `months` calendar months later (the month's last day when it is shorter)."""
+    index = moment.month - 1 + months
+    year, month = moment.year + index // 12, index % 12 + 1
+    return moment.replace(year=year, month=month, day=min(moment.day, monthrange(year, month)[1]))
 
 
 def _long_date(moment: datetime) -> str:
@@ -148,6 +172,8 @@ def _heading_period(period: str, start: datetime, today: datetime) -> str:
         last_day, word = start + timedelta(days=6), "week"
     elif period == "monthly":
         last_day, word = start.replace(day=monthrange(start.year, start.month)[1]), "month"
+    elif period == "quarterly":
+        last_day, word = _months_after(start, 3) - timedelta(days=1), "quarter"
     else:
         last_day, word = start.replace(month=12, day=31), "year"
     if today.date() == last_day.date():
@@ -492,9 +518,15 @@ def _scheduled_debt_service(user_id: str, currency: str, rate: int, start: datet
 
 
 @router.get("/ratios")
-def ratios(user_id: str = Depends(current_sme)):
-    """Calculate supported workbook ratios and apply inclusive yellow/red thresholds."""
-    report = statements(user_id, period="monthly")
+def ratios(user_id: str = Depends(current_sme), period: Annotated[str, Query()] = "monthly"):
+    """Calculate supported workbook ratios and apply inclusive yellow/red thresholds.
+
+    `period` is the window the profit and flow ratios cover: this month so far (monthly, the default) or this quarter
+    so far (quarterly), each compared with the same stretch of the period before. Balance-sheet ratios are as at today
+    either way, and interest coverage and DSCR always use the last complete quarter."""
+    if period not in {"monthly", "quarterly"}:
+        raise HTTPException(status_code=400, detail="period must be monthly or quarterly")
+    report = statements(user_id, period=period)
     metrics = report["_metrics"]
     pnl = metrics["current"]
     prev = metrics["prior"]
@@ -502,17 +534,16 @@ def ratios(user_id: str = Depends(current_sme)):
     movements = metrics["periodMovements"]
     income_lines = {line["key"]: line["current"] for section in report["income"]["sections"] for line in section["lines"]}
     balance_lines = {line["key"]: line["current"] for section in report["balance"]["sections"] for line in section["lines"]}
-    days = datetime.now(BUSINESS_TZ).day
-    month_start = datetime.now(BUSINESS_TZ).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     now = datetime.now(BUSINESS_TZ)
+    period_start = _quarter_start(now) if period == "quarterly" else now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    # Days covered so far, for the "days" ratios (a month so far is its day of the month).
+    days = (now.date() - period_start.date()).days + 1
     enough_month = False
     enough_quarter = False
     began = _business_start(user_id)
     if began:
-        due_year = began.year + (1 if began.month == 12 else 0)
-        due_month = 1 if began.month == 12 else began.month + 1
-        due_day = min(began.day, monthrange(due_year, due_month)[1])
-        enough_month = now >= began.replace(year=due_year, month=due_month, day=due_day)
+        # A period's ratios count once the business has been recorded for a whole period of that length.
+        enough_month = now >= _months_after(began, 3 if period == "quarterly" else 1)
     quarter_start, quarter_end = _complete_quarter(now)
     if began:
         enough_quarter = began <= quarter_start
@@ -535,7 +566,7 @@ def ratios(user_id: str = Depends(current_sme)):
     credit_sales = sum(_minor_amount(tx["amount"], tx["currency"], currency, tx.get("exchangeRate", rate))
                        for tx in _effective_transactions(user_id)
                        if tx.get("payMethod") == "later" and tx.get("typeId") in {"product_sale", "service_income"}
-                       and datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=BUSINESS_TZ) >= month_start)
+                       and datetime.fromtimestamp(tx["occurredAt"] / 1000, tz=BUSINESS_TZ) >= period_start)
     current_inventory = balance_lines.get("inventory", 0)
     opening_inventory = current_inventory - movements.get("1200", 0)
     average_inventory = (current_inventory + opening_inventory) / 2
@@ -576,7 +607,7 @@ def ratios(user_id: str = Depends(current_sme)):
         results.append({"id": key, "label": label, "value": value, "status": status,
                         "benchmark": rule["benchmark"], "yellow": rule["yellow"], "red": rule["red"], "betterWhen": rule["better"],
                         "message": message})
-    return {"period": report["period"], "ratios": results}
+    return {"period": report["period"], "periodKind": period, "ratios": results}
 
 
 def either_or_both(first: str, second: str) -> str | None:

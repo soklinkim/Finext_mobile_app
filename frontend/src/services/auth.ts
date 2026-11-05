@@ -7,6 +7,33 @@ import { API_BASE_URL, fetchWithTimeout } from './apiBase';
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const publishableKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 const LOCAL_OWNER_KEY = '@finext.auth.local-owner.v1';
+/** The email last used to sign up or log in on this device, filled in on the login screen (kept after logging out). */
+const LAST_EMAIL_KEY = '@finext.auth.last-email.v1';
+
+export async function getLastEmail(): Promise<string | null> {
+  return AsyncStorage.getItem(LAST_EMAIL_KEY).catch(() => null);
+}
+
+function rememberEmail(email: string) {
+  void AsyncStorage.setItem(LAST_EMAIL_KEY, email.trim()).catch(() => undefined);
+}
+
+/**
+ * A sign-in refused for a reason the login screen explains in the owner's language. Supabase deliberately gives one
+ * answer for "no such email" and "wrong password" (so nobody can test which emails have accounts), and so does this.
+ */
+export class SignInError extends Error {
+  constructor(public code: 'invalid_credentials' | 'email_not_confirmed' | 'rate_limited', message: string) {
+    super(message);
+  }
+}
+
+function signInError(error: { message: string; code?: string; status?: number }): Error {
+  if (error.code === 'invalid_credentials' || /invalid login credentials/i.test(error.message)) return new SignInError('invalid_credentials', error.message);
+  if (error.code === 'email_not_confirmed' || /email not confirmed/i.test(error.message)) return new SignInError('email_not_confirmed', error.message);
+  if (error.status === 429 || error.code === 'over_request_rate_limit') return new SignInError('rate_limited', error.message);
+  return error as Error;
+}
 
 /** Supabase Auth client. The public key is supplied through frontend/.env.local. */
 export const supabase = supabaseUrl && publishableKey
@@ -89,8 +116,9 @@ async function isLenderAccount(accessToken: string): Promise<boolean> {
 
 export async function signIn(email: string, password: string): Promise<Session> {
   const { data, error } = await getClient().auth.signInWithPassword({ email: email.trim(), password });
-  if (error) throw error;
+  if (error) throw signInError(error);
   if (!data.session) throw new Error('Supabase did not return a signed-in session.');
+  rememberEmail(email);
   // Check before binding this device's offline ledger, so a bank login never claims it.
   if (await isLenderAccount(data.session.access_token)) {
     await getClient().auth.signOut({ scope: 'local' });
@@ -112,6 +140,7 @@ export async function signUp(email: string, password: string, metadata: Record<s
     options: { data: metadata },
   });
   if (error) throw error;
+  if (data.user) rememberEmail(email);
   if (data.session) await bindLocalLedger(data.session.user.id);
   return data;
 }
@@ -129,6 +158,46 @@ export async function refreshSession(): Promise<Session | null> {
   const { data, error } = await getClient().auth.refreshSession();
   if (error) return null;
   return data.session;
+}
+
+/**
+ * The name to greet the owner by: the business name, else the owner's name from the business profile, else the
+ * name given at sign-up (kept with the login in Supabase, so it is there even when setup was never finished).
+ */
+export async function getDisplayName(settings: { businessName?: string | null; ownerName?: string | null } | undefined): Promise<string | null> {
+  const fromProfile = settings?.businessName?.trim() || settings?.ownerName?.trim();
+  if (fromProfile) return fromProfile;
+  const signUpName = (await getSession().catch(() => null))?.user.user_metadata?.full_name;
+  return typeof signUpName === 'string' && signUpName.trim() ? signUpName.trim() : null;
+}
+
+/** What the owner gave when creating the account, as kept with the login (older accounts have only name and phone). */
+export interface SignUpDetails {
+  ownerName: string | null;
+  ownerEmail: string | null;
+  ownerPhone: string | null;
+  businessName: string | null;
+  businessIndustry: string | null;
+  location: string | null;
+  startOperationDate: string | null;
+  mainProducts: string | null;
+  registrationStatus: 'registered' | 'unregistered' | null;
+  registrationNumber: string | null;
+}
+
+export async function getSignUpDetails(): Promise<SignUpDetails | null> {
+  const user = (await getSession().catch(() => null))?.user;
+  if (!user) return null;
+  const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+  const text = (key: string) => (typeof meta[key] === 'string' && (meta[key] as string).trim() ? (meta[key] as string).trim() : null);
+  return {
+    ownerName: text('full_name'), ownerEmail: user.email ?? null, ownerPhone: text('phone'),
+    businessName: text('business_name'), businessIndustry: text('business_industry'), location: text('location'),
+    startOperationDate: text('start_operation_date'), mainProducts: text('main_products'),
+    registrationStatus: text('registration_status') === 'registered' || text('registration_status') === 'unregistered'
+      ? (text('registration_status') as 'registered' | 'unregistered') : null,
+    registrationNumber: text('registration_number'),
+  };
 }
 
 /** Who is signed in on this device, for Profile > Security. */

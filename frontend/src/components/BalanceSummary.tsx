@@ -35,7 +35,7 @@ export function BalanceSummary({ balance, expense, currency, onPress, accessibil
           <Icon name="expense" size={14} color={dark ? colors.dark.primary : colors.accent.expense} />
         </View>
         <Text variant="body-sm" tone="neutral-600" style={{ flex: 1 }}>{t('summary.totalExpense')}</Text>
-        <Text variant="body" weight={700} tone="expense" numberOfLines={1}>
+        <Text variant="body" weight={700} tone="money-out" numberOfLines={1}>
           {formatMoney(-expense, currency)}
         </Text>
       </View>

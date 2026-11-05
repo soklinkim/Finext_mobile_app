@@ -4,9 +4,11 @@ import { Icon, type IconName } from '@/components/Icon';
 import { ScreenShell } from '@/components/ScreenShell';
 import { Text } from '@/components/Text';
 import { useLocalQuery } from '@/hooks/useLocalQuery';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useI18n, type TKey } from '@/i18n';
-import { signOut } from '@/services/auth';
-import { getSettings } from '@/services/bookkeeping';
+import { getDisplayName, signOut } from '@/services/auth';
+import { countPendingSync, getSettings } from '@/services/bookkeeping';
+import { setSimulatedOffline } from '@/services/network';
 import { setPlainLanguage } from '@/services/preferences';
 import { colors, radius } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
@@ -38,6 +40,9 @@ export default function Profile() {
   const { t, plain } = useI18n();
   const dark = useAppTheme();
   const { data: settings } = useLocalQuery(getSettings, []);
+  const { data: displayName } = useLocalQuery(() => getDisplayName(settings), [settings?.businessName, settings?.ownerName]);
+  const net = useNetworkStatus();
+  const { data: pending } = useLocalQuery(countPendingSync, []);
 
   const finishLogout = async () => {
     try {
@@ -67,7 +72,7 @@ export default function Profile() {
     Alert.alert(t('common.comingSoon'), t('auth.backendNote'));
   };
 
-  const name = settings?.businessName?.trim() || t('nav.profile');
+  const name = displayName || t('nav.profile');
   const details = [settings?.ownerName?.trim(), settings?.location?.trim()].filter(Boolean).join(' · ');
   const initials = name.split(/\s+/).map((word) => word[0]).join('').slice(0, 2).toUpperCase();
   const card = { borderRadius: radius.card, backgroundColor: dark ? colors.dark.surface : colors.white, borderWidth: 1, borderColor: dark ? colors.dark.border : colors.neutral[200], overflow: 'hidden' } as const;
@@ -90,8 +95,9 @@ export default function Profile() {
       )}
     >
       <View style={{ gap: 28, paddingTop: 20 }}>
-        {/* Plain language first: it changes how the whole app reads. */}
-        <View style={{ ...card, flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 18 }}>
+        {/* Plain language first: it changes how the whole app reads. Simulate offline sits with it so a demo can switch it quickly. */}
+        <View style={card}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 18 }}>
           <View style={{ width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: dark ? colors.dark.field : colors.primary[50] }}>
             <Icon name="book" size={20} color={dark ? colors.dark.primary : colors.primary[500]} strokeWidth={1.75} />
           </View>
@@ -106,6 +112,25 @@ export default function Profile() {
             trackColor={{ true: colors.primary[900], false: colors.neutral[300] }}
             thumbColor={colors.white}
           />
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 18, borderTopWidth: 1, borderTopColor: divider }}>
+          <View style={{ width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: dark ? colors.dark.field : colors.primary[50] }}>
+            <Icon name="wifiOff" size={20} color={dark ? colors.dark.primary : colors.primary[500]} strokeWidth={1.75} />
+          </View>
+          <View style={{ flex: 1, gap: 3 }}>
+            <Text variant="body-sm" weight={600} tone="primary-900">{t('settings.simulateOffline')}</Text>
+            <Text variant="micro" tone="neutral-600">
+              {net.isOnline ? t('settings.statusOnline') : t('settings.statusOffline')} · {t('settings.pendingSync', { count: pending ?? 0 })}
+            </Text>
+          </View>
+          <Switch
+            accessibilityLabel={t('settings.simulateOffline')}
+            value={net.simulated}
+            onValueChange={setSimulatedOffline}
+            trackColor={{ true: colors.primary[900], false: colors.neutral[300] }}
+            thumbColor={colors.white}
+          />
+        </View>
         </View>
 
         {GROUPS.map((group) => (

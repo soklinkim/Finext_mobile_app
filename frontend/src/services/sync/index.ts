@@ -114,6 +114,8 @@ export interface SyncService {
   getFinancialHealth(syncFirst?: boolean): Promise<{ period: string; ratios: RatioSnapshot[]; alerts: AppNotification[] }>;
   /** Sync pending rows then retrieve one ratio snapshot per complete month. */
   getHealthHistory(): Promise<HealthHistoryMonth[]>;
+  /** Sync pending rows then calculate the ratios for this quarter so far. */
+  getQuarterlyRatios(): Promise<RatioSnapshot[]>;
   getAnalysis(period: AnalysisPeriod): Promise<AnalysisResult>;
   getCategories(): Promise<CategorySlice[]>;
   dismissAlert(id: string): Promise<void>;
@@ -467,6 +469,11 @@ async function getHealthHistory(): Promise<HealthHistoryMonth[]> {
   return (await requestJson<{ snapshots: HealthHistoryMonth[] }>('/accounting/snapshots')).snapshots;
 }
 
+async function getQuarterlyRatios(): Promise<RatioSnapshot[]> {
+  await syncForAccountingReports();
+  return (await requestJson<{ ratios: RatioSnapshot[] }>('/accounting/ratios?period=quarterly')).ratios;
+}
+
 async function getAnalysis(period: AnalysisPeriod): Promise<AnalysisResult> {
   await syncForAccountingReports();
   return requestJson(`/accounting/analysis?period=${encodeURIComponent(period)}`);
@@ -481,4 +488,4 @@ async function dismissAlert(id: string): Promise<void> {
   await requestJson(`/accounting/health/${encodeURIComponent(id)}/dismiss`, { method: 'POST' });
 }
 
-export const syncService: SyncService = { pushPending, pullChanges, sync, getJournal, previewImpact, getStatements, getSummary, getForecast, getFutureRisk, checkLoan, whatIf, getUnusualEntries, getLoanReadiness, getFinancialHealth, getHealthHistory, getAnalysis, getCategories, dismissAlert };
+export const syncService: SyncService = { pushPending, pullChanges, sync, getJournal, previewImpact, getStatements, getSummary, getForecast, getFutureRisk, checkLoan, whatIf, getUnusualEntries, getLoanReadiness, getFinancialHealth, getHealthHistory, getQuarterlyRatios, getAnalysis, getCategories, dismissAlert };

@@ -15,10 +15,14 @@ interface Props {
   onSelect: (date: Date) => void;
   /** days of this month that have transactions get a small dot */
   activeDays?: number[];
+  /** days with no entries that the owner has not answered: red number and dot */
+  missedDays?: number[];
+  /** days filled with an average: amber dot */
+  estimatedDays?: number[];
 }
 
 /** §6.13 — month/year dropdowns, Monday-first 7-column grid, selected = 36 px primary-900 circle, today = 1 px ring. */
-export function CalendarGrid({ year, month, onMonthChange, selected, onSelect, activeDays = [] }: Props) {
+export function CalendarGrid({ year, month, onMonthChange, selected, onSelect, activeDays = [], missedDays = [], estimatedDays = [] }: Props) {
   const { locale, t } = useI18n();
   const [picker, setPicker] = useState<'month' | 'year' | null>(null);
   const first = new Date(year, month, 1);
@@ -75,16 +79,20 @@ export function CalendarGrid({ year, month, onMonthChange, selected, onSelect, a
             const date = new Date(year, month, d);
             const isSel = selected ? sameDay(selected, date) : false;
             const isToday = sameDay(today, date);
+            const missed = missedDays.includes(d);
+            const estimated = estimatedDays.includes(d);
+            const dot = missed ? colors.danger : estimated ? colors.warning : activeDays.includes(d) ? colors.accent.expense : null;
+            const label = `${d} ${MONTHS[locale][month]} ${year}${missed ? `, ${t('missed.legendMissed')}` : estimated ? `, ${t('missed.legendEstimate')}` : ''}`;
             return (
-              <Pressable key={c} accessibilityRole="button" accessibilityState={{ selected: isSel }} accessibilityLabel={`${d} ${MONTHS[locale][month]} ${year}`} onPress={() => onSelect(date)} className="flex-1 items-center justify-center">
+              <Pressable key={c} accessibilityRole="button" accessibilityState={{ selected: isSel }} accessibilityLabel={label} onPress={() => onSelect(date)} className="flex-1 items-center justify-center">
                 <View
                   className={`items-center justify-center ${isSel ? 'bg-primary-900' : ''}`}
                   style={{ width: 36, height: 36, borderRadius: 18, borderWidth: isToday && !isSel ? 1 : 0, borderColor: colors.primary[500] }}
                 >
-                  <Text variant="body" weight={400} tone={isSel ? 'white' : 'neutral-900'}>
+                  <Text variant="body" weight={missed ? 600 : 400} tone={isSel ? 'white' : 'neutral-900'} style={missed && !isSel ? { color: colors.dangerText } : undefined}>
                     {d}
                   </Text>
-                  {activeDays.includes(d) && !isSel && <View style={{ position: 'absolute', bottom: 3, width: 4, height: 4, borderRadius: 2, backgroundColor: colors.accent.expense }} />}
+                  {dot && !isSel && <View style={{ position: 'absolute', bottom: 3, width: missed ? 5 : 4, height: missed ? 5 : 4, borderRadius: 3, backgroundColor: dot }} />}
                 </View>
               </Pressable>
             );

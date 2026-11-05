@@ -7,6 +7,7 @@ import { BudgetProgress } from '@/components/BudgetProgress';
 import { Icon } from '@/components/Icon';
 import { ScreenShell } from '@/components/ScreenShell';
 import { SegmentedControl } from '@/components/SegmentedControl';
+import { SetupCard } from '@/components/SetupCard';
 import { EmptyState } from '@/components/StateViews';
 import { GoalRing } from '@/components/TargetRing';
 import { Text } from '@/components/Text';
@@ -16,8 +17,9 @@ import { useLocalQuery } from '@/hooks/useLocalQuery';
 import { useSummary } from '@/hooks/useSummary';
 import { useI18n, type TKey } from '@/i18n';
 import { getTargets } from '@/services/analysis';
+import { getDisplayName } from '@/services/auth';
 import { formatMoney, getPeriodTotals, getSettings, listTransactions, type RollingPeriod } from '@/services/bookkeeping';
-import { colors, radius } from '@/theme';
+import { colors, radius, tint } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
 
 const FEATHER = require('../../../assets/images/feather.png');
@@ -44,7 +46,8 @@ export default function Home() {
   const profit = targets.data?.find((x) => x.id === 'profit-goals');
 
   const currency = summary?.displayCurrency ?? 'USD';
-  const businessName = settings?.businessName?.trim();
+  // Business name, else the owner's name, else the sign-up name; the Finext wordmark only when there is none.
+  const { data: businessName } = useLocalQuery(() => getDisplayName(settings), [settings?.businessName, settings?.ownerName]);
 
   const hero = (
     <View style={{ gap: 20, paddingTop: 8, paddingBottom: 16 }}>
@@ -77,29 +80,29 @@ export default function Home() {
 
   return (
     <ScreenShell noHeader hero={hero} nav="home">
-      <Pressable accessibilityRole="button" accessibilityLabel={t('screen.quickAnalysis')} onPress={() => router.push('/quick-analysis')} className="bg-primary-50 flex-row items-center" style={{ borderRadius: radius.card, padding: 20, gap: 16, ...(dark ? { backgroundColor: colors.dark.surface } : {}) }}>
+      {settings && <View style={{ marginBottom: 20 }}><SetupCard settings={settings} /></View>}
+      <Pressable accessibilityRole="button" accessibilityLabel={t('screen.quickAnalysis')} onPress={() => router.push('/quick-analysis')} className="flex-row items-center" style={{ gap: 16 }}>
         {profit && <GoalRing percent={profit.percent} icon="dollar" label={t('home.profitGoals')} />}
         {profit && <View className="bg-primary-500" style={{ width: 1, alignSelf: 'stretch', ...(dark ? { backgroundColor: colors.dark.border } : {}) }} />}
         <View className="flex-1" style={{ gap: 12 }}>
-          <View className="flex-row items-center" style={{ gap: 12 }}>
-            <Icon name="income" size={36} strokeWidth={1.5} />
+          <View className="flex-row items-center" style={{ gap: 12, padding: 10, borderRadius: radius.md, backgroundColor: tint(colors.success, 0.24), borderWidth: 1.5, borderColor: tint(colors.success, 0.7) }}>
+            <Icon name="income" size={36} strokeWidth={1.75} color={dark ? colors.success : colors.successText} />
             <View className="flex-1">
               <Text variant="caption" tone="primary-900" weight={400}>
                 {t(IN_KEY[period])}
               </Text>
-              <Text variant="body-lg" weight={700} tone="primary-900" adjustsFontSizeToFit numberOfLines={1}>
+              <Text variant="body-lg" weight={700} tone="money-in" adjustsFontSizeToFit numberOfLines={1}>
                 {formatMoney(totals?.moneyIn ?? 0, currency)}
               </Text>
             </View>
           </View>
-          <View className="bg-primary-500" style={{ height: 1, ...(dark ? { backgroundColor: colors.dark.border } : {}) }} />
-          <View className="flex-row items-center" style={{ gap: 12 }}>
-            <Icon name="expense" size={36} strokeWidth={1.5} />
+          <View className="flex-row items-center" style={{ gap: 12, padding: 10, borderRadius: radius.md, backgroundColor: tint(colors.danger, 0.18), borderWidth: 1.5, borderColor: tint(colors.danger, 0.6) }}>
+            <Icon name="expense" size={36} strokeWidth={1.75} color={dark ? colors.danger : colors.dangerText} />
             <View className="flex-1">
               <Text variant="caption" tone="primary-900" weight={400}>
                 {t(OUT_KEY[period])}
               </Text>
-              <Text variant="body-lg" weight={700} tone="primary-900" adjustsFontSizeToFit numberOfLines={1}>
+              <Text variant="body-lg" weight={700} tone="money-out" adjustsFontSizeToFit numberOfLines={1}>
                 {formatMoney(-(totals?.moneyOut ?? 0), currency)}
               </Text>
             </View>

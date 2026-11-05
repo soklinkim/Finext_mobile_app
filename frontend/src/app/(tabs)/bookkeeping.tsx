@@ -19,6 +19,7 @@ import { formatMoney, getMonthsOverview, GROUPS, type OverviewGroup } from '@/se
 import { useAppTheme } from '@/theme/AppTheme';
 
 function GroupRow({ group, currency, locale }: { group: OverviewGroup; currency: 'KHR' | 'USD'; locale: 'en-GB' | 'km' }) {
+  const router = useRouter();
   const { t } = useI18n();
   const [open, setOpen] = useState(group.groupId === 'monthly');
   const label = GROUPS[group.groupId as keyof typeof GROUPS]?.labelKey ?? 'group.monthly';
@@ -42,7 +43,9 @@ function GroupRow({ group, currency, locale }: { group: OverviewGroup; currency:
       </Pressable>
       {open &&
         group.entries.map((e) => (
-          <View key={e.id} className="flex-row items-center justify-between" style={{ paddingLeft: 14, minHeight: 48 }}>
+          <Pressable key={e.id} accessibilityRole="button" accessibilityLabel={`${e.title}, ${formatMoney(e.signed, e.currency)}`}
+            onPress={() => router.push({ pathname: '/entry/[id]', params: { id: e.id } })}
+            className="flex-row items-center justify-between" style={{ paddingLeft: 14, minHeight: 48, gap: 8 }}>
             <View className="flex-1">
               <Text variant="body-sm" weight={500} tone="neutral-900" numberOfLines={1}>
                 {e.title}
@@ -51,10 +54,11 @@ function GroupRow({ group, currency, locale }: { group: OverviewGroup; currency:
                 {formatInputDate(e.occurredAt)}
               </Text>
             </View>
-            <Text variant="body-sm" weight={500} tone={e.direction === 'out' ? 'expense' : 'primary-900'}>
+            <Text variant="body-sm" weight={500} tone={e.direction === 'out' ? 'money-out' : 'money-in'}>
               {formatMoney(e.signed, e.currency)}
             </Text>
-          </View>
+            <Icon name="chevronRight" size={14} color={colors.neutral[500]} />
+          </Pressable>
         ))}
     </View>
   );
@@ -141,8 +145,8 @@ export default function Bookkeeping() {
 
       {/* 1. What happened this month */}
       <View className="flex-row" style={{ gap: 8 }}>
-        <KpiTile label={t('overview.moneyIn')} value={formatMoney(moneyIn, currency)} />
-        <KpiTile label={t('overview.moneyOut')} value={formatMoney(moneyOut, currency)} />
+        <KpiTile label={t('overview.moneyIn')} value={formatMoney(moneyIn, currency)} valueTone="money-in" />
+        <KpiTile label={t('overview.moneyOut')} value={formatMoney(moneyOut, currency)} valueTone="money-out" />
         <KpiTile label={t('overview.leftOver')} value={formatMoney(moneyIn - moneyOut, currency, { showPlus: true })} highlight />
       </View>
       <Text variant="micro" weight={300} tone="neutral-600" style={{ marginTop: 8, marginBottom: 16 }}>

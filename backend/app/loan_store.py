@@ -4,20 +4,25 @@ from app.db import pool
 
 SHARE_COLUMNS = (
     "ls.id::text, ls.lender_id::text, l.name, ls.scopes, ls.created_at, ls.expires_at, ls.revoked_at, "
-    "ls.decision, ls.decision_note, ls.decided_at, ls.readiness_score, ls.readiness_level, ls.readiness_at, ls.reviewing_at"
+    "ls.decision, ls.decision_note, ls.decided_at, ls.readiness_score, ls.readiness_level, ls.readiness_at, ls.reviewing_at, "
+    "ls.offer_amount, ls.offer_currency, ls.offer_rate, ls.offer_term_months, ls.sme_response, ls.sme_response_note, ls.sme_responded_at"
 )
 
 
-SHARE_WIDTH = 14  # number of SHARE_COLUMNS; extra selected columns follow them
+SHARE_WIDTH = 21  # number of SHARE_COLUMNS; extra selected columns follow them
 
 
 def _share(row) -> dict:
     (share_id, lender_id, lender_name, scopes, created_at, expires_at, revoked_at,
-     decision, note, decided_at, score, level, readiness_at, reviewing_at) = row[:SHARE_WIDTH]
+     decision, note, decided_at, score, level, readiness_at, reviewing_at,
+     amount, currency, rate, term, response, response_note, responded_at) = row[:SHARE_WIDTH]
+    offer = ({"amount": float(amount), "currency": currency, "annualRate": float(rate), "termMonths": term}
+             if amount is not None else None)
     return {"id": share_id, "lenderId": lender_id, "lenderName": lender_name, "scopes": list(scopes),
             "createdAt": created_at, "expiresAt": expires_at, "revokedAt": revoked_at,
             "decision": decision, "decisionNote": note, "decidedAt": decided_at,
-            "readinessScore": score, "readinessLevel": level, "readinessAt": readiness_at, "reviewingAt": reviewing_at}
+            "readinessScore": score, "readinessLevel": level, "readinessAt": readiness_at, "reviewingAt": reviewing_at,
+            "offer": offer, "smeResponse": response, "smeResponseNote": response_note, "smeRespondedAt": responded_at}
 
 
 def list_lenders() -> list[dict]:
@@ -121,14 +126,35 @@ def record_view(share_id: str, viewer_user_id: str, now: int) -> None:
                     (share_id, viewer_user_id, now))
 
 
-def set_decision(lender_id: str, share_id: str, decision: str, note: str | None, now: int) -> bool:
+def set_decision(lender_id: str, share_id: str, decision: str, note: str | None, offer: dict | None, now: int) -> str:
+    """Save the bank's decision (and its offer, when approving). 'saved'; 'answered' once the business has replied to
+    an offer (the decision is then final); or 'missing'."""
+    offer = offer or {}
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute(
             # Review starts with the first decision of any kind, so the SME's progress line
             # always has an "Under review" date before "Approved" / "Declined".
             "update loan_shares set decision = %s, decision_note = %s, decided_at = %s, "
-            "reviewing_at = coalesce(reviewing_at, %s) "
-            "where id = %s::uuid and lender_id = %s::uuid and revoked_at is null and expires_at > %s",
-            (decision, note, now, now, share_id, lender_id, now),
+            "reviewing_at = coalesce(reviewing_at, %s), "
+            "offer_amount = %s, offer_currency = %s, offer_rate = %s, offer_term_months = %s "
+            "where id = %s::uuid and lender_id = %s::uuid and revoked_at is null and expires_at > %s and sme_response is null",
+            (decision, note, now, now, offer.get("amount"), offer.get("currency"), offer.get("annualRate"),
+             offer.get("termMonths"), share_id, lender_id, now),
+        )
+        if cur.rowcount > 0:
+            return "saved"
+        cur.execute("select sme_response from loan_shares where id = %s::uuid and lender_id = %s::uuid", (share_id, lender_id))
+        row = cur.fetchone()
+        return "answered" if row and row[0] else "missing"
+
+
+def respond_to_offer(sme_user_id: str, share_id: str, response: str, note: str | None, now: int) -> bool:
+    """The business accepts or declines the bank's offer, once. False when there is no open offer to answer."""
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            "update loan_shares set sme_response = %s, sme_response_note = %s, sme_responded_at = %s "
+            "where id = %s::uuid and sme_user_id = %s and decision = 'approved' and offer_amount is not null "
+            "and sme_response is null and revoked_at is null and expires_at > %s",
+            (response, note, now, share_id, sme_user_id, now),
         )
         return cur.rowcount > 0

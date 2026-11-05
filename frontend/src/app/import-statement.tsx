@@ -14,10 +14,10 @@ import { TextField } from '@/components/TextField';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useI18n, type TKey } from '@/i18n';
 import { formatInputDate } from '@/lib/format';
-import { formatMoney, getEntryType, getSettings, GROUPS, listBanks, type Bank, type Currency } from '@/services/bookkeeping';
+import { formatMoney, getAccountBalances, getEntryType, getSettings, listBanks, type Bank, type Currency } from '@/services/bookkeeping';
 import type { UploadAsset } from '@/services/documents';
 import {
-  hasPendingStatement, IMPORT_TYPES, importRows, needsCheck, pickStatementFile, prepareRows, readStatement, StatementImportError, takePendingStatement,
+  convertsOnImport, CONVERTED_MARK, hasPendingStatement, IMPORT_KHR_PER_USD, IMPORT_TYPES, importRows, rielToCents, needsCheck, pickStatementFile, prepareRows, readStatement, StatementImportError, statementTotals, takePendingStatement,
   toMinor, STATEMENT_MAX_BYTES,
   type ReviewRow, type StatementRead,
 } from '@/services/statementImport';
@@ -37,15 +37,17 @@ const dateMs = (date: string) => {
   return new Date(y, m - 1, d, 12).getTime();
 };
 
-/** The groups of the Bookkeeping tab's "Entries in …" list, in the same order, plus moves to and from Cash. */
-const GROUP_ORDER = [...(Object.keys(GROUPS) as (keyof typeof GROUPS)[]), 'move'] as const;
-const groupOf = (row: ReviewRow) => getEntryType(row.typeId)?.groupId ?? (row.direction === 'in' ? 'sales' : 'monthly');
+/** The import is about money in and money out: two groups (whatever each entry's type), plus moves to and from Cash. */
+const GROUP_ORDER = ['in', 'out', 'move'] as const;
+const GROUP_LABEL: Record<(typeof GROUP_ORDER)[number], TKey> = { in: 'import.moneyIn', out: 'import.moneyOut', move: 'import.transfers' };
+const groupOf = (row: ReviewRow): (typeof GROUP_ORDER)[number] => (getEntryType(row.typeId)?.direction === 'move' ? 'move' : row.direction);
 
 /** One group of the summary, closed until tapped: the same look as the Bookkeeping tab's list. */
 function PreviewGroup({ label, rows, currency, first }: { label: string; rows: ReviewRow[]; currency: Currency; first: boolean }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const dark = useAppTheme();
   const [open, setOpen] = useState(false);
+  const [shown, setShown] = useState<number | null>(null); // the row whose details are open
   const signed = (row: ReviewRow) => (row.direction === 'out' ? -1 : 1) * toMinor(row.amount, row.currency ?? currency);
   const total = rows.reduce((sum, row) => sum + signed(row), 0);
   return (
@@ -61,15 +63,47 @@ function PreviewGroup({ label, rows, currency, first }: { label: string; rows: R
           <Icon name={open ? 'chevronDown' : 'chevronRight'} size={18} />
         </View>
       </Pressable>
-      {open && rows.map((row) => (
-        <View key={row.index} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingLeft: 14, minHeight: 48 }}>
-          <View style={{ flex: 1 }}>
-            <Text variant="body-sm" weight={500} tone="neutral-900" numberOfLines={1}>{readable(row.description) || '—'}</Text>
-            <Text variant="caption" weight={300} tone="neutral-600">{formatInputDate(dateMs(row.date))} · {t(`type.${row.typeId}` as TKey)}</Text>
+      {open && rows.map((row) => {
+        const expanded = shown === row.index;
+        const rowCurrency = row.currency ?? currency;
+        const note = row.duplicate ? 'import.duplicate' : row.loan ? 'import.loan' : row.cashMove ? 'import.cashMove' : row.unsure ? 'import.unsure' : null;
+        const details: { label: TKey; value: string }[] = [
+          { label: 'import.detail.date', value: new Date(dateMs(row.date)).toLocaleDateString(locale === 'km' ? 'km-KH' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) },
+          { label: 'import.detail.type', value: t(`type.${row.typeId}` as TKey) },
+          { label: 'import.detail.amount', value: formatMoney(signed(row), rowCurrency, { showPlus: true }) },
+          ...(row.balance !== null ? [{ label: 'import.detail.balance' as TKey, value: formatMoney(toMinor(row.balance, rowCurrency), rowCurrency) }] : []),
+        ];
+        return (
+          <View key={row.index} style={{ paddingLeft: 14 }}>
+            <Pressable accessibilityRole="button" accessibilityState={{ expanded }} onPress={() => setShown(expanded ? null : row.index)}
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, minHeight: 48 }}>
+              <View style={{ flex: 1 }}>
+                <Text variant="body-sm" weight={500} tone="neutral-900" numberOfLines={expanded ? undefined : 1}>{readable(row.description) || '—'}</Text>
+                <Text variant="caption" weight={300} tone="neutral-600">{formatInputDate(dateMs(row.date))} · {t(`type.${row.typeId}` as TKey)}</Text>
+              </View>
+              <Text variant="body-sm" weight={500} tone={row.direction === 'out' ? 'money-out' : 'money-in'}>{formatMoney(signed(row), rowCurrency)}</Text>
+              <Icon name={expanded ? 'chevronDown' : 'chevronRight'} size={14} color={colors.neutral[500]} />
+            </Pressable>
+            {expanded && (
+              <View style={{ gap: 8, padding: 12, marginBottom: 8, borderRadius: 10, backgroundColor: dark ? colors.dark.field : colors.primary[50] }}>
+                {details.map((d) => (
+                  <View key={d.label} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>
+                    <Text variant="caption" tone="neutral-600">{t(d.label)}</Text>
+                    <Text variant="caption" weight={600} tone="primary-900" style={{ flexShrink: 1, textAlign: 'right' }}>{d.value}</Text>
+                  </View>
+                ))}
+                {note && (
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
+                    <StatusMark kind="watch" />
+                    <Text variant="caption" tone="neutral-900" style={{ flex: 1 }}>{t(note as TKey)}</Text>
+                  </View>
+                )}
+                <Text variant="micro" tone="neutral-500">{t('import.detail.edit')}</Text>
+              </View>
+            )}
           </View>
-          <Text variant="body-sm" weight={500} tone={row.direction === 'out' ? 'expense' : 'primary-900'}>{formatMoney(signed(row), row.currency ?? currency)}</Text>
-        </View>
-      ))}
+        );
+      })}
     </View>
   );
 }
@@ -98,10 +132,14 @@ export default function ImportStatement() {
   const [bankId, setBankId] = useState<string | null>(null);
   const [picking, setPicking] = useState<number | null>(null); // row whose type is being chosen
   const [added, setAdded] = useState(0);
-  const [skippedTransfers, setSkippedTransfers] = useState(false);
+  const [failed, setFailed] = useState<ReviewRow[]>([]); // kept rows that could not be added
   const [saving, setSaving] = useState(false);
   const [showAll, setShowAll] = useState(false); // on the check page: every row, not just the ones to check
   const [savedMonth, setSavedMonth] = useState<string | null>(null); // YYYY-MM of the newest entry added
+  // After saving: the account's balance in FINEXT and the statement's ending balance, same currency (minor units).
+  const [reconcile, setReconcile] = useState<{ bank: string; currency: Currency; now: number; ending: number } | null>(null);
+  const [appCurrency, setAppCurrency] = useState<Currency>('USD'); // the currency FINEXT shows money in
+  const [converted, setConverted] = useState(0); // entries changed from riel to dollars when saved
 
   useEffect(() => {
     let active = true;
@@ -124,11 +162,13 @@ export default function ImportStatement() {
       const [settings, list] = await Promise.all([getSettings(), listBanks()]);
       setBanks(list);
       setRead(result);
+      setAppCurrency(settings.displayCurrency as Currency);
       setRows(await prepareRows(result, settings.displayCurrency as Currency));
       // The account whose name matches the statement's bank, else the first bank account.
       const first = (result.bank ?? '').toLowerCase().split(' ')[0];
       const bankAccounts = list.filter((b) => b.kind !== 'cash');
-      setBankId((bankAccounts.find((b) => first && b.name.toLowerCase().includes(first)) ?? bankAccounts[0] ?? list[0])?.id ?? null);
+      // Never Cash: a bank statement belongs to a bank or wallet account (and its cash deposits move money to Cash).
+      setBankId((bankAccounts.find((b) => first && b.name.toLowerCase().includes(first)) ?? bankAccounts[0])?.id ?? null);
       setNeedsPassword(false);
       setStage('review');
     } catch (err) {
@@ -169,10 +209,19 @@ export default function ImportStatement() {
   const save = async () => {
     if (!bank) return;
     setSaving(true);
-    const count = await importRows(rows, bank, cash);
-    setSkippedTransfers(!cash && kept.some((r) => r.typeId === 'transfer'));
+    const result = await importRows(rows, bank, cash, appCurrency);
+    setFailed(result.failed);
+    setConverted(result.converted);
     setSavedMonth(kept.map((r) => r.date.slice(0, 7)).sort().pop() ?? null);
-    setAdded(count);
+    setAdded(result.added);
+    // Does the account now end where the statement ends? Compared in the currency the entries were saved in.
+    const statementCurrency: Currency = read?.currency ?? kept[0]?.currency ?? 'USD';
+    const convert = convertsOnImport(statementCurrency, appCurrency);
+    const currency: Currency = convert ? 'USD' : statementCurrency;
+    const statementEnding = read ? statementTotals(read, statementCurrency).ending : null;
+    const ending = statementEnding !== null && convert ? rielToCents(statementEnding) : statementEnding;
+    const account = (await getAccountBalances()).find((a) => a.bankId === bank.id);
+    setReconcile(ending !== null && account ? { bank: bank.name, currency, now: account.byCurrency[currency], ending } : null);
     setSaving(false);
     setStage('done');
   };
@@ -193,9 +242,45 @@ export default function ImportStatement() {
             <Text variant="title" weight={700} tone="primary-900" style={{ textAlign: 'center' }}>{t('import.done', { count: added })}</Text>
             {/* Only worth saying if the connection dropped after the statement was read: online, they sync at once. */}
             {isOffline && <Text variant="body" tone="neutral-600" style={{ textAlign: 'center' }}>{t('import.doneBody')}</Text>}
-            {skippedTransfers && <Text variant="caption" tone="neutral-600" style={{ textAlign: 'center' }}>{t('import.noCash')}</Text>}
+            {failed.some((r) => r.typeId === 'transfer') && !cash && <Text variant="caption" tone="neutral-600" style={{ textAlign: 'center' }}>{t('import.noCash')}</Text>}
+            {converted > 0 && (
+              <Text variant="caption" tone="neutral-600" style={{ textAlign: 'center' }}>
+                {t('import.convertedDone', { count: converted, mark: CONVERTED_MARK, rate: IMPORT_KHR_PER_USD.toLocaleString('en-US') })}
+              </Text>
+            )}
           </SuccessMark>
         </View>
+        {failed.length > 0 && (
+          <View style={{ ...card, padding: 16, marginTop: 16, gap: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <StatusMark kind="bad" />
+              <Text variant="body-sm" weight={600} tone="neutral-900">{t('import.failed', { count: failed.length })}</Text>
+            </View>
+            {failed.map((row) => (
+              <Text key={row.index} variant="caption" tone="neutral-600" numberOfLines={1}>
+                {formatInputDate(dateMs(row.date))} · {readable(row.description) || '—'} · {formatMoney((row.direction === 'out' ? -1 : 1) * toMinor(row.amount, row.currency ?? 'USD'), row.currency ?? 'USD')}
+              </Text>
+            ))}
+          </View>
+        )}
+        {reconcile && (() => {
+          const diff = reconcile.now - reconcile.ending;
+          // Within rounding counts as the same: one minor unit, or a cent for every two converted rows.
+          const same = Math.abs(diff) <= Math.max(1, Math.ceil(converted / 2));
+          const money = (minor: number) => formatMoney(minor, reconcile.currency);
+          return (
+            <View style={{ ...card, padding: 16, marginTop: 16, flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+              <StatusMark kind={same ? 'good' : 'watch'} />
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text variant="body-sm" weight={500} tone="neutral-900">
+                  {same ? t('import.balanceMatch', { bank: reconcile.bank, amount: money(reconcile.now) })
+                    : t('import.balanceDiffers', { bank: reconcile.bank, amount: money(reconcile.now), ending: money(reconcile.ending), diff: formatMoney(Math.abs(diff), reconcile.currency) })}
+                </Text>
+                {!same && <Text variant="caption" tone="neutral-600">{t('import.balanceDiffersWhy')}</Text>}
+              </View>
+            </View>
+          );
+        })()}
         <View style={{ marginTop: 20 }}>
           {/* Back to Bookkeeping on the month the entries are in, so they show under "Entries in …" straight away. */}
           <Button label={t('import.seeEntries')} onPress={() => (savedMonth
@@ -208,31 +293,52 @@ export default function ImportStatement() {
 
   // FIX: 'check' is a valid review stage too; before, it fell through to the "Choose PDF" screen.
   if ((stage !== 'review' && stage !== 'check') || !read) {
+    const reading = stage === 'reading';
+    const locked = !reading && needsPassword && Boolean(asset);
+    const accent = dark ? colors.dark.primary : colors.primary[500];
     return (
       <ScreenShell title={t('import.title')} nav="bookkeeping" padding={24}>
-        <View style={{ ...card, padding: 20, gap: 16 }}>
-          <View style={{ width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: dark ? colors.dark.field : colors.primary[50] }}>
-            <Icon name="upload" size={24} color={colors.primary[500]} />
+        {/* One centred column whose shape stays the same in every state: only the icon, title and action change. */}
+        <View style={{ ...card, paddingHorizontal: 20, paddingVertical: 28, gap: 20, alignItems: 'center' }}>
+          <View style={{ width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', backgroundColor: dark ? colors.dark.field : colors.primary[50] }}>
+            {reading ? <ActivityIndicator size="large" color={accent} />
+              : <Icon name={locked ? 'lock' : 'upload'} size={28} color={accent} />}
           </View>
-          <Text variant="body" tone="neutral-900">{t('import.intro')}</Text>
-          {stage === 'reading' ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48 }}>
-              <ActivityIndicator color={colors.primary[500]} />
-              <Text variant="body" tone="neutral-600">{t('import.reading')}</Text>
-            </View>
-          ) : needsPassword && asset ? (
-            <View style={{ gap: 12 }}>
-              <TextField variant="form" label={t('import.password')} value={password} onChangeText={setPassword} secureTextEntry autoCapitalize="none" error={error ?? undefined} />
-              <Button label={t('import.open')} onPress={() => void run(asset, password)} disabled={!password} />
+          <View style={{ gap: 6, alignItems: 'center' }} accessibilityLiveRegion="polite">
+            <Text variant="title" weight={700} tone="primary-900" style={{ textAlign: 'center' }}>
+              {t(reading ? 'import.reading' : locked ? 'import.lockedTitle' : 'import.pickTitle')}
+            </Text>
+            <Text variant="body-sm" tone="neutral-600" style={{ textAlign: 'center' }}>
+              {t(reading ? 'import.readingBody' : locked ? 'import.lockedBody' : 'import.pickBody')}
+            </Text>
+          </View>
+          {reading ? null : locked ? (
+            <View style={{ alignSelf: 'stretch', gap: 12 }}>
+              <TextField variant="form" label={t('import.password')} value={password} onChangeText={setPassword} secureTextEntry error={error ?? undefined} />
+              <Button label={t('import.open')} onPress={() => void run(asset!, password)} disabled={!password} />
               <Button variant="text" size="sm" label={t('import.another')} onPress={() => void choose()} />
             </View>
           ) : (
-            <View style={{ gap: 10 }}>
-              {error && <Text variant="caption" tone="danger">{error}</Text>}
+            <View style={{ alignSelf: 'stretch', gap: 16 }}>
+              {/* What happens, in three short steps. */}
+              <View style={{ gap: 10 }}>
+                {(['import.step1', 'import.step2', 'import.step3'] as const).map((key, index) => (
+                  <View key={key} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <View style={{ width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: dark ? colors.dark.field : colors.primary[50] }}>
+                      <Text variant="micro" weight={700} style={{ color: accent }}>{index + 1}</Text>
+                    </View>
+                    <Text variant="body-sm" tone="neutral-900" style={{ flex: 1 }}>{t(key)}</Text>
+                  </View>
+                ))}
+              </View>
+              {error && <Text variant="caption" tone="danger" style={{ textAlign: 'center' }}>{error}</Text>}
               <Button label={t('import.choose')} icon="upload" onPress={() => void choose()} />
             </View>
           )}
-          <Text variant="caption" weight={400} tone="neutral-500">{t('import.privacy')}</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: 6, marginTop: 14, paddingHorizontal: 8 }}>
+          <Icon name="shield" size={14} color={colors.neutral[500]} />
+          <Text variant="micro" tone="neutral-500" style={{ flexShrink: 1 }}>{t('import.privacy')}</Text>
         </View>
       </ScreenShell>
     );
@@ -244,9 +350,27 @@ export default function ImportStatement() {
   const period = from && to ? `${day(from, false)} – ${day(to, true)}` : read.period;
   const totalsCurrency: Currency = read.currency ?? kept[0]?.currency ?? 'USD';
   const sum = (direction: 'in' | 'out') => kept.filter((r) => r.direction === direction).reduce((total, r) => total + toMinor(r.amount, r.currency ?? totalsCurrency), 0);
+  // The statement's three main figures: money in, money out and where the balance ends.
+  const statement = statementTotals(read, totalsCurrency);
+  // A riel statement in a dollar app: checked in riel here, changed to dollars only when the owner taps Add.
+  const convert = convertsOnImport(totalsCurrency, appCurrency);
+  const inDollars = (minor: number | null) => (minor === null ? '—' : formatMoney(rielToCents(minor), 'USD'));
+  const convertNotice = convert ? (
+    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, padding: 12, borderRadius: 10, backgroundColor: dark ? colors.dark.field : colors.primary[50] }}>
+      <Text variant="body" weight={700} style={{ color: dark ? colors.dark.primary : colors.primary[500] }}>{CONVERTED_MARK}</Text>
+      <View style={{ flex: 1, gap: 4 }}>
+        <Text variant="body-sm" weight={600} tone="neutral-900">{t('import.convertTitle')}</Text>
+        <Text variant="caption" tone="neutral-600">{t('import.convertBody', { rate: IMPORT_KHR_PER_USD.toLocaleString('en-US'), mark: CONVERTED_MARK })}</Text>
+        <Text variant="caption" weight={500} tone="neutral-900">
+          {t('import.convertTotals', { in: inDollars(statement.moneyIn), out: inDollars(statement.moneyOut), ending: inDollars(statement.ending) })}
+        </Text>
+      </View>
+    </View>
+  ) : null;
   const totals = [
-    { key: 'in', label: t('import.moneyIn'), minor: sum('in'), color: dark ? colors.success : colors.successText },
-    { key: 'out', label: t('import.moneyOut'), minor: sum('out'), color: dark ? colors.dark.text : colors.neutral[900] },
+    { key: 'in', label: t('import.moneyIn'), minor: statement.moneyIn, color: dark ? colors.success : colors.successText },
+    { key: 'out', label: t('import.moneyOut'), minor: statement.moneyOut, color: dark ? colors.danger : colors.dangerText },
+    { key: 'ending', label: t('import.endingBalance'), minor: statement.ending, color: dark ? colors.dark.text : colors.primary[900] },
   ];
   const toCheck = rows.filter(needsCheck);
   const groups = GROUP_ORDER.map((id) => ({ id, rows: kept.filter((r) => groupOf(r) === id) })).filter((g) => g.rows.length);
@@ -255,7 +379,7 @@ export default function ImportStatement() {
   const renderRow = (row: ReviewRow, i: number) => {
     const currency = row.currency ?? 'USD';
     const minor = toMinor(row.amount, currency);
-    const note = row.duplicate ? 'import.duplicate' : row.loan ? 'import.loan' : row.unsure ? 'import.unsure' : null;
+    const note = row.duplicate ? 'import.duplicate' : row.loan ? 'import.loan' : row.cashMove ? 'import.cashMove' : row.unsure ? 'import.unsure' : null;
     return (
       <View key={row.index} style={{ flexDirection: 'row', gap: 10, paddingVertical: 12, borderTopWidth: i ? 1 : 0, borderTopColor: line, opacity: row.keep ? 1 : 0.55 }}>
         <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: row.keep }} hitSlop={8} onPress={() => update(row.index, { keep: !row.keep })} style={{ paddingTop: 1 }}>
@@ -264,7 +388,7 @@ export default function ImportStatement() {
         <View style={{ flex: 1, gap: 3 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10 }}>
             <Text variant="body-sm" weight={500} tone="neutral-900" numberOfLines={2} style={{ flex: 1 }}>{readable(row.description) || '—'}</Text>
-            <Text variant="body-sm" weight={600} style={{ color: row.direction === 'out' ? (dark ? colors.dark.text : colors.neutral[900]) : dark ? colors.success : colors.successText }}>
+            <Text variant="body-sm" weight={600} style={{ color: row.direction === 'out' ? (dark ? colors.danger : colors.dangerText) : dark ? colors.success : colors.successText }}>
               {formatMoney(row.direction === 'out' ? -minor : minor, currency, { showPlus: true })}
             </Text>
           </View>
@@ -301,8 +425,16 @@ export default function ImportStatement() {
             <Text variant="caption" weight={600} style={{ color: colors.primary[500] }}>{t('import.backToSummary')}</Text>
           </Pressable>
           {toCheck.length > 0 && !showAll && <Text variant="body" tone="neutral-900">{t('import.checkBody')}</Text>}
-          <SelectField size="form" label={t('import.account')} options={(accounts.length ? accounts : banks).map((b) => ({ value: b.id, label: b.name }))}
-            value={bankId} onChange={setBankId} />
+          {convertNotice}
+          {accounts.length ? (
+            <SelectField size="form" label={t('import.account')} options={accounts.map((b) => ({ value: b.id, label: b.name }))}
+              value={bankId} onChange={setBankId} />
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+              <StatusMark kind="watch" />
+              <Text variant="body-sm" tone="neutral-900" style={{ flex: 1 }}>{t('import.needBank')}</Text>
+            </View>
+          )}
           <View style={{ gap: 8 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text variant="caption" tone="neutral-600">{t('import.selected', { count: kept.length, total: rows.length })}</Text>
@@ -321,7 +453,7 @@ export default function ImportStatement() {
           </View>
         </View>
         <PickerModal visible={picking !== null} title={t('import.chooseType')} options={typeOptions} value={pickerRow?.typeId ?? null}
-          onSelect={(typeId) => { if (picking !== null) update(picking, { typeId, learned: false, unsure: false }); }} onClose={() => setPicking(null)} />
+          onSelect={(typeId) => { if (picking !== null) update(picking, { typeId, learned: false, unsure: false, cashMove: false }); }} onClose={() => setPicking(null)} />
       </ScreenShell>
     );
   }
@@ -341,14 +473,22 @@ export default function ImportStatement() {
               {[period, t('import.summary', { count: rows.length, pages: read.pages })].filter(Boolean).join(' · ')}
             </Text>
           </View>
-          <View style={{ flexDirection: 'row', gap: 20 }}>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
             {totals.map(({ key, label, minor, color }) => (
-              <View key={key} style={{ gap: 1 }}>
-                <Text variant="micro" tone="neutral-600">{label}</Text>
-                <Text variant="body-sm" weight={600} style={{ color }}>{formatMoney(minor, totalsCurrency)}</Text>
+              <View key={key} accessible accessibilityLabel={`${label} ${minor === null ? '—' : formatMoney(minor, totalsCurrency)}`}
+                style={{ flex: 1, minWidth: 0, gap: 2, padding: 10, borderRadius: 10, backgroundColor: dark ? colors.dark.field : colors.primary[50] }}>
+                <Text variant="micro" tone="neutral-600" numberOfLines={1}>{label}</Text>
+                <Text variant="body-sm" weight={700} style={{ color }} adjustsFontSizeToFit numberOfLines={1}>{minor === null ? '—' : formatMoney(minor, totalsCurrency)}</Text>
               </View>
             ))}
           </View>
+          {statement.opening !== null && <Text variant="caption" tone="neutral-600">{t('import.openingBalance', { amount: formatMoney(statement.opening, totalsCurrency) })}</Text>}
+          {convertNotice}
+          {kept.length !== rows.length && (
+            <Text variant="caption" tone="neutral-600">
+              {t('import.adding', { count: kept.length, total: rows.length, in: formatMoney(sum('in'), totalsCurrency), out: formatMoney(sum('out'), totalsCurrency) })}
+            </Text>
+          )}
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
             <StatusMark kind={failing.length ? 'watch' : 'good'} />
             <View style={{ flex: 1, gap: 2 }}>
@@ -370,7 +510,7 @@ export default function ImportStatement() {
           <View style={{ ...card, paddingHorizontal: 16, paddingVertical: 4 }}>
             {groups.map((g, i) => (
               <PreviewGroup key={g.id} first={i === 0} rows={g.rows} currency={totalsCurrency}
-                label={t((g.id === 'move' ? 'import.transfers' : GROUPS[g.id].labelKey) as TKey)} />
+                label={t(GROUP_LABEL[g.id])} />
             ))}
             {!groups.length && <Text variant="body-sm" tone="neutral-600" style={{ paddingVertical: 16 }}>{t('import.noneSelected')}</Text>}
           </View>

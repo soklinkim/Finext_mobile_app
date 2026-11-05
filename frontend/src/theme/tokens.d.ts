@@ -8,6 +8,8 @@ export const colors: {
   warning: string;
   success: string;
   successText: string;
+  dangerText: string;
+  warningText: string;
   alert: string;
   white: string;
   progress: { fill: string };

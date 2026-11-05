@@ -176,7 +176,7 @@ export default function EntryScreen() {
           <Text variant="body-lg" weight={700} tone="primary-900">{entry.title}</Text>
           <Text
             variant="amount-xl"
-            tone={reversed ? 'neutral-500' : entry.direction === 'out' ? 'expense' : 'primary-900'}
+            tone={reversed ? 'neutral-500' : entry.direction === 'out' ? 'money-out' : 'money-in'}
             style={reversed ? { textDecorationLine: 'line-through' } : undefined}
           >
             {amountText}

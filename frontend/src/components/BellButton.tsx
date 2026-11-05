@@ -1,7 +1,9 @@
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Icon } from './Icon';
+import { useLocalQuery } from '@/hooks/useLocalQuery';
 import { useNotificationCount } from '@/hooks/useNotificationCount';
+import { listMissedDays } from '@/services/missedDays';
 import { useI18n } from '@/i18n';
 import { colors, shadow } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
@@ -11,7 +13,9 @@ export function BellButton() {
   const router = useRouter();
   const { t } = useI18n();
   const dark = useAppTheme();
-  const count = useNotificationCount();
+  // Server notifications plus days with no entries (the latter work offline).
+  const { data: missed } = useLocalQuery(() => listMissedDays(), []);
+  const count = useNotificationCount() + (missed?.length ?? 0);
   return (
     <Pressable
       accessibilityRole="button"

@@ -15,6 +15,10 @@ const TONES = {
   expense: colors.accent.expense,
   danger: colors.danger,
   warning: colors.warning,
+  /** Money in amounts: green. */
+  'money-in': colors.successText,
+  /** Money out amounts: red. */
+  'money-out': colors.dangerText,
 } as const;
 
 export type Tone = keyof typeof TONES;
@@ -24,6 +28,8 @@ export const toneColor = (tone: Tone, dark = false): string => {
     if (tone === 'primary-500' || tone === 'primary-200' || tone === 'primary-50') return colors.dark.primary;
     if (tone === 'neutral-600') return colors.dark.muted;
     if (tone === 'neutral-500') return colors.dark.faint;
+    if (tone === 'money-in') return colors.success;
+    if (tone === 'money-out') return colors.danger;
   }
   return TONES[tone];
 };

@@ -58,7 +58,7 @@ export function TransactionRow({ tx, index = 0, onPress }: { tx: TransactionView
       <View style={{ minWidth: 76 }} className="items-end">
         <Text
           variant="body"
-          tone={tx.status === 'reversed' ? 'neutral-500' : tx.direction === 'out' ? 'expense' : 'primary-900'}
+          tone={tx.status === 'reversed' ? 'neutral-500' : tx.direction === 'out' ? 'money-out' : 'money-in'}
           style={tx.status === 'reversed' ? { textDecorationLine: 'line-through' } : undefined}
           adjustsFontSizeToFit
           numberOfLines={1}

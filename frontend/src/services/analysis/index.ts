@@ -93,6 +93,11 @@ export function getRatios(): Promise<CachedResult<RatioSnapshot[]>> {
   return withCache('accounting:ratios', async () => (await syncService.getFinancialHealth()).ratios, { requireOnline: true });
 }
 
+/** The same ratios over this quarter so far (Health > Key ratios > Quarterly). */
+export function getQuarterlyRatios(): Promise<CachedResult<RatioSnapshot[]>> {
+  return withCache('accounting:ratios:quarterly', () => syncService.getQuarterlyRatios(), { requireOnline: true });
+}
+
 export function getHealthHistory(): Promise<CachedResult<HealthHistoryMonth[]>> {
   return withCache('accounting:snapshots:v1', () => syncService.getHealthHistory(), { requireOnline: true });
 }

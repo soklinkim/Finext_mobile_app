@@ -20,14 +20,19 @@ import {
   SHARE_SCOPES,
   getLoanReadiness,
   getSharing,
+  monthlyRepayment,
+  respondToOffer,
   revokeShare,
   shareWithLender,
   type Lender,
+  type LoanOffer,
+  type OfferResponse,
   type LoanShare,
   type ShareDecision,
   type ShareScope,
 } from '@/services/loan';
-import { colors, radius } from '@/theme';
+import { formatMoney } from '@/services/bookkeeping';
+import { colors, radius, tint } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
 
 const LEVEL_COLOR: Record<ReadinessLevel, string> = {
@@ -369,6 +374,13 @@ function ShareProgress({ share, date }: { share: LoanShare; date: (ms: number | 
       at: decided ? share.decidedAt : null,
       color: share.decision === 'declined' ? colors.danger : colors.success,
     },
+    // An approval is an offer: the business's answer is the last step.
+    ...(share.decision === 'approved' && share.offer ? [{
+      key: 'answer',
+      label: share.smeResponse ? t(`loan.response.${share.smeResponse}` as TKey) : t('loan.step.answer'),
+      at: share.smeRespondedAt,
+      color: share.smeResponse === 'declined' ? colors.neutral[500] : colors.success,
+    }] : []),
   ];
   // A bank can review before the view is logged (or decide straight away); show earlier steps as done too.
   const lastDone = steps.reduce((last, step, index) => (step.at ? index : last), 0);
@@ -394,12 +406,60 @@ function ShareProgress({ share, date }: { share: LoanShare; date: (ms: number | 
           </View>
         ))}
       </View>
-      {share.active && nextLabel ? <Text variant="micro" tone="neutral-600">{t('loan.step.waiting', { step: nextLabel.toLowerCase() })}</Text> : null}
+      {share.active && nextLabel && !(share.decision === 'approved' && share.offer) ? <Text variant="micro" tone="neutral-600">{t('loan.step.waiting', { step: nextLabel.toLowerCase() })}</Text> : null}
     </View>
   );
 }
 
-function ShareCard({ share, onRevoke }: { share: LoanShare; onRevoke: () => void }) {
+const minorOf = (amount: number, currency: LoanOffer['currency']) => Math.round(currency === 'USD' ? amount * 100 : amount);
+
+/** The bank's offer: amount, rate, term and the monthly repayment, then Accept / Decline (or the answer given). */
+function OfferBox({ share, onAnswer, busy }: { share: LoanShare; onAnswer: (response: OfferResponse) => void; busy: boolean }) {
+  const { t, locale } = useI18n();
+  const dark = useAppTheme();
+  const { isOffline } = useNetworkStatus();
+  const offer = share.offer!;
+  const money = (amount: number) => formatMoney(minorOf(amount, offer.currency), offer.currency);
+  const rows = [
+    { label: t('loan.offer.amount'), value: money(offer.amount) },
+    { label: t('loan.offer.rate'), value: t('loan.offer.rateValue', { rate: offer.annualRate }) },
+    { label: t('loan.offer.term'), value: t('loan.offer.termValue', { months: offer.termMonths }) },
+    { label: t('loan.offer.monthly'), value: money(monthlyRepayment(offer)) },
+  ];
+  const answered = share.smeResponse;
+  const date = (ms: number | null) => (ms ? new Date(ms).toLocaleDateString(locale === 'km' ? 'km-KH' : 'en-GB') : '');
+  return (
+    <View style={{ gap: 10, padding: 12, borderRadius: 12, backgroundColor: dark ? colors.dark.field : tint(colors.success, 0.1) }}>
+      <Text variant="body-sm" weight={700} tone="primary-900">{t('loan.offer.title', { bank: share.lenderName })}</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 }}>
+        {rows.map((row) => (
+          <View key={row.label} style={{ width: '50%', gap: 1 }}>
+            <Text variant="micro" tone="neutral-600">{row.label}</Text>
+            <Text variant="body-sm" weight={700} tone="primary-900">{row.value}</Text>
+          </View>
+        ))}
+      </View>
+      {answered ? (
+        <Text variant="caption" weight={600} tone={answered === 'accepted' ? 'money-in' : 'neutral-600'}>
+          {t(answered === 'accepted' ? 'loan.offer.youAccepted' : 'loan.offer.youDeclined', { date: date(share.smeRespondedAt) })}
+        </Text>
+      ) : share.active ? (
+        isOffline ? <Text variant="caption" tone="neutral-600">{t('loan.offer.needsInternet')}</Text> : (
+          <View style={{ gap: 8 }}>
+            <Text variant="micro" tone="neutral-600">{t('loan.offer.hint')}</Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ flex: 1 }}><Button size="sm" variant="soft" label={t('loan.offer.decline')} disabled={busy} onPress={() => onAnswer('declined')} /></View>
+              <View style={{ flex: 1 }}><Button size="sm" label={t('loan.offer.accept')} loading={busy} onPress={() => onAnswer('accepted')} /></View>
+            </View>
+          </View>
+        )
+      ) : null}
+      {answered === 'accepted' && <Text variant="micro" tone="neutral-600">{t('loan.offer.nextSteps')}</Text>}
+    </View>
+  );
+}
+
+function ShareCard({ share, onRevoke, onAnswer, busy }: { share: LoanShare; onRevoke: () => void; onAnswer: (response: OfferResponse) => void; busy: boolean }) {
   const { t, locale } = useI18n();
   const { card } = useCard();
   const date = (ms: number | null | undefined) => (ms ? new Date(ms).toLocaleDateString(locale === 'km' ? 'km-KH' : 'en-GB') : '');
@@ -426,6 +486,7 @@ function ShareCard({ share, onRevoke }: { share: LoanShare; onRevoke: () => void
           <Text variant="body-sm" tone="neutral-900">“{share.decisionNote}”</Text>
         </View>
       ) : null}
+      {share.decision === 'approved' && share.offer ? <OfferBox share={share} onAnswer={onAnswer} busy={busy} /> : null}
       <Text variant="micro" tone="neutral-600">{t('loan.sharing', { items: share.scopes.map((s) => t(`loan.scope.${s}` as TKey)).join(', ') })}</Text>
       <Text variant="micro" tone="neutral-600">
         {state}
@@ -446,7 +507,30 @@ function BankSharing() {
   const shares = sharing.data?.shares ?? [];
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [answering, setAnswering] = useState<string | null>(null); // share whose offer is being answered
   const reload = () => { setError(null); sharing.reload(); };
+
+  const answer = (share: LoanShare, response: OfferResponse) => {
+    const offer = share.offer!;
+    const amount = formatMoney(minorOf(offer.amount, offer.currency), offer.currency);
+    confirmAction(
+      t(response === 'accepted' ? 'loan.offer.acceptTitle' : 'loan.offer.declineTitle', { bank: share.lenderName, amount }),
+      t(response === 'accepted' ? 'loan.offer.acceptBody' : 'loan.offer.declineBody'),
+      t(response === 'accepted' ? 'loan.offer.accept' : 'loan.offer.decline'),
+      t('common.cancel'),
+      async () => {
+        setAnswering(share.id);
+        try {
+          await respondToOffer(share.id, response);
+          reload();
+        } catch (e) {
+          setError(errorText(e));
+        } finally {
+          setAnswering(null);
+        }
+      },
+    );
+  };
 
   const revoke = (share: LoanShare) => confirmAction(
     t('loan.stopTitle', { bank: share.lenderName }),
@@ -474,7 +558,9 @@ function BankSharing() {
       {sharing.error ? <ErrorState onRetry={reload} error={sharing.error} /> : null}
       {sharing.noCache ? <EmptyState titleKey="offline.noCache" bodyKey="offline.noCacheBody" icon="wifiOff" /> : null}
       {sharing.loading && !sharing.data ? <ActivityIndicator color={colors.primary[500]} style={{ paddingVertical: 16 }} /> : null}
-      {lenders !== null && shares.map((share) => <ShareCard key={share.id} share={share} onRevoke={() => revoke(share)} />)}
+      {lenders !== null && shares.map((share) => (
+        <ShareCard key={share.id} share={share} onRevoke={() => revoke(share)} onAnswer={(response) => answer(share, response)} busy={answering === share.id} />
+      ))}
       {lenders !== null && lenders.length === 0 && shares.length === 0 ? <EmptyState titleKey="loan.noBanksTitle" bodyKey="loan.noBanksBody" /> : null}
       {lenders !== null && lenders.length > 0 && (isOffline ? (
         <Text variant="caption" tone="neutral-600" style={{ textAlign: 'center' }}>{t('loan.shareNeedsInternet')}</Text>

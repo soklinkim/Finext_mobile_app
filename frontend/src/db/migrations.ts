@@ -129,6 +129,9 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX idx_entry_attachments_tx ON entry_attachments(transaction_id);
   `,
+  `
+  ALTER TABLE settings ADD COLUMN missed_days TEXT;
+  `,
 ];
 
 export function runMigrations(sqlite: SQLiteDatabase): void {

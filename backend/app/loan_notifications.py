@@ -34,8 +34,10 @@ def loan_notifications(user_id: str) -> list[dict]:
             items.append(_item(share, "reviewing", share["reviewingAt"], f"{bank} is reviewing your application",
                                note or "No action needed for now.", "yellow"))
         if share["decision"] == "approved" and share.get("decidedAt"):
-            items.append(_item(share, "approved", share["decidedAt"], f"{bank} approved your application",
-                               note or "Contact the bank to continue.", "green"))
+            ask = "Open Loan readiness to accept or decline the offer."
+            open_offer = share.get("offer") and not share.get("smeResponse")
+            body = (f"{note} {ask}" if note else ask) if open_offer else (note or "Contact the bank to continue.")
+            items.append(_item(share, "approved", share["decidedAt"], f"{bank} approved your application", body, "green"))
         if share["decision"] == "declined" and share.get("decidedAt"):
             items.append(_item(share, "declined", share["decidedAt"], f"{bank} declined your application",
                                note or "Check Loan readiness to see what to improve before applying again.", "red"))

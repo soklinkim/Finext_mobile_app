@@ -1,22 +1,20 @@
 import { useState } from 'react';
-import { Alert, Pressable, Switch, View } from 'react-native';
+import { Alert, Pressable, View } from 'react-native';
 import { Button } from '@/components/Button';
 import { Icon, type IconName } from '@/components/Icon';
 import { ScreenShell } from '@/components/ScreenShell';
 import { Text } from '@/components/Text';
 import { useLocalQuery } from '@/hooks/useLocalQuery';
-import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useI18n } from '@/i18n';
 import { colors, radius } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
 import { clearAnalysisCache } from '@/services/analysis';
 import { canChangeCurrency, countPendingSync, getSettings, updateSettings } from '@/services/bookkeeping';
-import { isOnline, setSimulatedOffline } from '@/services/network';
+import { isOnline } from '@/services/network';
 
-/** Setting — language, display currency, exchange rate, plus offline-testing tools. */
+/** Setting — language, display currency, cloud sync and the analysis cache. Simulate offline is on Profile. */
 export default function SettingsScreen() {
   const { t } = useI18n();
-  const net = useNetworkStatus();
   const { data: settings } = useLocalQuery(getSettings, []);
   const { data: pending } = useLocalQuery(countPendingSync, []);
   const { data: currencyOpen } = useLocalQuery(canChangeCurrency, []);
@@ -113,26 +111,12 @@ export default function SettingsScreen() {
         </>)}
 
         {section(t('settings.offlineTools'), 'wifiOff', <>
-          <View className="flex-row items-center justify-between" style={{ minHeight: 60 }}>
-            <View className="flex-1" style={{ paddingRight: 12, gap: 2 }}>
-              <Text variant="body" weight={500} tone="primary-900">{t('settings.simulateOffline')}</Text>
-              <Text variant="caption" weight={400} tone="neutral-600">
-                {net.isOnline ? t('settings.statusOnline') : t('settings.statusOffline')} · {t('settings.pendingSync', { count: pending ?? 0 })}
-              </Text>
-            </View>
-            <Switch
-              accessibilityLabel={t('settings.simulateOffline')}
-              value={net.simulated}
-              onValueChange={setSimulatedOffline}
-              trackColor={{ true: colors.primary[900], false: colors.neutral[300] }}
-              thumbColor={colors.white}
-            />
-          </View>
+          {/* Simulate offline is on the Profile page, next to Plain language. */}
           <Pressable
             accessibilityRole="button"
             onPress={() => clearAnalysisCache().then(() => Alert.alert(t('settings.clearCache'), t('settings.cacheCleared')))}
             className="flex-row items-center justify-between"
-            style={{ minHeight: 52, ...divider() }}
+            style={{ minHeight: 52 }}
           >
             <Text variant="body" weight={500} tone="primary-900">{t('settings.clearCache')}</Text>
             <Icon name="chevronRight" size={18} color={colors.neutral[500]} />

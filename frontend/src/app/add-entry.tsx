@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Button } from '@/components/Button';
 import { Chip, ChipRow } from '@/components/Chip';
 import { CurrencyInput } from '@/components/CurrencyInput';
@@ -59,7 +59,13 @@ export default function AddEntry() {
 
   const [direction, setDirection] = useState<Direction>('in');
   const [typeId, setTypeId] = useState<string | null>(null);
-  const [dateMs, setDateMs] = useState<number | null>(Date.now());
+  // Opened from a missed-day reminder: dated that day.
+  const params = useLocalSearchParams<{ date?: string }>();
+  const presetDate = Number(params.date);
+  const [dateMs, setDateMs] = useState<number | null>(() => {
+    const now = Date.now();
+    return Number.isFinite(presetDate) && presetDate > 0 && presetDate < now ? presetDate : now;
+  });
   const [amountText, setAmountText] = useState('');
   const [currency, setCurrency] = useState<Currency>('USD');
   const [pay, setPay] = useState<Pay>('cash');

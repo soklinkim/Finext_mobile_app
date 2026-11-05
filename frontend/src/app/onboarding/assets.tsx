@@ -310,6 +310,7 @@ export default function Assets() {
         <View style={{ flex: 1 }}>
           <TextField
             variant="form"
+            outlined
             value={assets[key]?.amount ?? ''}
             onChangeText={(value) => setAssetAmount(key, value)}
             keyboardType="decimal-pad"
@@ -353,6 +354,7 @@ export default function Assets() {
             {row.bank === OTHER_BANK ? (
               <TextField
                 variant="form"
+                outlined
                 value={row.lender}
                 onChangeText={(lender) => updateLoans(key, (rows) => rows.map((r) => (r.key === row.key ? { ...r, lender } : r)))}
                 placeholder={t('entry.otherLenderName')}
@@ -361,6 +363,7 @@ export default function Assets() {
             ) : null}
             <TextField
               variant="form"
+              outlined
               value={row.amount}
               onChangeText={(value) => updateLoans(key, (rows) => rows.map((r) => (r.key === row.key ? { ...r, amount: formatAmountTyping(value, currency) } : r)))}
               keyboardType="decimal-pad"
@@ -380,6 +383,7 @@ export default function Assets() {
     <TextField
       key={field.key}
       variant="form"
+      outlined
       label={t(field.label)}
       value={amounts[field.key] ?? ''}
       onChangeText={(value) => setAmount(field.key, value)}
@@ -455,6 +459,7 @@ export default function Assets() {
             {row.custom ? (
               <TextField
                 variant="form"
+                outlined
                 value={row.bankName}
                 onChangeText={(bankName) => setRows((old) => old.map((r) => r.key === row.key ? { ...r, bankName } : r))}
                 placeholder={t('entry.otherLenderName')}
@@ -466,6 +471,7 @@ export default function Assets() {
               <View style={{ flex: 1 }}>
                 <TextField
                   variant="form"
+                  outlined
                   value={row.amount}
                   onChangeText={(amount) => setRows((old) => old.map((r) => r.key === row.key ? { ...r, amount: formatAmountTyping(amount, r.currency) } : r))}
                   keyboardType="decimal-pad"
@@ -486,6 +492,7 @@ export default function Assets() {
           <View key={`other-${other.key}`} style={{ gap: 8 }}>
             <TextField
               variant="form"
+              outlined
               label={t('assets.otherAssetName')}
               value={other.name}
               onChangeText={(name) => setOtherAssets((old) => old.map((o) => (o.key === other.key ? { ...o, name } : o)))}
@@ -501,6 +508,7 @@ export default function Assets() {
               <View style={{ flex: 1 }}>
                 <TextField
                   variant="form"
+                  outlined
                   value={other.amount}
                   onChangeText={(value) => setOtherAssets((old) => old.map((o) => (o.key === other.key ? { ...o, amount: formatAmountTyping(value, currency) } : o)))}
                   keyboardType="decimal-pad"

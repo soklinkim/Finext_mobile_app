@@ -20,17 +20,24 @@ interface Props extends Omit<TextInputProps, 'style'> {
   appearance?: 'box' | 'row';
   /** shows a red * after the label */
   required?: boolean;
+  /** White box with a 1 px primary-200 border at rest, for fields on a tinted card where the default fill disappears. */
+  outlined?: boolean;
 }
 
 /** Text input on primary-50. Focus = 2 px primary-500 outline, error = 2 px danger outline + helper text. */
-export function TextField({ label, error, variant = 'entry', right, left, fieldBackgroundColor, onFocus, onBlur, multiline, appearance = 'box', required, ...rest }: Props) {
+export function TextField({ label, error, variant = 'entry', right, left, fieldBackgroundColor, onFocus, onBlur, multiline, appearance = 'box', required, outlined, ...rest }: Props) {
   const { locale } = useI18n();
   const dark = useAppTheme();
   const isForm = variant === 'form';
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<ComponentRef<typeof TextInput>>(null);
   const outerRef = useScrollToError(error, { focus: () => inputRef.current?.focus(), skip: focused });
-  const border = error ? colors.danger : focused ? colors.primary[500] : 'transparent';
+  const restingBorder = outlined ? (dark ? colors.dark.border : colors.primary[200]) : 'transparent';
+  const border = error ? colors.danger : focused ? colors.primary[500] : restingBorder;
+  const boxBackground = dark ? colors.dark.field : fieldBackgroundColor ?? (outlined ? colors.white : colors.primary[50]);
+  // A password field (one that can hide its text) keeps exactly what was typed, also while it is shown: no capital
+  // first letter and no autocorrect, or "finext123" typed visibly becomes "Finext123" and the login is refused.
+  const passwordProps = rest.secureTextEntry !== undefined ? ({ autoCapitalize: 'none', autoCorrect: false, spellCheck: false } as const) : {};
 
   if (appearance === 'row') {
     return (
@@ -46,7 +53,8 @@ export function TextField({ label, error, variant = 'entry', right, left, fieldB
             onFocus={(e) => { setFocused(true); onFocus?.(e); }}
             onBlur={(e) => { setFocused(false); onBlur?.(e); }}
             style={{ flex: 1, minWidth: 0, color: dark ? colors.dark.text : colors.neutral[900], fontFamily: fontFamily(500, locale), fontSize: 15, paddingVertical: 2, minHeight: multiline ? 48 : 24, textAlignVertical: multiline ? 'top' : 'center' }}
-            {...rest}
+            {...passwordProps}
+          {...rest}
           />
           {right}
         </View>
@@ -59,7 +67,7 @@ export function TextField({ label, error, variant = 'entry', right, left, fieldB
       {label ? <FieldLabel label={label} required={required} variant={isForm ? 'body' : 'micro'} weight={isForm ? 500 : 300} tone={isForm ? 'primary-900' : 'neutral-600'} /> : null}
       <View
         className={`flex-row items-center bg-primary-50 ${isForm ? 'rounded-lg' : 'rounded-field'}`}
-        style={{ borderWidth: 2, borderColor: border, minHeight: isForm ? 40 : 36, paddingHorizontal: isForm ? 20 : 12, gap: 8, backgroundColor: dark ? colors.dark.field : fieldBackgroundColor ?? colors.primary[50] }}
+        style={{ borderWidth: 2, borderColor: border, minHeight: isForm ? 40 : 36, paddingHorizontal: isForm ? 20 : 12, gap: 8, backgroundColor: boxBackground }}
       >
         {left}
         <TextInput
@@ -85,6 +93,7 @@ export function TextField({ label, error, variant = 'entry', right, left, fieldB
             minHeight: multiline ? 64 : undefined,
             textAlignVertical: multiline ? 'top' : 'center',
           }}
+          {...passwordProps}
           {...rest}
         />
         {right}

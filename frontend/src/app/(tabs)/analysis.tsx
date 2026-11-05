@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { BarChartCard } from '@/components/BarChartCard';
 import { AnalysisLoading } from '@/components/AnalysisLoading';
 import { FinancialHealthChart } from '@/components/FinancialHealthChart';
-import { FutureRiskSection, StoryHeading } from '@/components/FutureRiskSection';
+import { FutureRiskSection } from '@/components/FutureRiskSection';
 import { IncomeExpenseForecastCard } from '@/components/IncomeExpenseForecastCard';
 import { LoanReadinessSection } from '@/components/LoanReadinessSection';
 import { OfflineBanner } from '@/components/OfflineBanner';
@@ -68,15 +68,7 @@ export default function Analysis() {
           {analysis.data && analysis.data.labels.length === 0 && <EmptyState titleKey="data.noActivityTitle" bodyKey="data.noActivityBody" />}
           {analysis.data && analysis.data.labels.length > 0 && (
             <>
-              <BarChartCard
-                title={t('analysis.incomeExpenses')}
-                labels={analysis.data.labels}
-                income={analysis.data.income}
-                expense={analysis.data.expense}
-                currency={analysis.data.currency}
-                onSearch={() => router.push('/search')}
-                onCalendar={() => router.push('/calendar')}
-              />
+              {/* Totals first, then the chart that breaks them down. */}
               <View style={{ flexDirection: 'row', gap: 9 }}>
                 {[
                   { label: t('summary.income'), amount: analysis.data.totals.income, color: colors.primary[500] },
@@ -89,6 +81,15 @@ export default function Analysis() {
                   </View>
                 ))}
               </View>
+              <BarChartCard
+                title={t('analysis.incomeExpenses')}
+                labels={analysis.data.labels}
+                income={analysis.data.income}
+                expense={analysis.data.expense}
+                currency={analysis.data.currency}
+                onSearch={() => router.push('/search')}
+                onCalendar={() => router.push('/calendar')}
+              />
             </>
           )}
           {!analysis.loading && <IncomeExpenseForecastCard />}
@@ -102,17 +103,16 @@ export default function Analysis() {
       )}
 
       {section === 'health' && (
-        // A story from the answer down to the details: the AI's answer, why, what to do, borrowing, the owner's
-        // check-in, then the ratios behind it all.
+        // The health score, cash today and the key ratios first; then the AI's look ahead (its answer, why, what to
+        // do, borrowing, the owner's check-in).
         <View style={{ marginTop: 24, gap: 28 }}>
-          <FutureRiskSection />
           <View style={{ gap: 12 }}>
-            <StoryHeading icon="chart" title={t('story.numbers')} />
             {ratios.loading && !ratios.data ? <AnalysisLoading mode="health" /> : null}
             {ratios.noCache ? <EmptyState titleKey="offline.noCache" bodyKey="offline.noCacheBody" icon="wifiOff" /> : null}
             {ratios.error ? <ErrorState onRetry={ratios.reload} error={ratios.error} /> : null}
             {ratios.data && ratios.data.length > 0 && <FinancialHealthChart ratios={ratios.data} />}
           </View>
+          <FutureRiskSection />
         </View>
       )}
 

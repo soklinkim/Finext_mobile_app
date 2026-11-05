@@ -507,6 +507,34 @@ export async function getAccountBalances(): Promise<AccountBalance[]> {
   return [...map.values()];
 }
 
+/**
+ * Cash and bank money over the last `days` days, from this device's books (works offline): one closing figure per day,
+ * oldest first, ending today, plus how much it changed over the window. Same rule as the account balances: a
+ * "pay later" entry is not cash yet, and moving money between accounts changes no total.
+ */
+export async function getCashTrend(days = 7): Promise<{ currency: Currency; today: number; change: number; points: number[] }> {
+  const s = await getSettings();
+  const currency = s.displayCurrency;
+  const today = (await getAccountBalances()).reduce((sum, account) =>
+    sum + convertMinor(account.byCurrency.KHR, 'KHR', currency, s.rateKhrPerUsd) + convertMinor(account.byCurrency.USD, 'USD', currency, s.rateKhrPerUsd), 0);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  // Day i closes at the end of (days - 1 - i) days ago; its figure is today's less everything that came after it.
+  const dayEnds = Array.from({ length: days }, (_, i) => startOfToday.getTime() + (i - days + 2) * DAY);
+  const windowStart = startOfToday.getTime() - (days - 1) * DAY;
+  const after = new Array<number>(days).fill(0);
+  let change = 0;
+  for (const t of allLive()) {
+    if (t.payMethod === 'later' || t.direction === 'move' || t.occurredAt < windowStart) continue;
+    const v = convertMinor(t.amount, t.currency, currency, t.exchangeRate) * (t.direction === 'in' ? 1 : -1);
+    change += v;
+    dayEnds.forEach((end, i) => {
+      if (t.occurredAt >= end) after[i] += v;
+    });
+  }
+  return { currency, today, change, points: after.map((later) => today - later) };
+}
+
 export async function setBudgetTarget(targetMinor: number, currency: Currency): Promise<void> {
   const existing = db.select().from(schema.budgets).where(isNull(schema.budgets.deletedAt)).get();
   if (existing) {
@@ -769,6 +797,9 @@ export interface AddTransactionInput {
   note?: string;
   occurredAt?: number;
   meta?: {
+    /** filled from the average of recorded days for a day the owner did not record (services/missedDays) */
+    estimated?: boolean;
+    basedOnDays?: number;
     cost?: number;
     lender?: string;
     lenderType?: 'bank_mfi' | 'informal';

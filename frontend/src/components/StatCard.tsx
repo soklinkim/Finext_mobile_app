@@ -27,7 +27,7 @@ export function StatCard({ kind, label, amount, variant = 'card' }: Props) {
       <Text variant="body-lg" tone="primary-900">
         {label}
       </Text>
-      <Text variant="amount-lg" tone={isIncome ? 'primary-900' : 'expense'} adjustsFontSizeToFit numberOfLines={1}>
+      <Text variant="amount-lg" tone={isIncome ? 'money-in' : 'money-out'} adjustsFontSizeToFit numberOfLines={1}>
         {amount}
       </Text>
     </View>

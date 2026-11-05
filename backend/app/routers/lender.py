@@ -37,9 +37,18 @@ def _active_share(lender: dict, share_id: str) -> tuple[dict, str]:
     return found
 
 
+class Offer(BaseModel):
+    """What the bank offers when it approves: the business accepts or declines exactly this."""
+    amount: float = Field(gt=0, le=1e12)
+    currency: Literal["USD", "KHR"]
+    annual_rate: float = Field(alias="annualRate", ge=0, le=100)
+    term_months: int = Field(alias="termMonths", ge=1, le=360)
+
+
 class DecisionRequest(BaseModel):
     decision: Literal["reviewing", "approved", "declined"]
     note: str | None = Field(default=None, max_length=1000)
+    offer: Offer | None = None
 
 
 @router.get("/me")
@@ -86,7 +95,17 @@ def applicant_document(share_id: UUID, kind: DocumentKind, lender: dict = Depend
 
 @router.put("/applicants/{share_id}/decision")
 def decide(share_id: UUID, req: DecisionRequest, lender: dict = Depends(current_lender)):
+    """Set the status. Approving needs an offer (amount, currency, rate, term) for the business to accept or decline;
+    once it has answered, the decision can no longer be changed."""
     _active_share(lender, share_id)
+    if req.decision == "approved" and req.offer is None:
+        raise HTTPException(status_code=422, detail="An approval needs an offer: amount, currency, interest rate and term.")
+    offer = ({"amount": round(req.offer.amount, 2), "currency": req.offer.currency, "annualRate": req.offer.annual_rate,
+              "termMonths": req.offer.term_months} if req.decision == "approved" and req.offer else None)
     note = (req.note or "").strip() or None
-    loan_store.set_decision(lender["id"], share_id, req.decision, note, _now())
-    return {"decision": req.decision, "decisionNote": note}
+    result = loan_store.set_decision(lender["id"], share_id, req.decision, note, offer, _now())
+    if result == "answered":
+        raise HTTPException(status_code=409, detail="The business has already answered this offer, so the decision is final.")
+    if result != "saved":
+        raise HTTPException(status_code=404, detail="This applicant is not sharing data with your bank.")
+    return {"decision": req.decision, "decisionNote": note, "offer": offer}
