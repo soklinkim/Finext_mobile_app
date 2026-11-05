@@ -7,6 +7,10 @@ from math import sqrt
 
 from app.bookkeeping import depreciation_entries, estimated_costs, journal_for, loan_account_map
 
+# A forecast needs this many of the last six completed months with activity. With 3 to 5 it is shown with
+# "moderate" coverage (wider ranges from fewer points); a month with no entries counts as zero, as recorded.
+MIN_FORECAST_MONTHS = 3
+
 REVENUE_ACCOUNTS = {"4000", "4100", "4200", "4900"}
 EXPENSE_ACCOUNTS = {
     "5000", "6000", "6100", "6200", "6300", "6400", "6500", "6600", "6700",
@@ -119,7 +123,7 @@ def forecast_income_expense(
             "level": readiness,
             "activeMonths": active_months,
             "windowMonths": 6,
-            "forecastEligible": active_months >= 6,
+            "forecastEligible": active_months >= MIN_FORECAST_MONTHS,
         },
         "basicAnalysis": {
             "totalIncome": total_income,
@@ -130,11 +134,13 @@ def forecast_income_expense(
         },
         "ruleInsight": rule_insight,
         "forecast": [],
-        "available": active_months >= 6,
-        "note": "Experimental trend estimate from six completed months. It is not a guarantee or accounting advice.",
+        "available": active_months >= MIN_FORECAST_MONTHS,
+        "note": "Experimental trend estimate from the last six completed months"
+                + ("" if active_months >= 6 else f", {active_months} of them with records, so the range is wider")
+                + ". It is not a guarantee or accounting advice.",
     }
-    if active_months < 6:
-        result["reason"] = "Six active completed months are needed before a forecast is shown. Basic totals are available now."
+    if active_months < MIN_FORECAST_MONTHS:
+        result["reason"] = f"{MIN_FORECAST_MONTHS} active completed months are needed before a forecast is shown. Basic totals are available now."
         return result
 
     incomes, income_ranges = _fit_trend([point["income"] for point in history], 3)
