@@ -7,7 +7,7 @@
    {
     "heading": "Document control",
     "bullets": [
-     "Policy owner: Data Protection Lead and AI Model Owner, jointly. [Names to be appointed.]",
+     "Policy owner: the FINEXT team (Team F4), which holds the data protection and AI model responsibilities in section 8 jointly during the prototype stage.",
      "Approved by: FINEXT team (Team F4). [Confirm with management before launch.]",
      "Version: 1.1, 5 November 2026 (competition prototype). Effective date: [to be set on approval for launch].",
      "Review: at least once a year, and whenever a law or framework named in section 5 changes."
@@ -87,7 +87,7 @@
    {
     "heading": "7. AI governance",
     "body": [
-     "7.1 Permitted uses. AI in FINEXT is used to estimate 12-month financial risk, forecast 3-month cash stress, check debt capacity, show the effect of changes (what-if), and flag unusual entries. Any new AI use needs the approval of the AI Model Owner and an update to this policy.",
+     "7.1 Permitted uses. AI in FINEXT is used to estimate 12-month financial risk, forecast 3-month cash stress, check debt capacity, show the effect of changes (what-if), and flag unusual entries. Any new AI use needs the approval of the FINEXT team and an update to this policy.",
      "7.2 Human oversight. AI outputs are guidance for the user. FINEXT does not approve or refuse loans, and lenders make their own decisions. Users can question any estimate, and a person reviews it.",
      "7.3 Transparency and explainability. Each estimate shows its level (low, moderate, high), its main reasons, and a note on its limits. The app states where AI is used, what data it uses and how it was tested.",
      "7.4 Fairness. AI features use only the business's financial figures. They never use gender, age, ethnicity, religion, location or other personal traits.",
@@ -101,8 +101,8 @@
     "heading": "8. Roles and responsibilities",
     "bullets": [
      "Management: approves this policy and gives the resources to carry it out.",
-     "Data Protection Lead: answers user requests, keeps records of consent and sharing, handles data incidents. [To be appointed.]",
-     "AI Model Owner: approves AI features and model versions, keeps model cards, oversees monitoring. [To be appointed.]",
+     "Data protection (held by the FINEXT team): answers user requests, keeps records of consent and sharing, handles data incidents.",
+     "AI model responsibility (held by the FINEXT team): approves AI features and model versions, keeps model cards, oversees monitoring.",
      "Developers and staff: follow this policy and report any concern straight away.",
      "Lenders: view shared data only for assessing the user's application, within the consent given, and follow \"Rules for partner banks\"."
     ]
@@ -110,7 +110,7 @@
    {
     "heading": "9. Incidents",
     "body": [
-     "Any suspected data breach or harmful AI behaviour is reported to the Data Protection Lead or AI Model Owner at once, investigated without delay, and recorded. Affected users, partner lenders whose shared data is involved, and the relevant authorities are told within 72 hours of FINEXT becoming aware of a breach that puts their data at risk, with what happened, what data was affected and what they should do. The cause is fixed before the feature is used again."
+     "Any suspected data breach or harmful AI behaviour is reported to the FINEXT team at once, investigated without delay, and recorded. Affected users, partner lenders whose shared data is involved, and the relevant authorities are told within 72 hours of FINEXT becoming aware of a breach that puts their data at risk, with what happened, what data was affected and what they should do. The cause is fixed before the feature is used again."
     ]
    },
    {
@@ -133,7 +133,7 @@
    {
     "heading": "12. Contact",
     "body": [
-     "Questions about this policy: [contact email and address to be added]."
+     "Questions about this policy: the FINEXT team (Team F4); during the prototype stage there is no separate support address."
     ]
    }
   ]
@@ -211,7 +211,7 @@
      "Correct it: edit or cancel any entry.",
      "Take a copy: download your statements as PDF.",
      "Withdraw consent: stop sharing with any bank at any time.",
-     "Delete your account and data: [contact method to be added]. We aim to answer requests within one month."
+     "Delete your account and data: ask the FINEXT team. We aim to answer requests within one month."
     ]
    },
    {
@@ -235,7 +235,7 @@
    {
     "heading": "Contact and changes",
     "body": [
-     "Questions or requests: [contact email and address to be added]. We will tell you in the app before any important change to this policy."
+     "Questions or requests: the FINEXT team (Team F4); during the prototype stage there is no separate support address. We will tell you in the app before any important change to this policy."
     ]
    }
   ]
@@ -294,7 +294,7 @@
      "Correct any entry and the estimates update.",
      "Mark an unusual-entry alert as right if it is.",
      "Switch between plain and accounting language in Profile.",
-     "Question an estimate: [contact method to be added]. A person will review it."
+     "Question an estimate: tell the FINEXT team. A person will review it."
     ]
    },
    {
@@ -412,8 +412,8 @@
    {
     "heading": "Who is accountable",
     "bullets": [
-     "Data protection lead: answers privacy requests and incidents. [Name to be appointed.]",
-     "AI model owner: approves each model version before release and watches how it performs. [Name to be appointed.]"
+     "Data protection: the FINEXT team answers privacy requests and handles incidents.",
+     "AI model: the FINEXT team approves each model version before release and watches how it performs."
     ]
    },
    {
