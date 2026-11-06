@@ -17,7 +17,7 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useI18n, type TKey } from '@/i18n';
 import { confirmAction } from '@/lib/confirm';
 import { formatInputDate, sameDay } from '@/lib/format';
-import { formatMoney, getAccountBalances, getEntryType, getSettings, listBanks, type Bank, type Currency } from '@/services/bookkeeping';
+import { addBank, formatMoney, getAccountBalances, getEntryType, getSettings, listBanks, type Bank, type Currency } from '@/services/bookkeeping';
 import type { UploadAsset } from '@/services/documents';
 import {
   convertsOnImport, CONVERTED_MARK, hasPendingStatement, IMPORT_KHR_PER_USD, IMPORT_TYPES, importRows, rielToCents, needsCheck, pickStatementFile, prepareRows, readStatement, StatementImportError, statementTotals, takePendingStatement,
@@ -217,7 +217,10 @@ export default function ImportStatement() {
 
   useEffect(() => {
     let active = true;
-    void listBanks().then((list) => { if (active) setBanks(list); });
+    void listBanks().then((list) => {
+      const seen = new Set<string>();
+      if (active) setBanks(list.filter((b) => { const k = b.name.trim().toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; }));
+    });
     return () => { active = false; };
   }, []);
 
@@ -233,7 +236,21 @@ export default function ImportStatement() {
     setStage('reading');
     try {
       const result = await readStatement(file, pw);
-      const [settings, list] = await Promise.all([getSettings(), listBanks()]);
+      const [settings, all] = await Promise.all([getSettings(), listBanks()]);
+      // One entry per account name (a second phone or reinstall can leave a copy of the starting accounts).
+      const seen = new Set<string>();
+      const list = all.filter((b) => {
+        const key = b.name.trim().toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      // A statement from a bank that is not yet an account (ACLEDA, Canadia...) gets its account added.
+      const statementBank = (result.bank ?? '').trim();
+      const statementWord = statementBank.toLowerCase().split(' ')[0];
+      if (statementBank && !list.some((b) => b.kind !== 'cash' && b.name.toLowerCase().includes(statementWord))) {
+        list.push(await addBank(statementBank, 'bank'));
+      }
       setBanks(list);
       setRead(result);
       setAppCurrency(settings.displayCurrency as Currency);

@@ -1,3 +1,4 @@
+import { popupCard } from '@/lib/layout';
 import { useEffect, useState } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -38,7 +39,7 @@ export function MissedDaysPopup() {
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={close}>
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <View style={{ alignSelf: 'stretch', gap: 12, padding: 20, borderRadius: radius.card, backgroundColor: dark ? colors.dark.surface : colors.white }}>
+        <View style={{ ...popupCard, width: '100%', gap: 12, padding: 20, borderRadius: radius.card, backgroundColor: dark ? colors.dark.surface : colors.white }}>
           <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.danger }} />
           <Text variant="title" weight={700} tone="primary-900">{t('missed.popupTitle')}</Text>
           <Text variant="body-sm" tone="neutral-600">{t('missed.popupBody', { count })}</Text>

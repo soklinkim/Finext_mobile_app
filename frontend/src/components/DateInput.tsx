@@ -1,3 +1,4 @@
+import { popupCard } from '@/lib/layout';
 import { useEffect, useState } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { CalendarGrid } from './CalendarGrid';
@@ -67,7 +68,7 @@ export function DateInput({ label, value, onChange, error, variant = 'form' }: P
       />
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)} statusBarTranslucent>
         <Pressable className="flex-1 items-center justify-center px-6" style={{ backgroundColor: tint(colors.shadow, 0.35) }} onPress={() => setOpen(false)}>
-          <Pressable className="w-full bg-white" style={{ borderRadius: radius.lg, padding: 20, gap: 12, backgroundColor: dark ? colors.dark.background : colors.white }} onPress={() => undefined}>
+          <Pressable className="w-full bg-white" style={{ ...popupCard, borderRadius: radius.lg, padding: 20, gap: 12, backgroundColor: dark ? colors.dark.background : colors.white }} onPress={() => undefined}>
             <CalendarGrid
               year={cursor.year}
               month={cursor.month}

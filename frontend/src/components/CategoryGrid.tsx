@@ -1,3 +1,4 @@
+import { popupCard } from '@/lib/layout';
 import { useState } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { Button } from './Button';
@@ -73,7 +74,7 @@ export function CategoryGrid({ items, addLabel, addTitle, onAdd, onOpen }: Props
       </View>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)} statusBarTranslucent>
         <Pressable className="flex-1 items-center justify-center px-6" style={{ backgroundColor: tint(colors.shadow, 0.35) }} onPress={() => setOpen(false)}>
-          <Pressable className="w-full bg-white" style={{ borderRadius: radius.lg, padding: 24, gap: 16, backgroundColor: dark ? colors.dark.background : colors.white }} onPress={() => undefined}>
+          <Pressable className="w-full bg-white" style={{ ...popupCard, borderRadius: radius.lg, padding: 24, gap: 16, backgroundColor: dark ? colors.dark.background : colors.white }} onPress={() => undefined}>
             <Text variant="section" tone="primary-900">
               {addTitle}
             </Text>

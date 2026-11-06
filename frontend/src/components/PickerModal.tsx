@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { Icon } from './Icon';
 import { Text } from './Text';
+import { sheetPanel } from '@/lib/layout';
 import { colors, radius, tint } from '@/theme';
 import { useI18n } from '@/i18n';
 import { useAppTheme } from '@/theme/AppTheme';
@@ -33,7 +34,7 @@ export function PickerModal<T extends string | number>({ visible, title, options
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <Pressable accessibilityLabel={t('common.close')} className="flex-1 justify-end" style={{ backgroundColor: tint(colors.shadow, 0.35) }} onPress={onClose}>
-        <Pressable className="bg-white" style={{ borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, maxHeight: '70%', paddingTop: 16, backgroundColor: dark ? colors.dark.background : colors.white }} onPress={() => undefined}>
+        <Pressable className="bg-white" style={{ ...sheetPanel, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, maxHeight: '70%', paddingTop: 16, backgroundColor: dark ? colors.dark.background : colors.white }} onPress={() => undefined}>
           <View className="flex-row items-center justify-between px-6" style={{ paddingBottom: 8 }}>
             <Text variant="section" tone="primary-900">
               {title}

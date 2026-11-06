@@ -1,3 +1,4 @@
+import { popupCard } from '@/lib/layout';
 import { useEffect, useRef } from 'react';
 import { AppState, Modal, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -47,7 +48,7 @@ export function ReminderPopup() {
   return (
     <Modal visible={shown !== null} transparent animationType="fade" onRequestClose={close}>
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <View style={{ alignSelf: 'stretch', gap: 12, padding: 20, borderRadius: radius.card, backgroundColor: dark ? colors.dark.surface : colors.white }}>
+        <View style={{ ...popupCard, width: '100%', gap: 12, padding: 20, borderRadius: radius.card, backgroundColor: dark ? colors.dark.surface : colors.white }}>
           <Text variant="title" weight={700} tone="primary-900">{t('reminder.popupTitle')}</Text>
           <Text variant="body-sm" tone="neutral-600">{t('reminder.popupBody', { time })}</Text>
           <Button label={t('reminder.popupOpen')} icon="plus" onPress={open} />

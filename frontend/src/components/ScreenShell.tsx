@@ -150,7 +150,7 @@ export function ScreenShell({
             ref={scrollRef}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
-            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : Platform.OS === 'web' ? 'none' : 'on-drag'}
             contentContainerStyle={{ paddingHorizontal: padding, paddingTop: 32, paddingBottom: bottomPad }}
           >
             {children}

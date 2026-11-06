@@ -3,6 +3,7 @@ import { Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { Button } from './Button';
 import { Icon } from './Icon';
 import { Text } from './Text';
+import { sheetPanel } from '@/lib/layout';
 import { colors, radius, tint } from '@/theme';
 import { useI18n } from '@/i18n';
 import { useAppTheme } from '@/theme/AppTheme';
@@ -55,7 +56,7 @@ export function MultiSelectField({ title, options, value, onChange, allLabel, ma
       </Pressable>
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => close()} statusBarTranslucent>
         <Pressable accessibilityLabel={t('common.close')} className="flex-1 justify-end" style={{ backgroundColor: tint(colors.shadow, 0.35) }} onPress={() => close()}>
-          <Pressable style={{ borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, maxHeight: '75%', paddingTop: 16, backgroundColor: dark ? colors.dark.background : colors.white }} onPress={() => undefined}>
+          <Pressable style={{ ...sheetPanel, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, maxHeight: '75%', paddingTop: 16, backgroundColor: dark ? colors.dark.background : colors.white }} onPress={() => undefined}>
             <View className="flex-row items-center justify-between px-6" style={{ paddingBottom: 8 }}>
               <Text variant="section" tone="primary-900">{title}</Text>
               <Pressable accessibilityRole="button" accessibilityLabel={t('common.close')} onPress={() => close()} hitSlop={12}>
