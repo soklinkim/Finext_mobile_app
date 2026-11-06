@@ -3,6 +3,8 @@
 **Bookkeeping, financial statements and AI risk insight for Cambodian micro, small and medium businesses (MSMEs),
 in Khmer and English, with USD and KHR.**
 
+**Try it live:** https://finext-neon.vercel.app/launch (no install needed; opens in the browser on phone or computer)
+
 A shop owner records sales and costs on their phone, even offline. FINEXT turns those records into standard financial
 statements, checks the business's financial health, uses AI to estimate the risk of financial stress (with the reasons),
 and lets the owner share a loan pack with a bank, only with their consent.
