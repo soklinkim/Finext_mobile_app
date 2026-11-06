@@ -2,7 +2,8 @@
 
 Cleaner books make the risk answers more trustworthy, so the app asks the owner to look at entries that:
 
-- `duplicate`: repeat another entry of the same type, amount, category and party within two days;
+- `duplicate`: are money out repeating another entry of the same type, amount, category and party within two days
+  (repeated sales and transfers are normal for a vendor and are not flagged);
 - `spike` / `extra_zero`: are far above what this kind of cost usually is (a robust median and spread of earlier
   entries); about 10 or 100 times the usual amount reads as a typing slip (an extra zero);
 - `maybe_expense`: are money in for exactly a regular cost's amount, in a month where that cost is missing
@@ -57,10 +58,11 @@ def find_unusual(transactions: list[dict[str, Any]], now: datetime | None = None
         if tx["occurredAt"] > now_ms + DAY_MS:
             flag(tx, "future_date")
 
-    # Same entry twice within two days.
+    # Same cost twice within two days (rent or a stock order paid twice). Money in is not checked: a market vendor sells
+    # the same item at the same price many times a day, so repeated sales are normal. Transfers are not checked either.
     same: dict[tuple, list[dict]] = defaultdict(list)
     for tx in entries:
-        if tx["direction"] == "move":
+        if tx["direction"] != "out":
             continue
         key = (tx["typeId"], tx["amount"], tx["currency"], tx.get("categoryId"), (tx.get("counterparty") or "").strip().lower())
         for earlier in same[key]:

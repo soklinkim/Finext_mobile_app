@@ -2,16 +2,13 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { LegendSwatch, Sparkline, useChartColors, useWidth, ZoneBar } from './HealthCharts';
-import { Icon } from './Icon';
-import { SegmentedControl } from './SegmentedControl';
-import { EmptyState, ErrorState, LoadingState } from './StateViews';
 import { Text } from './Text';
 import { useAnalysisQuery } from '@/hooks/useAnalysisQuery';
 import { useLocalQuery } from '@/hooks/useLocalQuery';
 import { useI18n, type TKey } from '@/i18n';
 import { colors, radius, tint } from '@/theme';
 import { useAppTheme } from '@/theme/AppTheme';
-import { getHealthHistory, getQuarterlyRatios, type HealthHistoryMonth, type RatioSnapshot } from '@/services/analysis';
+import { getHealthHistory, type HealthHistoryMonth, type RatioSnapshot } from '@/services/analysis';
 import { formatMoney, getCashTrend } from '@/services/bookkeeping';
 import { healthRatioFormula } from '@/services/formulas';
 import { formatRatio } from '@/services/ratioFormat';
@@ -273,74 +270,41 @@ function RatioGroup({ title, items }: { title: string; items: Judged[] }) {
   );
 }
 
-function RatiosHeading({ period, onPeriod }: { period: Period; onPeriod: (p: Period) => void }) {
-  const { t } = useI18n();
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-      <Text variant="title" weight={700} tone="primary-900">{t('health.ratios')}</Text>
-      <View style={{ width: 200 }}>
-        <SegmentedControl options={[{ value: 'monthly', label: t('health.monthly') }, { value: 'quarterly', label: t('health.quarterly') }]} value={period} onChange={onPeriod} />
-      </View>
-    </View>
-  );
-}
-
-/** Score, cash and the ratios for one period, judged against the chosen comparison. */
-function HealthBody({ ratios: serverRatios, months, period, onPeriod, compare, onCompare }: {
-  ratios: RatioSnapshot[]; months: HealthHistoryMonth[]; period: Period; onPeriod: (p: Period) => void; compare: Compare; onCompare: () => void;
-}) {
+/**
+ * Health tab, top part, kept simple: a score out of 100 from the ratio statuses, cash today with its last 7 days,
+ * then this month's ratios that need attention. Ratios on track are folded away behind one tap; ratios without enough
+ * data are not listed. Each ratio is judged against the business's own past months (the standard target until 3
+ * complete months are recorded).
+ */
+export function FinancialHealthChart({ ratios: serverRatios }: { ratios: RatioSnapshot[] }) {
   const { t, term } = useI18n();
   const dark = useAppTheme();
+  const [showOnTrack, setShowOnTrack] = useState(false);
+  const history = useAnalysisQuery(getHealthHistory);
+  const months = recentMonths(history.data);
   // Ratio names come from the server in accounting terms; plain language swaps in everyday words.
-  const items = serverRatios.map((ratio) => judge({ ...ratio, label: term(ratio.label) }, months, compare, period));
+  const items = serverRatios.map((ratio) => judge({ ...ratio, label: term(ratio.label) }, months, 'past', 'monthly'));
   const byStatus = (...statuses: Status[]) => statuses.flatMap((status) => items.filter((item) => item.status === status));
-  const fewMonths = compare === 'past' && items.some((item) => item.fallback);
+  const attention = byStatus('red', 'yellow');
+  const onTrack = byStatus('green');
   return (
     <View style={{ gap: 20 }}>
       <ScoreHeader items={items} />
       <CashCard />
-      <View style={{ gap: 12 }}>
-        <RatiosHeading period={period} onPeriod={onPeriod} />
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Text variant="body-sm" tone="neutral-600">{t('health.compare')}</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel={`${t('health.compare')} ${t(compare === 'past' ? 'health.compare.past' : 'health.compare.standard')}. ${t('health.compare.switch')}`} onPress={onCompare}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: dark ? colors.dark.field : colors.primary[50] }}>
-            <Text variant="body-sm" weight={600} tone="primary-900">{t(compare === 'past' ? 'health.compare.past' : 'health.compare.standard')}</Text>
-            <Icon name="swap" size={14} color={dark ? colors.dark.primary : colors.primary[900]} />
-          </Pressable>
+      {(attention.length > 0 || onTrack.length > 0) && (
+        <View style={{ gap: 12 }}>
+          <Text variant="title" weight={700} tone="primary-900">{t('health.ratios')}</Text>
+          <RatioGroup title={t('health.group.attention')} items={attention} />
+          {onTrack.length > 0 && (showOnTrack
+            ? <RatioGroup title={t('health.group.ontrack')} items={onTrack} />
+            : (
+              <Pressable accessibilityRole="button" onPress={() => setShowOnTrack(true)} hitSlop={6}
+                style={{ alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: dark ? colors.dark.field : colors.primary[50] }}>
+                <Text variant="body-sm" weight={600} tone="primary-900">{t('health.showOnTrack', { count: onTrack.length })}</Text>
+              </Pressable>
+            ))}
         </View>
-        {fewMonths && <Text variant="micro" tone="neutral-500">{t('health.compare.fewMonths')}</Text>}
-        <RatioGroup title={t('health.group.attention')} items={byStatus('red', 'yellow')} />
-        <RatioGroup title={t('health.group.ontrack')} items={byStatus('green')} />
-        <RatioGroup title={t('health.group.notready')} items={byStatus('not_available')} />
-      </View>
+      )}
     </View>
   );
-}
-
-/** Quarterly ratios are only fetched once the owner asks for them. */
-function QuarterlyHealth(props: Omit<Parameters<typeof HealthBody>[0], 'ratios'>) {
-  const quarterly = useAnalysisQuery(getQuarterlyRatios);
-  if (quarterly.data) return <HealthBody {...props} ratios={quarterly.data} />;
-  // Keep the switch on screen while waiting (or after a failure), so the owner can go back to Monthly.
-  return (
-    <View style={{ gap: 12 }}>
-      <RatiosHeading period={props.period} onPeriod={props.onPeriod} />
-      {quarterly.noCache ? <EmptyState titleKey="offline.noCache" bodyKey="offline.noCacheBody" icon="wifiOff" />
-        : quarterly.error ? <ErrorState onRetry={quarterly.reload} error={quarterly.error} /> : <LoadingState />}
-    </View>
-  );
-}
-
-/**
- * Health tab, top part: a score out of 100 from the ratio statuses, cash today with its last 7 days, then the key
- * ratios (this month or this quarter so far) grouped into "Needs attention" and "On track", each against either the
- * business's own past months or the standard targets.
- */
-export function FinancialHealthChart({ ratios }: { ratios: RatioSnapshot[] }) {
-  const [period, setPeriod] = useState<Period>('monthly');
-  const [compare, setCompare] = useState<Compare>('past');
-  const history = useAnalysisQuery(getHealthHistory);
-  const props = { months: recentMonths(history.data), period, onPeriod: setPeriod, compare, onCompare: () => setCompare(compare === 'past' ? 'standard' : 'past') };
-  return period === 'quarterly' ? <QuarterlyHealth {...props} /> : <HealthBody {...props} ratios={ratios} />;
 }

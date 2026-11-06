@@ -218,6 +218,7 @@ def main(argv: list[str]) -> int:
         print(f"No account for {email}: sign up in the app first, then open it once while online.")
         return 1
     user_id = str(found[0])
+    db.pool.open()  # the app opens it at start-up; a script must open it itself
     banks = db.get_table_rows(user_id, "banks")
     bank = next((b for b in banks if b.get("kind") == "bank" and (b.get("name") or "").upper() == "ABA"), None)
     if bank is None:

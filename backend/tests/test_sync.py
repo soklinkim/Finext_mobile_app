@@ -91,6 +91,30 @@ def test_last_write_wins():
     assert rows[0]["name"] == "New"
 
 
+def test_a_new_devices_starting_accounts_do_not_duplicate_the_account():
+    push([bank("own-cash", updated=0, name="Cash"), bank("own-aba", updated=0, name="ABA", kind="bank")])
+    # Another phone signs in and sends its own starting set (never edited, updatedAt 0).
+    r = push([bank("new-cash", updated=0, name="Cash"), bank("new-wing", updated=0, name="Wing", kind="wallet")]).json()
+    assert r["accepted"]["banks"] == ["new-wing"]          # a name the account does not have yet is kept
+    assert [c["row"]["id"] for c in r["conflicts"]] == ["new-cash"]
+    assert r["conflicts"][0]["row"]["deletedAt"] is not None  # the device deletes its copy
+    names = sorted(row["name"] for batch in client.get("/sync/changes").json()["changes"] for row in batch["rows"])
+    assert names == ["ABA", "Cash", "Wing"]
+
+
+def test_a_starting_account_already_used_by_an_entry_is_kept():
+    push([bank("own-cash", updated=0, name="Cash")])
+    tx = {"id": "t1", "createdAt": 1, "updatedAt": 1, "deletedAt": None, "syncStatus": "pending", "title": "Sale",
+          "typeId": "product_sale", "direction": "in", "groupId": None, "amount": 1000, "currency": "USD",
+          "exchangeRate": 4000, "payMethod": "cash", "bankId": "new-cash", "toBankId": None, "categoryId": None,
+          "counterparty": None, "note": None, "occurredAt": 1, "reviewFlag": False, "meta": None}
+    r = client.post("/sync/push", json={"batches": [
+        {"table": "banks", "rows": [bank("new-cash", updated=0, name="Cash")]},
+        {"table": "transactions", "rows": [tx]},
+    ]}).json()
+    assert "new-cash" in r["accepted"]["banks"]
+
+
 def test_rejected_bank_reference_is_not_stored():
     tx = {
         "id": "tx1", "createdAt": 1, "updatedAt": 1, "deletedAt": None,

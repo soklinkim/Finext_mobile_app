@@ -35,6 +35,13 @@ def test_same_amount_a_week_apart_or_to_someone_else_is_not_a_duplicate():
     assert codes(rows) == {}
 
 
+def test_repeated_sales_at_the_same_price_are_normal_not_duplicates():
+    rows = [entry(f"s{i}", "product_sale", "in", 80_000, at=on(2026, 1, 10)) for i in range(3)]
+    rows.append(entry("o", "other_income", "in", 20_000, at=on(2026, 1, 11)))
+    rows.append(entry("o2", "other_income", "in", 20_000, at=on(2026, 1, 11)))
+    assert codes(rows) == {}
+
+
 def test_a_cost_far_above_its_usual_amount_is_a_spike():
     rows = [entry(f"u{i}", "utilities", "out", 50_000 + i * 500, at=on(2025, 9 + i % 4, 2 + i)) for i in range(6)]
     rows.append(entry("big", "utilities", "out", 260_000, at=on(2026, 1, 15)))

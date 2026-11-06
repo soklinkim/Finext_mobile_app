@@ -216,11 +216,22 @@ export const needsCheck = (row: ReviewRow) => row.duplicate || row.loan || row.u
  * (`appCurrency` USD) are saved in dollars at IMPORT_KHR_PER_USD, marked with CONVERTED_MARK, and the note keeps the
  * riel amount.
  */
-export async function importRows(rows: ReviewRow[], bank: Bank, cash: Bank | null, appCurrency: Currency): Promise<{ added: number; failed: ReviewRow[]; converted: number }> {
+export async function importRows(
+  rows: ReviewRow[], bank: Bank, cash: Bank | null, appCurrency: Currency, onProgress?: (done: number, total: number) => void,
+): Promise<{ added: number; failed: ReviewRow[]; converted: number }> {
   let added = 0;
   let converted = 0;
   const failed: ReviewRow[] = [];
-  for (const row of rows.filter((r) => r.keep)) {
+  const kept = rows.filter((r) => r.keep);
+  let done = 0;
+  for (const row of kept) {
+    // Every few entries, report progress and let the screen redraw, so a long statement shows a moving count instead of
+    // a frozen screen.
+    if (done % 5 === 0) {
+      onProgress?.(done, kept.length);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    done += 1;
     const original = row.currency ?? 'USD';
     const convert = convertsOnImport(original, appCurrency);
     const currency: Currency = convert ? 'USD' : original;
@@ -260,5 +271,6 @@ export async function importRows(rows: ReviewRow[], bank: Bank, cash: Bank | nul
       failed.push(row);
     }
   }
+  onProgress?.(kept.length, kept.length);
   return { added, failed, converted };
 }

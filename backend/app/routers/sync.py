@@ -27,6 +27,8 @@ MODELS = {
 }
 TABLE_ORDER = list(MODELS)  # parents first, so foreign keys resolve
 PULL_PAGE_SIZE = 500
+# The updatedAt a device gives its starting accounts and categories (frontend db/seed.ts STARTING_ROW_UPDATED_AT).
+STARTING_ROW_UPDATED_AT = 0
 
 BALANCE_SHEET_KEYS = {
     "cash_bank", "receivable", "inventory", "prepaid", "equipment", "other_long_term",
@@ -141,10 +143,36 @@ def push(req: PushRequest, user_id: str = Depends(current_sme)):
             continue
     loan_accounts = loan_account_map(loan_rows)
 
+    # A new phone or browser starts with its own set of accounts and categories (never edited: updatedAt 0). If one of
+    # those reaches the server while the business already has an account or category of that name, it is a duplicate
+    # set: it is not stored, and the device is told to delete its copy. Unless an entry already uses it.
+    existing_names = {
+        table: {(r.get("name"), r.get("kind")): r["id"] for r in db.get_table_rows(user_id, table)}
+        for table in ("banks", "categories")
+    }
+    referenced: set[str] = set()
+    for batch in req.batches:
+        for raw in batch.rows:
+            if batch.table == "transactions":
+                referenced.update(v for v in (raw.get("bankId"), raw.get("toBankId"), raw.get("categoryId")) if v)
+            elif batch.table in ("business_assets", "budgets"):
+                referenced.update(v for v in (raw.get("bankId"), raw.get("categoryId")) if v)
+    referenced.update(v for t in all_transactions for v in (t.get("bankId"), t.get("toBankId"), t.get("categoryId")) if v)
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+
+    def starting_duplicate(table: str, raw: dict) -> bool:
+        if table not in existing_names or raw.get("updatedAt") != STARTING_ROW_UPDATED_AT or raw.get("deletedAt") is not None:
+            return False
+        same = existing_names[table].get((raw.get("name"), raw.get("kind")))
+        return same is not None and same != raw.get("id") and raw.get("id") not in referenced
+
     for batch in sorted(req.batches, key=lambda b: TABLE_ORDER.index(b.table)):
         model = MODELS[batch.table]
         valid = []
         for raw in batch.rows:
+            if starting_duplicate(batch.table, raw):
+                conflicts.append(SyncConflict(table=batch.table, row={**raw, "deletedAt": now_ms, "syncStatus": "synced"}))
+                continue
             try:
                 row = model.model_validate(raw)
             except ValidationError as e:

@@ -169,6 +169,26 @@ function AccountSummary({ read, rows, currency }: { read: StatementRead; rows: R
   );
 }
 
+/** Short names banks are known by, so a statement headed "Advanced Bank of Asia" matches the account called ABA. */
+const BANK_ALIASES: Record<string, string[]> = {
+  aba: ['aba', 'advanced bank of asia'],
+  acleda: ['acleda'],
+  'kb prasac': ['kb prasac', 'prasac'],
+  wing: ['wing'],
+  canadia: ['canadia'],
+  'bridge bank': ['bridge'],
+};
+
+/** The owner's account for the statement's bank, or null when it cannot be told. */
+function matchStatementBank<B extends { name: string }>(statementBank: string | null | undefined, accounts: B[]): B | null {
+  const text = (statementBank ?? '').toLowerCase();
+  if (!text) return null;
+  return accounts.find((account) => {
+    const name = account.name.toLowerCase();
+    return (BANK_ALIASES[name] ?? [name]).some((alias) => text.includes(alias));
+  }) ?? null;
+}
+
 /**
  * Bookkeeping > Import bank statement.
  * Page 1 (review): what was read, grouped like the Bookkeeping tab's "Entries in …" list.
@@ -208,6 +228,8 @@ export default function ImportStatement() {
   const [added, setAdded] = useState(0);
   const [failed, setFailed] = useState<ReviewRow[]>([]); // kept rows that could not be added
   const [saving, setSaving] = useState(false);
+  /** While adding: how many entries are done, out of how many. */
+  const [progress, setProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
   const [showAll, setShowAll] = useState(false); // on the check page: every row, not just the ones to check
   const [savedMonth, setSavedMonth] = useState<string | null>(null); // YYYY-MM of the newest entry added
   // After saving: the account's balance in FINEXT and the statement's ending balance, same currency (minor units).
@@ -257,11 +279,10 @@ export default function ImportStatement() {
       const prepared = await prepareRows(result, settings.displayCurrency as Currency);
       setRows(prepared);
       setAllRows(prepared);
-      // The account whose name matches the statement's bank, else the first bank account.
-      const first = (result.bank ?? '').toLowerCase().split(' ')[0];
-      const bankAccounts = list.filter((b) => b.kind !== 'cash');
+      // Pre-choose the account only when the statement's bank is recognised; otherwise the owner chooses (no guess).
       // Never Cash: a bank statement belongs to a bank or wallet account (and its cash deposits move money to Cash).
-      setBankId((bankAccounts.find((b) => first && b.name.toLowerCase().includes(first)) ?? bankAccounts[0])?.id ?? null);
+      const bankAccounts = list.filter((b) => b.kind !== 'cash');
+      setBankId(matchStatementBank(result.bank, bankAccounts)?.id ?? null);
       setNeedsPassword(false);
       setStage('review');
     } catch (err) {
@@ -301,8 +322,11 @@ export default function ImportStatement() {
 
   const save = async () => {
     if (!bank) return;
+    setProgress({ done: 0, total: kept.length });
     setSaving(true);
-    const result = await importRows(rows, bank, cash, appCurrency);
+    // Let the "Adding entries" screen appear before the work starts.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const result = await importRows(rows, bank, cash, appCurrency, (done, total) => setProgress({ done, total }));
     setFailed(result.failed);
     setConverted(result.converted);
     setSavedMonth(kept.map((r) => r.date.slice(0, 7)).sort().pop() ?? null);
@@ -351,6 +375,19 @@ export default function ImportStatement() {
     () => (pickerRow ? IMPORT_TYPES[pickerRow.direction].map((id) => ({ value: id as string, label: t(`type.${id}` as TKey) })) : []),
     [pickerRow, t],
   );
+
+  // Adding takes a few seconds for a long statement: a loading circle and a count until the green tick.
+  if (saving) {
+    return (
+      <ScreenShell title={t('import.title')} nav="bookkeeping" padding={24}>
+        <View accessibilityLiveRegion="polite" style={{ ...card, padding: 32, alignItems: 'center', gap: 16 }}>
+          <ActivityIndicator size="large" color={colors.primary[500]} />
+          <Text variant="title" weight={700} tone="primary-900" style={{ textAlign: 'center' }}>{t('import.addingTitle')}</Text>
+          <Text variant="body" tone="neutral-600" style={{ textAlign: 'center' }}>{t('import.addingProgress', { done: progress.done, total: progress.total })}</Text>
+        </View>
+      </ScreenShell>
+    );
+  }
 
   if (stage === 'done') {
     return (
@@ -553,10 +590,18 @@ export default function ImportStatement() {
     const idSet = new Set(applied.ids ?? listIds ?? rows.map((r) => r.index));
     // A search found a fixed set of entries; with no search, the list fixed when the page was opened.
     const shown = rows.filter((r) => idSet.has(r.index));
-    const dirty = filterDate !== applied.date || filterText.trim() !== applied.text || filterCats.length !== applied.cats.length || filterCats.some((c) => !applied.cats.includes(c));
     // Back to the starting point: no keyword, no day, every category.
     const clearFilters = () => { setFilterText(''); setFilterDate(null); setFilterCats([]); setApplied({ date: null, cats: [], text: '', ids: null }); };
-    const search = () => setApplied({ date: filterDate, cats: filterCats, text: filterText.trim(), ids: findIds(rows, { date: filterDate, cats: filterCats, text: filterText.trim() }) });
+    // Filters apply as soon as they change (no Search button). The list found stays fixed until the filters change again,
+    // so an entry does not vanish from it the moment it is given a type.
+    const applyFilters = (next: { date: number | null; cats: string[]; text: string }) => {
+      const text = next.text.trim();
+      if (next.date === null && !next.cats.length && !text) return setApplied({ date: null, cats: [], text: '', ids: null });
+      setApplied({ date: next.date, cats: next.cats, text, ids: findIds(rows, { date: next.date, cats: next.cats, text }) });
+    };
+    const changeText = (text: string) => { setFilterText(text); applyFilters({ date: filterDate, cats: filterCats, text }); };
+    const changeDate = (date: number | null) => { setFilterDate(date); applyFilters({ date, cats: filterCats, text: filterText }); };
+    const changeCats = (cats: string[]) => { setFilterCats(cats); applyFilters({ date: filterDate, cats, text: filterText }); };
     const filtering = applied.ids !== null;
     // Only the entries found that are ticked (the ones that will be added) get the type; unticked ones are left alone.
     const shownTicked = shown.filter((r) => r.keep);
@@ -608,27 +653,29 @@ export default function ImportStatement() {
           {convertNotice}
           {accounts.length ? (
             <SelectField size="form" label={t('import.account')} options={accounts.map((b) => ({ value: b.id, label: b.name }))}
-              value={bankId} onChange={setBankId} />
+              value={bankId} onChange={setBankId} placeholder={t('import.chooseAccount')} />
           ) : (
             <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
               <StatusMark kind="watch" />
               <Text variant="body-sm" tone="neutral-900" style={{ flex: 1 }}>{t('import.needBank')}</Text>
             </View>
           )}
-          <TextField variant="form" value={filterText} onChangeText={setFilterText} placeholder={t('import.searchDescription')} returnKeyType="search" onSubmitEditing={search} autoCorrect={false}
+          <TextField variant="form" value={filterText} onChangeText={changeText} placeholder={t('import.searchDescription')} returnKeyType="search" autoCorrect={false}
             left={<Icon name="search" size={16} color={colors.neutral[500]} />} />
-          {/* Same search as the entries history: a day, categories (none = All) and Search, bright while there is something not yet searched. */}
+          {/* A day and categories (none = All): the list updates as soon as either changes. Clear filter appears while any filter is on. */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <View style={{ flex: 1.1 }}><DateInput value={filterDate} onChange={setFilterDate} /></View>
+            <View style={{ flex: 1.1 }}><DateInput value={filterDate} onChange={changeDate} /></View>
             <View style={{ flex: 1 }}>
-              <MultiSelectField title={t('search.categories')} searchable options={filterOptions} value={filterCats} onChange={setFilterCats}
+              <MultiSelectField title={t('search.categories')} searchable options={filterOptions} value={filterCats} onChange={changeCats}
                 allLabel={t('tx.filterAll')} manyLabel={(count) => t('tx.categoriesCount', { count })} />
             </View>
-            <Pressable accessibilityRole="button" accessibilityLabel={t('common.search')} accessibilityState={{ selected: dirty }} onPress={search}
-              style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: dirty ? colors.primary[900] : dark ? colors.dark.field : colors.primary[200] }}>
-              <Icon name="search" size={20} color={dirty ? colors.white : colors.primary[500]} />
-            </Pressable>
           </View>
+          {filtering ? (
+            <Pressable accessibilityRole="button" onPress={clearFilters} hitSlop={6}
+              style={{ alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: dark ? colors.dark.field : colors.primary[50] }}>
+              <Text variant="body-sm" weight={600} tone="primary-900">{t('import.clearFilter')}</Text>
+            </Pressable>
+          ) : null}
           {/* How far the typing has got: every entry needs a type before anything can be added. */}
           <View style={{ gap: 6, padding: 12, borderRadius: 10, backgroundColor: dark ? colors.dark.field : colors.primary[50] }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -646,12 +693,7 @@ export default function ImportStatement() {
           {/* What the search found: how many entries, and what they add up to. */}
           {filtering ? (
             <View accessibilityLiveRegion="polite" style={{ gap: 2, padding: 12, borderRadius: 10, backgroundColor: dark ? colors.dark.field : colors.primary[50] }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                <Text variant="body-sm" weight={700} tone="primary-900" style={{ flex: 1 }}>{t('import.results', { count: shown.length, total: rows.length })}</Text>
-                <Pressable accessibilityRole="button" hitSlop={8} onPress={clearFilters}>
-                  <Text variant="caption" weight={600} style={{ color: colors.primary[500] }}>{t('import.clearFilter')}</Text>
-                </Pressable>
-              </View>
+              <Text variant="body-sm" weight={700} tone="primary-900">{t('import.results', { count: shown.length, total: rows.length })}</Text>
               <Text variant="caption" tone="neutral-600">
                 {t('import.resultsTotals', { in: formatMoney(shown.filter((r) => r.direction === 'in').reduce((n, r) => n + toMinor(r.amount, r.currency ?? totalsCurrency), 0), totalsCurrency), out: formatMoney(shown.filter((r) => r.direction === 'out').reduce((n, r) => n + toMinor(r.amount, r.currency ?? totalsCurrency), 0), totalsCurrency) })}
               </Text>

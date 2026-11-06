@@ -3,7 +3,6 @@ import { ActivityIndicator, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button } from './Button';
 import { Chip, ChipRow } from './Chip';
-import { FinHealthCard } from './FinHealthCard';
 import { BeforeAfterBar, CashFanChart, DivergingBars, ShareBar, StackedBar, TargetMeter, useChartColors } from './HealthCharts';
 import { Icon, type IconName } from './Icon';
 import { OfflineBanner } from './OfflineBanner';
@@ -537,20 +536,13 @@ function LockedCard({ months }: { months: number }) {
 }
 
 /**
- * The Health tab as a story: the answer, why, what to do, whether the business can borrow, and the owner's own
- * check-in next to the books. The ratio details follow on the Analysis screen.
+ * The Health tab as a story: the answer, why, what to do, and whether the business can borrow.
  */
 export function FutureRiskSection() {
   const { t } = useI18n();
   const query = useAnalysisQuery(getFutureRisk);
   const risk = query.data;
   const answer = <StoryHeading icon="shield" title={t('story.answer')} />;
-  const checkIn = (
-    <View style={{ gap: 12 }}>
-      <StoryHeading icon="user" title={t('story.booksVsYou')} />
-      <FinHealthCard booksLevel={risk ? overallLevel(risk) : null} />
-    </View>
-  );
   // Say what is happening rather than hiding the section: loading, offline with nothing saved, or the error itself.
   if (!risk) {
     return (
@@ -561,7 +553,6 @@ export function FutureRiskSection() {
           {!query.loading && query.noCache ? <EmptyState titleKey="offline.noCache" bodyKey="offline.noCacheBody" icon="wifiOff" /> : null}
           {!query.loading && query.error ? <ErrorState onRetry={query.reload} error={query.error} /> : null}
         </View>
-        {!query.loading && checkIn}
       </View>
     );
   }
@@ -575,7 +566,6 @@ export function FutureRiskSection() {
           {answer}
           <LockedCard months={recorded} />
         </View>
-        {checkIn}
       </View>
     );
   }
@@ -607,7 +597,6 @@ export function FutureRiskSection() {
           ? <DebtCapacityCard capacity={risk.debtCapacity} />
           : <NotYet title={t('debt.title')} body={t('debt.needsHistory', { count: risk.debtCapacity.months })} />}
       </View>
-      {checkIn}
     </View>
   );
 }
