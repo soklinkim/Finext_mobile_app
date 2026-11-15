@@ -117,7 +117,11 @@ function LocaleGate({ children, bookkeeping }: { children: ReactNode; bookkeepin
   }, []);
   // Before sign-in the launch screen's choice rules (Khmer unless the owner picks otherwise). Once signed in, the
   // account's own language rules. The two are kept apart so signing out never turns the launch screen to English.
-  const locale = signedIn && accountLocale ? accountLocale : deviceLocale;
+  // The sign-in screens always follow the choice made on them, even when a session is still saved in this browser:
+  // otherwise tapping ខ្មែរ there would seem to do nothing while the saved account's language stayed on screen.
+  const pathname = usePathname();
+  const onSignInScreens = ['/launch', '/login', '/signup', '/forgot-password'].includes(pathname);
+  const locale = signedIn && accountLocale && !onSignInScreens ? accountLocale : deviceLocale;
   useEffect(() => {
     void getPlainLanguage().then(setPlain);
     return subscribeToPlainLanguage(setPlain);
