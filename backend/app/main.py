@@ -53,6 +53,15 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/health/db")
+def health_db():
+    """Runs one tiny query, so a scheduled ping counts as database activity (Supabase's free plan pauses idle projects)."""
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute("select 1")
+        cur.fetchone()
+    return {"status": "ok", "database": "ok"}
+
+
 @app.get("/me")
 def me(user_id: str = Depends(current_user)):
     """Which side of FINEXT this login belongs to: the SME app or the lender portal."""

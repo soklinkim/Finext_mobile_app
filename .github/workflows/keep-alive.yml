@@ -1,0 +1,27 @@
+# Keeps the free-tier services awake for the demo.
+# Supabase pauses a free project after about 7 days without database activity, and Render's free API sleeps when idle.
+# Every 3 days this calls the API's /health/db, which wakes Render and runs one query on Supabase.
+name: Keep services awake
+
+on:
+  schedule:
+    - cron: "0 1 */3 * *"   # 01:00 UTC every 3 days (08:00 in Cambodia)
+  workflow_dispatch:          # lets anyone run it by hand from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake the API and touch the database
+        run: |
+          # Render can take about a minute to wake, so allow a long wait and retry a few times.
+          for attempt in 1 2 3 4 5; do
+            if curl --fail --silent --show-error --max-time 120 https://finext-api.onrender.com/health/db; then
+              echo; echo "Database reached on attempt $attempt."
+              exit 0
+            fi
+            echo "Attempt $attempt failed; retrying in 30 s."
+            sleep 30
+          done
+          echo "Could not reach the database after 5 attempts."
+          exit 1
